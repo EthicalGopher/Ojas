@@ -1,10 +1,17 @@
 {
   "expo": {
     "name": "Ojas",
-    "slug": "expo-camera-test",
+    "slug": "ojas",
+    "scheme": "ojas",
     "version": "1.0.0",
     "orientation": "default",
     "userInterfaceStyle": "dark",
+    "icon": "./assets/icon.png",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#222327"
+    },
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
@@ -12,18 +19,24 @@
       }
     },
     "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#222327"
+      },
       "permissions": [
         "CAMERA"
       ]
     },
-    "extra": {
-      "eas": {
-        "projectId": "5bae5656-b031-43c6-97d3-cd248988b3a9"
-      }
-    },
     "plugins": [
       "expo-asset",
-      "expo-status-bar"
-    ]
+      "expo-status-bar",
+      "expo-web-browser"
+    ],
+    "owner": "sankhyah",
+    "extra": {
+      "eas": {
+        "projectId": "53d0007f-5c2e-4c0f-b59b-4daefdb4991c"
+      }
+    }
   }
 }

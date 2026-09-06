@@ -374,15 +374,15 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           disabled={isSaving}
         >
           {isSaving ? (
-            <ActivityIndicator size="small" color="#11141A" />
+            <ActivityIndicator size="small" color="#FFFFFF" />
           ) : isEditing ? (
             <View style={styles.btnRow}>
-              <Save size={13} color="#11141A" style={{ marginRight: 4 }} />
+              <Save size={13} color="#FFFFFF" style={{ marginRight: 4 }} />
               <Text style={styles.editButtonText}>Save</Text>
             </View>
           ) : (
             <View style={styles.btnRow}>
-              <Edit3 size={13} color="#11141A" style={{ marginRight: 4 }} />
+              <Edit3 size={13} color="#FFFFFF" style={{ marginRight: 4 }} />
               <Text style={styles.editButtonText}>Edit</Text>
             </View>
           )}
@@ -468,9 +468,9 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                   disabled={isUploadingPhoto}
                 >
                   {isUploadingPhoto ? (
-                    <ActivityIndicator size="small" color="#11141A" />
+                    <ActivityIndicator size="small" color="#FFFFFF" />
                   ) : (
-                    <CameraIcon size={16} color="#11141A" />
+                    <CameraIcon size={16} color="#FFFFFF" />
                   )}
                 </TouchableOpacity>
               </View>
@@ -482,9 +482,9 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                 disabled={isUploadingPhoto}
               >
                 {isUploadingPhoto ? (
-                  <ActivityIndicator size="small" color="#11141A" style={{ marginRight: 6 }} />
+                  <ActivityIndicator size="small" color="#FFFFFF" style={{ marginRight: 6 }} />
                 ) : (
-                  <Upload size={14} color="#11141A" style={{ marginRight: 6 }} />
+                  <Upload size={14} color="#FFFFFF" style={{ marginRight: 6 }} />
                 )}
                 <Text style={styles.uploadPhotoBtnText}>
                   {avatarUrl ? 'Change Profile Photo' : 'Upload Profile Photo'}
@@ -496,7 +496,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
               <View style={styles.badgeRow}>
                 <View style={styles.badgePill}>
-                  <ShieldCheck size={13} color="#11141A" style={{ marginRight: 4 }} />
+                  <ShieldCheck size={13} color="#FFFFFF" style={{ marginRight: 4 }} />
                   <Text style={styles.badgeText}>Verified Athlete</Text>
                 </View>
                 <View style={[styles.badgePill, { backgroundColor: '#C8B6FF' }]}>
@@ -623,7 +623,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                 activeOpacity={0.7}
                 onPress={() => setActiveTab('add_friend')}
               >
-                <UserPlus size={12} color="#11141A" style={{ marginRight: 4 }} />
+                <UserPlus size={12} color="#FFFFFF" style={{ marginRight: 4 }} />
                 <Text style={styles.headerActionPillText}>Add New</Text>
               </TouchableOpacity>
             </View>
@@ -640,7 +640,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                   activeOpacity={0.85}
                   onPress={() => setActiveTab('add_friend')}
                 >
-                  <UserPlus size={15} color="#11141A" style={{ marginRight: 6 }} />
+                  <UserPlus size={15} color="#FFFFFF" style={{ marginRight: 6 }} />
                   <Text style={styles.addFriendPrimaryBtnText}>Find Friends</Text>
                 </TouchableOpacity>
               </View>
@@ -719,9 +719,9 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                          disabled={actionLoadingId === item.friendship_id}
                        >
                          {actionLoadingId === item.friendship_id ? (
-                           <ActivityIndicator size="small" color="#11141A" />
+                           <ActivityIndicator size="small" color="#FFFFFF" />
                          ) : (
-                           <Check size={16} color="#11141A" />
+                           <Check size={16} color="#FFFFFF" />
                          )}
                        </TouchableOpacity>
 
@@ -807,10 +807,10 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                   disabled={isSendingRequest}
                 >
                   {isSendingRequest ? (
-                    <ActivityIndicator size="small" color="#11141A" />
+                    <ActivityIndicator size="small" color="#FFFFFF" />
                   ) : (
                     <View style={styles.btnRow}>
-                      <UserPlus size={15} color="#11141A" style={{ marginRight: 6 }} />
+                      <UserPlus size={15} color="#FFFFFF" style={{ marginRight: 6 }} />
                       <Text style={styles.sendRequestBtnText}>Send</Text>
                     </View>
                   )}

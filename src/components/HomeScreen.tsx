@@ -104,15 +104,14 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     }
   }, [selectedExerciseId, exercisesList]);
 
-  const isFirstTabRender = useRef(true);
+  const prevActiveTab = useRef(activeTab);
 
   useEffect(() => {
-    if (isFirstTabRender.current) {
-      isFirstTabRender.current = false;
-      return;
+    if (prevActiveTab.current !== activeTab) {
+      prevActiveTab.current = activeTab;
+      setSelectedExercise(null);
+      setSelectedExerciseId(null);
     }
-    setSelectedExercise(null);
-    setSelectedExerciseId(null);
   }, [activeTab, setSelectedExerciseId]);
 
   useEffect(() => {

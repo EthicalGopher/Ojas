@@ -45,6 +45,11 @@ export const Header: React.FC<HeaderProps> = ({
     }
   };
 
+  const fitnessGoal =
+    profile?.fitness_goal ||
+    user?.user_metadata?.fitness_goal ||
+    'Fitness Freak';
+
   const leftContent = leftAction ?? (
     <TouchableOpacity
       style={styles.profileHeaderRow}
@@ -65,7 +70,9 @@ export const Header: React.FC<HeaderProps> = ({
         </Text>
         <View style={styles.statusRow}>
           <Flame size={12} color="#E8D5C4" style={{ marginRight: 3 }} />
-          <Text style={styles.subtitleText}>Fitness Freak</Text>
+          <Text style={styles.subtitleText} numberOfLines={1}>
+            {fitnessGoal}
+          </Text>
         </View>
       </View>
     </TouchableOpacity>

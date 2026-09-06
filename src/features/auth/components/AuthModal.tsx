@@ -12,6 +12,7 @@ import {
 import { supabase } from '../../../utils/supabase';
 import { Avatar } from '../../../components/Avatar';
 import { generateRandomUsername } from '../../../utils/usernameGenerator';
+import { signInWithGoogleOAuth } from '../../../utils/googleAuth';
 
 interface AuthModalProps {
   visible: boolean;
@@ -30,6 +31,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onUserCh
   const [username, setUsername] = useState<string>('');
   const [fetchingUsername, setFetchingUsername] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
+  const [googleLoading, setGoogleLoading] = useState<boolean>(false);
   const [resending, setResending] = useState<boolean>(false);
   const [resendStatus, setResendStatus] = useState<string>('');
   const [user, setUser] = useState<any>(null);
@@ -150,6 +152,29 @@ export const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onUserCh
       setErrorMsg(err?.message || 'Failed to resend verification email.');
     } finally {
       setResending(false);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    setErrorMsg('');
+    setResendStatus('');
+    setGoogleLoading(true);
+    try {
+      const res = await signInWithGoogleOAuth();
+      if (!res.success) {
+        if (res.error && !res.error.includes('canceled')) {
+          setErrorMsg(res.error);
+        }
+      } else if (res.user) {
+        setUser(res.user);
+        setStep('profile');
+        if (onUserChange) onUserChange(res.user);
+        onClose();
+      }
+    } catch (e: any) {
+      setErrorMsg(e?.message || 'Failed to sign in with Google.');
+    } finally {
+      setGoogleLoading(false);
     }
   };
 
@@ -314,14 +339,40 @@ export const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onUserCh
                   style={styles.primaryActionButton}
                   activeOpacity={0.88}
                   onPress={handleAuth}
-                  disabled={loading}
+                  disabled={loading || googleLoading}
                 >
                   {loading ? (
-                    <ActivityIndicator color="#11141A" />
+                    <ActivityIndicator color="#FFFFFF" />
                   ) : (
                     <Text style={styles.primaryActionButtonText}>
                       {isSignUp ? 'Create Athlete Account' : 'Sign In'}
                     </Text>
+                  )}
+                </TouchableOpacity>
+
+                {/* OAuth Divider */}
+                <View style={styles.dividerRow}>
+                  <View style={styles.dividerLine} />
+                  <Text style={styles.dividerText}>OR CONTINUE WITH</Text>
+                  <View style={styles.dividerLine} />
+                </View>
+
+                {/* Google Sign In Button */}
+                <TouchableOpacity
+                  style={styles.googleButton}
+                  activeOpacity={0.88}
+                  onPress={handleGoogleSignIn}
+                  disabled={loading || googleLoading}
+                >
+                  {googleLoading ? (
+                    <ActivityIndicator color="#FFFFFF" size="small" />
+                  ) : (
+                    <View style={styles.googleBtnContent}>
+                      <Text style={styles.googleIconText}>G</Text>
+                      <Text style={styles.googleButtonText}>
+                        {isSignUp ? 'Sign up with Google' : 'Sign in with Google'}
+                      </Text>
+                    </View>
                   )}
                 </TouchableOpacity>
 
@@ -603,5 +654,47 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 10,
     borderRadius: 10,
+  },
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 16,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  dividerText: {
+    color: '#8E95A0',
+    fontSize: 10,
+    fontWeight: '800',
+    marginHorizontal: 10,
+    letterSpacing: 0.5,
+  },
+  googleButton: {
+    backgroundColor: '#262A32',
+    borderRadius: 26,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+  },
+  googleBtnContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+  },
+  googleIconText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '900',
+  },
+  googleButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '800',
   },
 });

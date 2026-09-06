@@ -31,9 +31,18 @@ export async function getOrCreateUserProfile(user: any): Promise<UserProfile> {
     throw new Error('User ID is required');
   }
 
-  let defaultUsername = user.user_metadata?.username;
+  const userMeta = user.user_metadata || {};
+  
+  // 1. Extract or generate username
+  let defaultUsername = userMeta.username || userMeta.preferred_username || userMeta.user_name;
+  if (!defaultUsername && userMeta.full_name) {
+    defaultUsername = userMeta.full_name.toLowerCase().replace(/[^a-z0-9_]/g, '_').slice(0, 20);
+  }
+  if (!defaultUsername && userMeta.name) {
+    defaultUsername = userMeta.name.toLowerCase().replace(/[^a-z0-9_]/g, '_').slice(0, 20);
+  }
   if (!defaultUsername && user.email) {
-    defaultUsername = user.email.split('@')[0];
+    defaultUsername = user.email.split('@')[0].toLowerCase().replace(/[^a-z0-9_]/g, '_').slice(0, 20);
   }
   if (!defaultUsername) {
     try {
@@ -43,6 +52,9 @@ export async function getOrCreateUserProfile(user: any): Promise<UserProfile> {
     }
   }
 
+  // 2. Extract OAuth avatar URL (Google provides avatar_url or picture)
+  const oauthAvatarUrl = userMeta.avatar_url || userMeta.picture || null;
+  const fullName = userMeta.full_name || userMeta.name || '';
   const defaultAvatar = generateDefaultAvatar(defaultUsername);
 
   try {
@@ -53,21 +65,35 @@ export async function getOrCreateUserProfile(user: any): Promise<UserProfile> {
       .maybeSingle();
 
     if (!error && data) {
+      // If row exists but is missing avatar_url and Google provides one, auto-update it
+      if (!data.avatar_url && oauthAvatarUrl) {
+        try {
+          await supabase
+            .from('profiles')
+            .update({ avatar_url: oauthAvatarUrl, full_name: data.full_name || fullName })
+            .eq('id', user.id);
+          data.avatar_url = oauthAvatarUrl;
+          if (!data.full_name && fullName) data.full_name = fullName;
+        } catch (e) {
+          console.warn('[profileService] auto-update avatar error:', e);
+        }
+      }
+
       return {
         ...data,
         avatar_config: data.avatar_config && Object.keys(data.avatar_config).length > 0 ? data.avatar_config : defaultAvatar,
-        avatar_url: data.avatar_url || null,
+        avatar_url: data.avatar_url || oauthAvatarUrl || null,
       };
     }
 
-    // If table or row doesn't exist, construct profile from auth metadata
+    // Construct profile from Google / Auth metadata
     const initialProfile: UserProfile = {
       id: user.id,
       username: defaultUsername,
-      phone_number: user.user_metadata?.phone_number || user.phone || '',
-      full_name: user.user_metadata?.full_name || user.user_metadata?.name || '',
-      avatar_config: user.user_metadata?.avatar_config || defaultAvatar,
-      avatar_url: user.user_metadata?.avatar_url || null,
+      phone_number: userMeta.phone_number || user.phone || '',
+      full_name: fullName,
+      avatar_config: userMeta.avatar_config || defaultAvatar,
+      avatar_url: oauthAvatarUrl,
       bio: 'Ready to crush daily fitness milestones with Ojas! 🔥',
       fitness_goal: 'Strength & Stamina',
     };

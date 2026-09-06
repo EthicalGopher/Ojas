@@ -169,6 +169,8 @@ class ConnectionManager:
 class MatchmakingManager:
     def __init__(self, connection_mgr: ConnectionManager):
         self.connection_mgr = connection_mgr
+        # Global sequential match / room counter for incremental room IDs
+        self.match_counter: int = 0
         # exercise_id -> list of user_ids waiting in queue (1v1)
         self.queues: dict[str, list[str]] = {}
         # Set of all user IDs currently in any matchmaking queue
@@ -186,6 +188,15 @@ class MatchmakingManager:
         self.exercise_counts: dict[str, int] = {}
         # Connected presence websockets for broadcasting live count updates
         self.presence_sockets: set[WebSocket] = set()
+
+    def generate_match_room(self, exercise_id: str, mode: str = "1v1") -> tuple[str, str, int]:
+        """Generates an incremental room number and room ID for transparent synchronization."""
+        self.match_counter += 1
+        room_num = self.match_counter
+        clean_ex = str(exercise_id).strip()
+        room_id = f"{clean_ex}_room_{room_num}"
+        match_id = room_id
+        return match_id, room_id, room_num
 
     def normalize_username(self, user_id: str) -> str:
         """Extracts clean unique username to deduplicate multiple connections from same user."""
@@ -239,7 +250,6 @@ class MatchmakingManager:
 
     async def join_ffa_lobby(self, user_id: str, exercise_id: str):
         """Adds player to a Free-for-All (FFA) lobby up to 10 players with a 30s countdown timer."""
-        # Normalize exercise key to ensure exact match across any format ('1_ffa', '1', 'squats_ffa')
         clean_raw = str(exercise_id or "1").strip().lower()
         if not clean_raw.endswith("_ffa"):
             clean_ex_key = f"{clean_raw}_ffa"
@@ -247,6 +257,7 @@ class MatchmakingManager:
             clean_ex_key = clean_raw
 
         self.leave_queue(user_id)
+        self.player_matches.pop(user_id, None)
 
         # 1. First check: Is there an existing active lobby in waiting state for this exercise?
         lobby = self.ffa_lobbies.get(clean_ex_key)
@@ -261,10 +272,12 @@ class MatchmakingManager:
 
         if lobby and lobby.get("status") == "waiting":
             # Join existing active lobby!
-            if user_id not in lobby["players"]:
-                lobby["players"].append(user_id)
-                lobby["scores"][user_id] = 0
-                print(f"👥 '{user_id}' joined existing FFA Lobby #{lobby['match_id']} for '{clean_ex_key}' ({len(lobby['players'])}/10 players, {lobby.get('countdown', 30)}s remaining)")
+            # Clean up dead sockets from lobby first
+            live_players = [p for p in lobby["players"] if self.connection_mgr.get(p) is not None and p != user_id]
+            live_players.append(user_id)
+            lobby["players"] = live_players
+            lobby["scores"][user_id] = 0
+            print(f"👥 '{user_id}' joined existing FFA Lobby #{lobby.get('room_id', lobby['match_id'])} (Room #{lobby.get('room_number', 1)}) for '{clean_ex_key}' ({len(lobby['players'])}/10 players, {lobby.get('countdown', 30)}s remaining)")
 
             # If 10 players reached, start immediately
             if len(lobby["players"]) >= 10:
@@ -274,9 +287,11 @@ class MatchmakingManager:
                 return
         else:
             # No existing waiting lobby found -> Create new lobby and start 30s countdown timer
-            match_id = str(uuid.uuid4())
+            match_id, room_id, room_num = self.generate_match_room(clean_ex_key, mode="ffa")
             lobby = {
                 "match_id": match_id,
+                "room_id": room_id,
+                "room_number": room_num,
                 "exercise_id": clean_ex_key,
                 "mode": "ffa",
                 "players": [user_id],
@@ -286,7 +301,7 @@ class MatchmakingManager:
                 "created_at": time.time(),
             }
             self.ffa_lobbies[clean_ex_key] = lobby
-            print(f"👑 Created new FFA Lobby #{match_id} for '{clean_ex_key}' initiated by '{user_id}' (30s timer started)")
+            print(f"👑 Created new FFA Lobby #{room_id} (Room #{room_num}) for '{clean_ex_key}' initiated by '{user_id}' (30s timer started)")
 
             # Start 30s countdown background task
             async def ffa_countdown_task(ex_id: str, m_id: str):
@@ -315,6 +330,8 @@ class MatchmakingManager:
         payload = json.dumps({
             "type": "ffa_lobby_update",
             "match_id": lobby["match_id"],
+            "room_id": lobby.get("room_id", lobby["match_id"]),
+            "room_number": lobby.get("room_number", 1),
             "exercise_id": clean_ex_key,
             "players": lobby["players"],
             "player_count": len(lobby["players"]),
@@ -335,11 +352,20 @@ class MatchmakingManager:
             return
 
         now = time.time()
-        players = list(lobby["players"])
+        # Filter live players only
+        players = [p for p in lobby["players"] if self.connection_mgr.get(p) is not None]
+        if not players:
+            self.ffa_lobbies.pop(exercise_id, None)
+            return
+
+        room_id = lobby.get("room_id", match_id)
+        room_number = lobby.get("room_number", 1)
 
         # Store in matches dictionary with authoritative timing
         match_obj = {
             "match_id": match_id,
+            "room_id": room_id,
+            "room_number": room_number,
             "exercise_id": exercise_id,
             "mode": "ffa",
             "players": players,
@@ -360,6 +386,8 @@ class MatchmakingManager:
         start_payload = json.dumps({
             "type": "ffa_matched",
             "match_id": match_id,
+            "room_id": room_id,
+            "room_number": room_number,
             "exercise_id": exercise_id,
             "mode": "ffa",
             "players": players,
@@ -378,15 +406,16 @@ class MatchmakingManager:
         if self.ffa_lobbies.get(exercise_id, {}).get("match_id") == match_id:
             del self.ffa_lobbies[exercise_id]
 
+        print(f"🚀 FFA Match #{room_id} (Room #{room_number}) officially started for '{exercise_id}' with {len(players)} athletes: {players}")
+
         # Start authoritative server-side match timer task for FFA
-        async def ffa_match_timer_task(m_id: str):
+        async def ffa_timer_task(m_id: str):
             await asyncio.sleep(MATCH_DURATION + 35)
             m = self.get_match(m_id)
             if m and m.get("status") in ("waiting", "ready", "in_progress"):
                 await self.finish_ffa_match(m_id)
 
-        match_obj["timer_task"] = asyncio.create_task(ffa_match_timer_task(match_id))
-        print(f"🚀 FFA Match #{match_id} created for exercise '{exercise_id}' with {len(players)} players: {players}")
+        match_obj["timer_task"] = asyncio.create_task(ffa_timer_task(match_id))
 
     async def finish_ffa_match(self, match_id: str):
         """Authoritatively ends an FFA match from server side and broadcasts results."""
@@ -462,31 +491,51 @@ class MatchmakingManager:
         asyncio.create_task(delayed_1v1_cleanup(match_id))
 
     def join_queue(self, user_id: str, exercise_id: str):
-        """Adds a player to a standard 1v1 queue. If 2 players are present, creates a new unique match."""
-        # Ensure user isn't duplicated in queues
+        """Adds a player to a standard 1v1 queue. If 2 live players are present, creates a new unique incremental match."""
         self.leave_queue(user_id)
+        self.player_matches.pop(user_id, None)
 
-        queue = self.queues.setdefault(exercise_id, [])
-        queue.append(user_id)
+        clean_ex = str(exercise_id).strip()
+        queue = self.queues.setdefault(clean_ex, [])
+
+        # Filter out dead / disconnected sockets before adding
+        active_queue = []
+        for uid in queue:
+            if uid != user_id and self.connection_mgr.get(uid) is not None:
+                active_queue.append(uid)
+        active_queue.append(user_id)
+        self.queues[clean_ex] = active_queue
         self.queued_users.add(user_id)
-        self.exercise_counts[exercise_id] = len(queue)
-        print(f"👤 {user_id} joined queue for exercise '{exercise_id}' (queue length: {len(queue)})")
+        self.exercise_counts[clean_ex] = len(active_queue)
+        print(f"👤 {user_id} joined queue for exercise '{clean_ex}' (active queue length: {len(active_queue)})")
 
-        if len(queue) >= 2:
-            p1_id = queue.pop(0)
-            p2_id = queue.pop(0)
+        while len(self.queues[clean_ex]) >= 2:
+            p1_id = self.queues[clean_ex].pop(0)
+            p1_ws = self.connection_mgr.get(p1_id)
+            if not p1_ws:
+                self.queued_users.discard(p1_id)
+                continue
+
+            p2_id = self.queues[clean_ex].pop(0)
+            p2_ws = self.connection_mgr.get(p2_id)
+            if not p2_ws:
+                self.queued_users.discard(p2_id)
+                self.queues[clean_ex].insert(0, p1_id)
+                continue
+
             self.queued_users.discard(p1_id)
             self.queued_users.discard(p2_id)
-            self.exercise_counts[exercise_id] = len(queue)
+            self.exercise_counts[clean_ex] = len(self.queues[clean_ex])
 
-            # Generate separate, collision-free UUID match_id
-            match_id = str(uuid.uuid4())
+            match_id, room_id, room_num = self.generate_match_room(clean_ex, mode="1v1")
             now = time.time()
 
             # Authoritative match state with proper lifecycle and timing
             match_obj = {
                 "match_id": match_id,
-                "exercise_id": exercise_id,
+                "room_id": room_id,
+                "room_number": room_num,
+                "exercise_id": clean_ex,
                 "mode": "1v1",
                 "player1_id": p1_id,
                 "player2_id": p2_id,
@@ -517,10 +566,10 @@ class MatchmakingManager:
 
             match_obj["timer_task"] = asyncio.create_task(match_timer_task(match_id))
 
-            print(f"🔗 Authoritative Match #{match_id} created for '{exercise_id}' between {p1_id} and {p2_id}")
-            return match_id, p1_id, p2_id
+            print(f"🔗 Authoritative Match #{room_id} (Room #{room_num}) created for '{clean_ex}' between {p1_id} and {p2_id}")
+            return match_id, p1_id, p2_id, room_id, room_num
 
-        return None, None, None
+        return None, None, None, None, None
 
     def get_match_id(self, user_id: str) -> str | None:
         """Retrieves match_id for a player dynamically, resolving Player 1 and Player 2 alike."""
@@ -644,6 +693,7 @@ async def presence_websocket(ws: WebSocket):
         print(f"\n🔌 User {user_id} disconnected from presence")
 
 ALLOWED_MESSAGE_TYPES = {
+    "join",
     "score",
     "peer_ready",
     "frame",
@@ -655,6 +705,32 @@ ALLOWED_MESSAGE_TYPES = {
     "match_leave",
     "ping",
 }
+
+async def dispatch_1v1_matched(match_id: str, p1_id: str, p2_id: str, exercise_id: str, room_id: str, room_num: int):
+    p1_ws = conn_manager.get(p1_id)
+    p2_ws = conn_manager.get(p2_id)
+    if p1_ws:
+        await p1_ws.send_text(json.dumps({
+            "type": "matched",
+            "match_id": match_id,
+            "room_id": room_id,
+            "room_number": room_num,
+            "exercise_id": exercise_id,
+            "mode": "1v1",
+            "role": "player1",
+            "opponent": p2_id,
+        }))
+    if p2_ws:
+        await p2_ws.send_text(json.dumps({
+            "type": "matched",
+            "match_id": match_id,
+            "room_id": room_id,
+            "room_number": room_num,
+            "exercise_id": exercise_id,
+            "mode": "1v1",
+            "role": "player2",
+            "opponent": p1_id,
+        }))
 
 @app.websocket("/ws/match")
 async def match_websocket(ws: WebSocket):
@@ -679,29 +755,9 @@ async def match_websocket(ws: WebSocket):
         if is_ffa_request:
             await matchmaker.join_ffa_lobby(user_id, exercise_id)
         else:
-            match_id, p1_id, p2_id = matchmaker.join_queue(user_id, exercise_id)
-
+            match_id, p1_id, p2_id, room_id, room_num = matchmaker.join_queue(user_id, exercise_id)
             if match_id:
-                p1_ws = conn_manager.get(p1_id)
-                p2_ws = conn_manager.get(p2_id)
-                if p1_ws:
-                    await p1_ws.send_text(json.dumps({
-                        "type": "matched",
-                        "match_id": match_id,
-                        "exercise_id": exercise_id,
-                        "mode": "1v1",
-                        "role": "player1",
-                        "opponent": p2_id,
-                    }))
-                if p2_ws:
-                    await p2_ws.send_text(json.dumps({
-                        "type": "matched",
-                        "match_id": match_id,
-                        "exercise_id": exercise_id,
-                        "mode": "1v1",
-                        "role": "player2",
-                        "opponent": p1_id,
-                    }))
+                await dispatch_1v1_matched(match_id, p1_id, p2_id, exercise_id, room_id, room_num)
 
         # Message Handling Loop
         while True:
@@ -715,6 +771,18 @@ async def match_websocket(ws: WebSocket):
             msg_type = msg.get("type")
             if msg_type not in ALLOWED_MESSAGE_TYPES:
                 print(f"⚠️ Unauthorized message type '{msg_type}' from {user_id}")
+                continue
+
+            if msg_type == "join":
+                join_ex_id = str(msg.get("exercise_id", exercise_id))
+                exercise_id = join_ex_id
+                is_ffa_request = exercise_id.endswith("_ffa") or exercise_id.startswith("ffa_")
+                if is_ffa_request:
+                    await matchmaker.join_ffa_lobby(user_id, exercise_id)
+                else:
+                    match_id, p1_id, p2_id, room_id, room_num = matchmaker.join_queue(user_id, exercise_id)
+                    if match_id:
+                        await dispatch_1v1_matched(match_id, p1_id, p2_id, exercise_id, room_id, room_num)
                 continue
 
             if msg_type in ("leave", "match_leave"):

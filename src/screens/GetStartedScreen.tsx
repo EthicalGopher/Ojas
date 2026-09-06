@@ -25,7 +25,7 @@ export const GetStartedScreen: React.FC<GetStartedScreenProps> = ({
 }) => {
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="light-content" backgroundColor="#0D111A" />
+      <StatusBar barStyle="light-content" backgroundColor="#1A1C20" />
       <View style={styles.container}>
         {/* Top Brand Logo */}
         <View style={styles.header}>

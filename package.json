@@ -1,5 +1,5 @@
 {
-  "name": "expo-camera-test-app",
+  "name": "ojas",
   "version": "1.0.0",
   "main": "node_modules/expo/AppEntry.js",
   "scripts": {
@@ -15,12 +15,14 @@
     "babel-preset-expo": "~57.0.0",
     "expo": "~57.0.19",
     "expo-asset": "~57.0.16",
+    "expo-auth-session": "~57.0.11",
     "expo-camera": "~57.0.4",
     "expo-dev-client": "~57.0.18",
     "expo-file-system": "~57.0.6",
     "expo-image-picker": "~57.0.15",
     "expo-screen-orientation": "~57.0.2",
     "expo-status-bar": "~57.0.1",
+    "expo-web-browser": "~57.0.2",
     "livekit-client": "^2.22.1",
     "lucide-react-native": "^1.35.0",
     "react": "19.2.3",

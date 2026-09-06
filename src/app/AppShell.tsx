@@ -16,7 +16,11 @@ import { Swords, Video, Zap, Check, X, Flame } from 'lucide-react-native';
 import { Avatar } from '../components/Avatar';
 import type { MainTab } from '../components/HomeScreen';
 import type { ModelComplexity } from '../utils/deviceSpecs';
-import { connectMatchSocket, disconnectMatchSocket } from '../utils/matchmaking';
+import {
+  connectMatchSocket,
+  disconnectMatchSocket,
+  addMatchMessageListener,
+} from '../utils/matchmaking';
 import { supabase } from '../utils/supabase';
 import { useUserStore } from '../store/userStore';
 import {
@@ -64,39 +68,51 @@ export default function AppShell() {
     };
   }, [currentUser?.id]);
 
+  // Auth initialization
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    const initAuth = async () => {
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (session?.user) {
+          setCurrentUser(session.user);
+          setUser(session.user);
+        }
+      } catch (e) {
+        console.warn('Auth session check failed:', e);
+      } finally {
+        setIsAuthLoading(false);
+      }
+    };
+
+    initAuth();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
         setCurrentUser(session.user);
         setUser(session.user);
+      } else {
+        setCurrentUser(null);
+        setUser(null);
       }
       setIsAuthLoading(false);
     });
 
-    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) {
-        setCurrentUser(session.user);
-        setUser(session.user);
-        setShowAuthModal(false);
-      } else if (_event === 'SIGNED_OUT') {
-        setCurrentUser(null);
-        setUser(null);
-      }
-    });
-
     return () => {
-      authListener.subscription.unsubscribe();
+      subscription.unsubscribe();
     };
   }, [setUser]);
 
+  // Auto handle orientation
   useEffect(() => {
     async function updateOrientation() {
       try {
-        if (ScreenOrientation) {
+        if (ScreenOrientation && ScreenOrientation.OrientationLock) {
           if (isFullscreen) {
-            if (ScreenOrientation.unlockAsync) {
-              await ScreenOrientation.unlockAsync();
-            } else if (ScreenOrientation.lockAsync) {
+            if (ScreenOrientation.lockAsync) {
               await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.DEFAULT);
             }
           } else {
@@ -173,12 +189,88 @@ export default function AppShell() {
             selfUsername={currentUser?.user_metadata?.username || currentUser?.email || 'user'}
             exerciseId={matchExerciseId}
             onClose={() => {
-              setIsMatchCamera(false);
-              setIsFullscreen(false);
-              setActiveTab('home');
-              if (matchExerciseId) {
-                useUserStore.getState().setSelectedExerciseId(matchExerciseId);
-              }
+              setTimeout(() => {
+                setIsMatchCamera(false);
+                setIsFullscreen(false);
+                setActiveTab('home');
+                if (matchExerciseId) {
+                  useUserStore.getState().setSelectedExerciseId(matchExerciseId);
+                }
+              }, 0);
+            }}
+            onRequeue={(nextMode, exId) => {
+              setTimeout(() => {
+                setIsMatchCamera(false);
+                setIsFullscreen(false);
+                setActiveTab('home');
+                if (exId) {
+                  useUserStore.getState().setSelectedExerciseId(exId);
+                }
+                const userId =
+                  currentUser?.user_metadata?.username ||
+                  currentUser?.email ||
+                  currentUser?.user?.id ||
+                  currentUser?.id ||
+                  `Player_${Math.floor(1000 + Math.random() * 9000)}`;
+
+                if (nextMode === 'ffa') {
+                  setWaitingTitle('FREE FOR ALL LOBBY');
+                  setWaitingMessage('Gathering athletes (Max 10). Match starts when timer expires or lobby fills...');
+                  setWaitingBadge('WAITING: 30s');
+                  setWaitingSubInfo('👥 1 Athlete Joined');
+                  setIsFFALobby(true);
+                  setFfaLobbyCountdown(30);
+                  setFfaLobbyPlayerCount(1);
+                  setMatchWaiting(true);
+
+                  const matchQueueId = `${exId}_ffa`;
+                  connectMatchSocket(userId, matchQueueId);
+
+                  const cleanup = addMatchMessageListener((msg: any) => {
+                    if (msg.type === 'ffa_lobby_update') {
+                      setWaitingTitle('FREE FOR ALL LOBBY');
+                      setWaitingMessage(`Match starts in ${msg.countdown}s (or when 10 athletes join)...`);
+                      setWaitingBadge(`STARTING IN ${msg.countdown}s`);
+                      setWaitingSubInfo(`👥 ${msg.player_count} ${msg.player_count === 1 ? 'Athlete' : 'Athletes'} in Lobby (Max 10)`);
+                      setFfaLobbyCountdown(msg.countdown);
+                      setFfaLobbyPlayerCount(msg.player_count);
+                    } else if (msg.type === 'ffa_matched') {
+                      setMatchWaiting(false);
+                      setIsFFALobby(false);
+                      setOpponentUsername('Free For All');
+                      setMatchMode('ffa');
+                      setMatchExerciseId(exId);
+                      setIsMatchCamera(true);
+                      setIsFullscreen(true);
+                      cleanup();
+                    }
+                  });
+                } else {
+                  setWaitingTitle('FINDING OPPONENT');
+                  setWaitingMessage('Searching for a worthy rival in the queue...');
+                  setWaitingBadge(undefined);
+                  setWaitingSubInfo(undefined);
+                  setIsFFALobby(false);
+                  setMatchWaiting(true);
+
+                  const queueType = nextMode === 'quickjoin' ? 'quick_start' : 'faceoff';
+                  const matchQueueId = `${exId}_${queueType}`;
+                  connectMatchSocket(userId, matchQueueId);
+
+                  const cleanup = addMatchMessageListener((msg: any) => {
+                    if (msg.type === 'matched') {
+                      setMatchWaiting(false);
+                      setIsFFALobby(false);
+                      setOpponentUsername(msg.opponent);
+                      setMatchMode(queueType === 'quick_start' ? 'quickjoin' : 'faceoff');
+                      setMatchExerciseId(exId);
+                      setIsMatchCamera(true);
+                      setIsFullscreen(true);
+                      cleanup();
+                    }
+                  });
+                }
+              }, 0);
             }}
           />
         ) : isFullscreen ? (

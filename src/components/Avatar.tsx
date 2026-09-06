@@ -59,13 +59,30 @@ export const Avatar: React.FC<AvatarProps> = ({
     return { seed: username || 'athlete', style: 'adventurer' as AvatarStyle, bgColor: undefined };
   }, [config, username]);
 
-  const resolvedUri = useMemo(() => {
+  const diceBearUri = useMemo(() => {
+    return getAvatarUri(seed, style, bgColor);
+  }, [seed, style, bgColor]);
+
+  const customImgUri = useMemo(() => {
     const customImg = avatarUrl || profilePicUrl;
-    if (customImg && customImg.trim().length > 0) {
+    if (customImg && typeof customImg === 'string' && customImg.trim().length > 0) {
       return customImg.trim();
     }
-    return getAvatarUri(seed, style, bgColor);
-  }, [avatarUrl, profilePicUrl, seed, style, bgColor]);
+    return null;
+  }, [avatarUrl, profilePicUrl]);
+
+  // Track if custom image failed so we smoothly fall back to DiceBear
+  const [customImageFailed, setCustomImageFailed] = useState(false);
+  const [dicebearFailed, setDicebearFailed] = useState(false);
+
+  // Reset error states when URI changes
+  React.useEffect(() => {
+    setCustomImageFailed(false);
+    setDicebearFailed(false);
+  }, [customImgUri, diceBearUri]);
+
+  // Determine which URI to display
+  const activeImageUri = customImgUri && !customImageFailed ? customImgUri : diceBearUri;
 
   const fallbackColor = useMemo(() => {
     const colors = ['#2563EB', '#0F766E', '#B45309', '#BE123C', '#4338CA', '#7C3AED'];
@@ -87,11 +104,17 @@ export const Avatar: React.FC<AvatarProps> = ({
         customStyle,
       ]}
     >
-      {!imageError ? (
+      {!dicebearFailed ? (
         <Image
-          source={{ uri: resolvedUri }}
+          source={{ uri: activeImageUri }}
           style={{ width: size, height: size, borderRadius: size / 2 }}
-          onError={() => setImageError(true)}
+          onError={() => {
+            if (customImgUri && !customImageFailed) {
+              setCustomImageFailed(true);
+            } else {
+              setDicebearFailed(true);
+            }
+          }}
           resizeMode="cover"
         />
       ) : (

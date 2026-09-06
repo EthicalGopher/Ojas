@@ -14,6 +14,7 @@ export interface ExerciseItem {
   difficulty?: string;
   bg_theme?: string;
   image_url?: string;
+  type?: string;
 }
 
 export const DEFAULT_EXERCISES: ExerciseItem[] = [
@@ -30,6 +31,7 @@ export const DEFAULT_EXERCISES: ExerciseItem[] = [
     reps_target: 15,
     difficulty: 'Intermediate',
     bg_theme: '#C8B6FF',
+    type: 'Common exercises',
   },
   {
     id: '3',
@@ -44,6 +46,7 @@ export const DEFAULT_EXERCISES: ExerciseItem[] = [
     reps_target: 10,
     difficulty: 'Beginner',
     bg_theme: '#A7F3D0',
+    type: 'Yoga',
   },
   {
     id: '4',
@@ -58,6 +61,7 @@ export const DEFAULT_EXERCISES: ExerciseItem[] = [
     reps_target: 16,
     difficulty: 'Intermediate',
     bg_theme: '#FFD6E0',
+    type: 'Common exercises',
   },
   {
     id: '5',
@@ -72,6 +76,7 @@ export const DEFAULT_EXERCISES: ExerciseItem[] = [
     reps_target: 20,
     difficulty: 'Beginner',
     bg_theme: '#E8D5C4',
+    type: 'Common exercises',
   },
   {
     id: '2',
@@ -86,6 +91,23 @@ export const DEFAULT_EXERCISES: ExerciseItem[] = [
     reps_target: 15,
     difficulty: 'Intermediate',
     bg_theme: '#C8B6FF',
+    type: 'Common exercises',
+  },
+  {
+    id: '6',
+    name: 'Cobra Pose',
+    category: 'flexibility',
+    icon: '🐍',
+    description: 'AI Real-time Bhujangasana Pose Tracker for Pelvis Grounding, Chest Elevation & Spine Flexibility',
+    bgGradient: '#A7F3D0',
+    isFavorite: true,
+    duration_mins: 15,
+    muscle_groups: 'Spine Extensors / Chest / Shoulders / Abdominals',
+    reps_target: 10,
+    difficulty: 'Beginner',
+    bg_theme: '#A7F3D0',
+    image_url: 'https://locsjrjekkyjbeapgreu.supabase.co/storage/v1/object/public/Images/Excercise/a-female-doing-yoga.svg',
+    type: 'Yoga',
   },
 ];
 
@@ -98,6 +120,38 @@ export async function fetchExercisesFromSupabase(): Promise<ExerciseItem[]> {
       .order('display_order', { ascending: true });
 
     if (error) {
+      // If user session token expired or has clock skew, fallback to direct public REST API
+      const restRes = await fetch(
+        'https://locsjrjekkyjbeapgreu.supabase.co/rest/v1/exercises?is_active=eq.true&select=*&order=display_order.asc',
+        {
+          headers: {
+            apikey: 'sb_publishable_sHRSstl83vk7Yrurd4aWgA_ENJRFgBm',
+            Authorization: 'Bearer sb_publishable_sHRSstl83vk7Yrurd4aWgA_ENJRFgBm',
+          },
+        }
+      );
+      if (restRes.ok) {
+        const restData = await restRes.json();
+        if (Array.isArray(restData) && restData.length > 0) {
+          return restData.map((row: any) => ({
+            id: String(row.id),
+            name: row.name,
+            category: row.category as ExerciseItem['category'],
+            icon: row.icon || '🏋️',
+            description: row.description || '',
+            bgGradient: row.bg_gradient || row.bg_theme || '#C8B6FF',
+            isFavorite: true,
+            duration_mins: row.duration_mins || 30,
+            muscle_groups: row.muscle_groups || 'Glutes / Squats / Core',
+            reps_target: row.reps_target || 15,
+            difficulty: row.difficulty || 'Intermediate',
+            bg_theme: row.bg_theme || row.bg_gradient || '#C8B6FF',
+            image_url: row.image_url || undefined,
+            type: row.type || (row.category === 'flexibility' ? 'Yoga' : 'Common exercises'),
+          }));
+        }
+      }
+
       console.warn('Could not fetch exercises from Supabase, using local defaults:', error.message);
       return DEFAULT_EXERCISES;
     }
@@ -117,6 +171,7 @@ export async function fetchExercisesFromSupabase(): Promise<ExerciseItem[]> {
         difficulty: row.difficulty || 'Intermediate',
         bg_theme: row.bg_theme || row.bg_gradient || '#C8B6FF',
         image_url: row.image_url || undefined,
+        type: row.type || (row.category === 'flexibility' ? 'Yoga' : 'Common exercises'),
       }));
     }
 

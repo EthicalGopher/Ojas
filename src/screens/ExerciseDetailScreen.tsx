@@ -65,6 +65,7 @@ export interface ExerciseItem {
   isFavorite?: boolean;
   bgGradient?: string;
   image_url?: string;
+  type?: string;
 }
 
 interface ExerciseDetailScreenProps {
@@ -306,10 +307,6 @@ export const ExerciseDetailScreen: React.FC<ExerciseDetailScreenProps> = ({
           <ArrowLeft size={18} color="#FFFFFF" />
         </TouchableOpacity>
 
-        <View style={styles.notificationBadgePill}>
-          <View style={styles.notificationBadgeDot} />
-          <Text style={styles.notificationBadgeText}>1</Text>
-        </View>
       </View>
 
       {/* HERO BANNER CARD (Vibrant Purple Background #3B4CCA / #3949AB) */}
@@ -569,6 +566,7 @@ export const ExerciseDetailScreen: React.FC<ExerciseDetailScreenProps> = ({
                   username={profile?.username || user?.email || 'user'}
                   size={46}
                   config={profile?.avatar_config}
+                  avatarUrl={profile?.avatar_url}
                 />
                 <View style={styles.myRankInfo}>
                   <Text style={styles.myRankName}>

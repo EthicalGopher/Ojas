@@ -20,6 +20,7 @@ import {
   SwitchCamera,
   Flame,
 } from 'lucide-react-native';
+import { LoadingScreen } from '../../../screens/LoadingScreen';
 
 export type ModelComplexity = 'light' | 'medium' | 'high';
 
@@ -30,7 +31,7 @@ interface CameraScreenProps {
   exerciseName?: string;
 }
 
-export const getPoseHtmlBundle = (exercise: string = 'squats') => {
+export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean = false) => {
   const norm = exercise.toLowerCase();
   let exerciseMode = 'squats';
   let exerciseTitle = 'Squats';
@@ -47,6 +48,9 @@ export const getPoseHtmlBundle = (exercise: string = 'squats') => {
   } else if (norm.includes('situp') || norm.includes('sit-up') || norm === '2') {
     exerciseMode = 'situp';
     exerciseTitle = 'Sit-ups';
+  } else if (norm.includes('cobra') || norm.includes('bhujanga') || norm === '6') {
+    exerciseMode = 'cobra_pose';
+    exerciseTitle = 'Cobra Pose';
   }
 
   return `
@@ -95,66 +99,51 @@ export const getPoseHtmlBundle = (exercise: string = 'squats') => {
       font-size: 12.5px; cursor: pointer; letter-spacing: 0.01em;
     }
 
-    /* ---------- HUD: STATE & VISIBILITY ---------- */
+    /* ---------- HUD ---------- */
     #hud {
-      position: absolute; z-index: 10;
-      top: max(82px, calc(env(safe-area-inset-top) + 68px));
-      left: max(14px, env(safe-area-inset-left));
-      padding: 7px 11px; border-radius: 16px;
-      background: rgba(12, 15, 20, 0.85);
-      border: 1px solid rgba(255, 255, 255, 0.14);
-      backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
-      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
-      font-variant-numeric: tabular-nums;
-      display: flex; flex-direction: column; gap: 5px;
-      min-width: 140px;
+      position: absolute;
+      top: 80px;
+      left: 0;
+      right: 0;
+      display: ${isMatch ? 'none' : 'flex'};
+      flex-direction: column;
+      align-items: center;
+      justifyContent: center;
+      gap: 8px;
+      z-index: 50;
+      pointer-events: none;
     }
     @media (orientation: landscape) {
       #hud {
-        top: 68px;
-        left: max(14px, env(safe-area-inset-left));
+        top: 75px;
       }
     }
-    .hud-row {
-      display: flex; align-items: center; justify-content: space-between; gap: 10px;
-    }
-    .hud-label-tag {
-      font-size: 9px; font-weight: 800; letter-spacing: 0.08em; color: #8E95A0;
-      text-transform: uppercase;
-    }
     .state-badge {
-      display: inline-flex; align-items: center; gap: 5px;
-      background: rgba(232, 213, 196, 0.14); border: 1px solid rgba(232, 213, 196, 0.35);
-      border-radius: 10px; padding: 3px 8px;
-      transition: all 0.2s ease;
+      display: inline-flex; align-items: center; gap: 12px;
+      background: rgba(10, 12, 18, 0.94);
+      border: 2.5px solid #FFFFFF;
+      border-radius: 30px;
+      padding: 10px 28px;
+      backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.7), 0 0 16px rgba(0, 0, 0, 0.5);
+      transition: all 0.15s ease;
     }
     .state-dot {
-      width: 6px; height: 6px; border-radius: 50%; background: #E8D5C4;
-      box-shadow: 0 0 8px 1px #E8D5C4; transition: all 0.2s ease;
+      width: 14px; height: 14px; border-radius: 50%; background: #FFFFFF;
+      box-shadow: 0 0 14px 4px rgba(255, 255, 255, 0.8); transition: all 0.15s ease;
+      flex-shrink: 0;
     }
     .state-text {
-      font-size: 11.5px; font-weight: 900; letter-spacing: 0.04em; color: #E8D5C4;
-      text-transform: uppercase; transition: color 0.2s ease;
-    }
-    .vis-box {
-      display: flex; align-items: center; gap: 7px;
-    }
-    .vis-value {
-      font-size: 12px; font-weight: 800; color: #E8D5C4;
-    }
-    .vis-track {
-      width: 48px; height: 5px; border-radius: 3px; background: rgba(255, 255, 255, 0.12);
-      overflow: hidden;
-    }
-    .vis-fill {
-      height: 100%; width: 0%; border-radius: 3px; background: #E8D5C4;
-      transition: width 0.2s ease, background-color 0.2s ease;
+      font-size: 26px; font-weight: 900; letter-spacing: 0.12em; color: #FFFFFF;
+      text-transform: uppercase; transition: color 0.15s ease;
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.9);
     }
     #hud-hint {
-      margin-top: 2px; padding: 4px 8px; border-radius: 8px;
-      background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3);
-      font-size: 10px; font-weight: 700; color: #FCA5A5; display: none; text-align: center;
-      max-width: 170px;
+      margin-top: 4px; padding: 6px 16px; border-radius: 12px;
+      background: rgba(220, 38, 38, 0.9); border: 1.5px solid #FCA5A5;
+      font-size: 13px; font-weight: 800; color: #FFFFFF; display: none; text-align: center;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+      max-width: 280px;
     }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1675466862/camera_utils.js" crossorigin="anonymous"></script>
@@ -179,23 +168,15 @@ export const getPoseHtmlBundle = (exercise: string = 'squats') => {
     <video id="video" playsinline webkit-playsinline muted></video>
     <canvas id="canvas"></canvas>
 
+    ${!isMatch ? `
     <div id="hud">
-      <div class="hud-row">
-        <span class="hud-label-tag">STATE</span>
-        <div id="state-badge" class="state-badge">
-          <span id="state-dot" class="state-dot"></span>
-          <span id="state-value" class="state-text">Ready</span>
-        </div>
-      </div>
-      <div class="hud-row">
-        <span class="hud-label-tag">VISIBILITY</span>
-        <div class="vis-box">
-          <span id="visibility-value" class="vis-value">--</span>
-          <div class="vis-track"><div id="visibility-fill" class="vis-fill"></div></div>
-        </div>
+      <div id="state-badge" class="state-badge">
+        <span id="state-dot" class="state-dot"></span>
+        <span id="state-value" class="state-text">Ready</span>
       </div>
       <div id="hud-hint">⚠️ Step back into frame</div>
     </div>
+    ` : ''}
   </div>
 
   <script>
@@ -250,42 +231,49 @@ export const getPoseHtmlBundle = (exercise: string = 'squats') => {
       correctHoldFrames = 0;
       kneeValues.length = 0;
       visibilityValues.length = 0;
-      renderState('TOP');
-    }
-
-    function average(values, value) {
-      values.push(value);
-      if (values.length > SMOOTHING_WINDOW) values.shift();
-      return values.reduce((sum, item) => sum + item, 0) / values.length;
     }
 
     function angle(a, b, c) {
-      const ba = { x: a.x - b.x, y: a.y - b.y };
-      const bc = { x: c.x - b.x, y: c.y - b.y };
-      const radians = Math.atan2(bc.y, bc.x) - Math.atan2(ba.y, ba.x);
-      const degrees = Math.abs(radians * 180 / Math.PI);
-      return degrees > 180 ? 360 - degrees : degrees;
+      const radians = Math.atan2(c.y - b.y, c.x - b.x) - Math.atan2(a.y - b.y, a.x - b.x);
+      let deg = Math.abs((radians * 180.0) / Math.PI);
+      if (deg > 180.0) deg = 360.0 - deg;
+      return deg;
     }
 
-    function midpoint(a, b) {
-      return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, z: ((a.z || 0) + (b.z || 0)) / 2 };
+    function average(arr, val) {
+      arr.push(val);
+      if (arr.length > SMOOTHING_WINDOW) arr.shift();
+      return arr.reduce((acc, c) => acc + c, 0) / arr.length;
     }
 
-    // ---------- State Machine Variables ----------
+    function calculateOverallVisibility(landmarks) {
+      if (!landmarks || landmarks.length === 0) return 0;
+      let sum = 0;
+      let count = 0;
+      for (const idx of REQUIRED_LANDMARKS) {
+        if (landmarks[idx] && typeof landmarks[idx].visibility === 'number') {
+          sum += landmarks[idx].visibility;
+          count++;
+        }
+      }
+      return count > 0 ? sum / count : 0;
+    }
+
+    // Generic state machine tracker with debounce
     let confirmedState = 'TOP';
     let candidateState = null;
     let candidateCount = 0;
     let reachedApexOrBottom = false;
     let correctHoldFrames = 0;
 
-    function updateGenericStateMachine(rawState, apexState = 'BOTTOM', startState = 'TOP') {
-      if (rawState === confirmedState) {
-        candidateState = null;
-        candidateCount = 0;
-        return false;
+    function updateGenericStateMachine(instantState, apexState, startState) {
+      if (instantState === candidateState) {
+        candidateCount += 1;
+      } else {
+        candidateState = instantState;
+        candidateCount = 1;
       }
-      candidateCount = rawState === candidateState ? candidateCount + 1 : 1;
-      candidateState = rawState;
+
       if (candidateCount < DEBOUNCE_FRAMES) return false;
 
       if (candidateState === apexState) reachedApexOrBottom = true;
@@ -305,16 +293,20 @@ export const getPoseHtmlBundle = (exercise: string = 'squats') => {
 
     // ---------- HUD Rendering ----------
     const STATE_STYLE = {
-      TOP: { text: 'Standing ▲', color: '#E8D5C4', bg: 'rgba(232, 213, 196, 0.15)', border: 'rgba(232, 213, 196, 0.35)' },
-      DOWN: { text: 'Moving ▼', color: '#C8B6FF', bg: 'rgba(200, 182, 255, 0.18)', border: 'rgba(200, 182, 255, 0.4)' },
-      BOTTOM: { text: 'Target ✓', color: '#34D399', bg: 'rgba(52, 211, 153, 0.2)', border: 'rgba(52, 211, 153, 0.45)' },
-      PERFECT: { text: 'Perfect Hold ✓', color: '#34D399', bg: 'rgba(52, 211, 153, 0.2)', border: 'rgba(52, 211, 153, 0.45)' },
-      ADJUST: { text: 'Adjust Form ⚠️', color: '#FBBF24', bg: 'rgba(251, 191, 36, 0.18)', border: 'rgba(251, 191, 36, 0.4)' },
-      SETUP: { text: 'Setup Stance ▲', color: '#C8B6FF', bg: 'rgba(200, 182, 255, 0.18)', border: 'rgba(200, 182, 255, 0.4)' },
+      TOP: { text: 'TOP', color: '#FFFFFF', bg: 'rgba(15, 23, 42, 0.95)', border: '#38BDF8' },
+      DOWN: { text: 'DOWN', color: '#E0E7FF', bg: 'rgba(49, 46, 129, 0.95)', border: '#818CF8' },
+      BOTTOM: { text: 'BOTTOM', color: '#ECFDF5', bg: 'rgba(6, 78, 59, 0.95)', border: '#34D399' },
+      PERFECT: { text: 'PERFECT', color: '#ECFDF5', bg: 'rgba(6, 78, 59, 0.95)', border: '#10B981' },
+      ADJUST: { text: 'ADJUST', color: '#FFFBEB', bg: 'rgba(120, 53, 15, 0.95)', border: '#FBBF24' },
+      SETUP: { text: 'SETUP', color: '#FDF4FF', bg: 'rgba(88, 28, 135, 0.95)', border: '#C084FC' },
+      LOW_VISIBILITY: { text: 'LOW VISIBILITY', color: '#FFFFFF', bg: 'rgba(127, 29, 29, 0.98)', border: '#EF4444' },
     };
 
+    let currentSmoothVisibility = 0;
+
     function renderState(state) {
-      const cfg = STATE_STYLE[state] || STATE_STYLE.TOP;
+      const effectiveState = currentSmoothVisibility < 0.40 ? 'LOW_VISIBILITY' : state;
+      const cfg = STATE_STYLE[effectiveState] || STATE_STYLE.TOP;
       const dot = document.getElementById('state-dot');
       const label = document.getElementById('state-value');
       const badge = document.getElementById('state-badge');
@@ -330,26 +322,27 @@ export const getPoseHtmlBundle = (exercise: string = 'squats') => {
         badge.style.background = cfg.bg;
         badge.style.borderColor = cfg.border;
       }
+      if (window.ReactNativeWebView) {
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'POSE_STATE',
+          state: effectiveState,
+          text: cfg.text,
+          color: cfg.color,
+          bg: cfg.bg,
+          border: cfg.border
+        }));
+      }
     }
 
     function renderVisibility(value) {
-      const valueEl = document.getElementById('visibility-value');
-      const fillEl = document.getElementById('visibility-fill');
+      currentSmoothVisibility = value;
       const hintEl = document.getElementById('hud-hint');
-      const pct = Math.round(value * 100);
-      const color = value >= 0.7 ? '#E8D5C4' : value >= 0.4 ? '#FBBF24' : '#F87171';
-      if (valueEl) {
-        valueEl.textContent = pct + '%';
-        valueEl.style.color = color;
-      }
-      if (fillEl) {
-        fillEl.style.width = Math.max(4, pct) + '%';
-        fillEl.style.backgroundColor = color;
-      }
-      if (hintEl && value < 0.45) {
-        hintEl.textContent = '⚠️ Step back into full frame';
-        hintEl.style.display = 'block';
-        hintEl.style.color = '#FCA5A5';
+      if (hintEl) {
+        if (value < 0.40) {
+          hintEl.textContent = '⚠️ Low Visibility: Step back into full frame';
+          hintEl.style.display = 'block';
+          hintEl.style.color = '#F87171';
+        }
       }
     }
 
@@ -360,11 +353,15 @@ export const getPoseHtmlBundle = (exercise: string = 'squats') => {
       const smoothKnee = average(kneeValues, (leftKnee + rightKnee) / 2);
 
       const instantState = smoothKnee <= 95 ? 'BOTTOM' : smoothKnee >= 155 ? 'TOP' : 'DOWN';
-      const completedRep = updateGenericStateMachine(instantState, 'BOTTOM', 'TOP');
+      
+      // Enforce 40% minimum visibility to register or progress rep state
+      const completedRep = currentSmoothVisibility >= 0.40
+        ? updateGenericStateMachine(instantState, 'BOTTOM', 'TOP')
+        : false;
       renderState(instantState);
 
       const hintEl = document.getElementById('hud-hint');
-      if (hintEl) {
+      if (hintEl && currentSmoothVisibility >= 0.40) {
         hintEl.style.display = smoothKnee > 115 && smoothKnee < 145 ? 'block' : 'none';
         hintEl.textContent = 'Squat deeper to parallel';
         hintEl.style.color = '#C8B6FF';
@@ -409,6 +406,12 @@ export const getPoseHtmlBundle = (exercise: string = 'squats') => {
 
       const isTopWristUp = topWrist.y < topShoulderPos.y;
       const hintEl = document.getElementById('hud-hint');
+
+      if (currentSmoothVisibility < 0.40) {
+        renderState('LOW_VISIBILITY');
+        correctHoldFrames = 0;
+        return;
+      }
 
       if (!isTopWristUp) {
         renderState('SETUP');
@@ -468,11 +471,14 @@ export const getPoseHtmlBundle = (exercise: string = 'squats') => {
       const torsoAngle = Math.abs(Math.atan2(torsoVec.x, -torsoVec.y) * 180 / Math.PI);
 
       const instantState = (smoothFrontKnee <= 100 && backKnee <= 115) ? 'BOTTOM' : smoothFrontKnee >= 160 ? 'TOP' : 'DOWN';
-      const completedRep = updateGenericStateMachine(instantState, 'BOTTOM', 'TOP');
+      
+      const completedRep = currentSmoothVisibility >= 0.40
+        ? updateGenericStateMachine(instantState, 'BOTTOM', 'TOP')
+        : false;
       renderState(instantState);
 
       const hintEl = document.getElementById('hud-hint');
-      if (hintEl) {
+      if (hintEl && currentSmoothVisibility >= 0.40) {
         if (torsoAngle > 22) {
           hintEl.textContent = '⚠️ Keep torso & chest upright';
           hintEl.style.display = 'block';
@@ -501,11 +507,14 @@ export const getPoseHtmlBundle = (exercise: string = 'squats') => {
       const smoothTorso = average(kneeValues, torsoAngleToFloor);
 
       const instantState = smoothTorso >= 22 ? 'BOTTOM' : smoothTorso <= 8 ? 'TOP' : 'DOWN';
-      const completedRep = updateGenericStateMachine(instantState, 'BOTTOM', 'TOP');
+      
+      const completedRep = currentSmoothVisibility >= 0.40
+        ? updateGenericStateMachine(instantState, 'BOTTOM', 'TOP')
+        : false;
       renderState(instantState === 'BOTTOM' ? 'BOTTOM' : instantState === 'TOP' ? 'TOP' : 'DOWN');
 
       const hintEl = document.getElementById('hud-hint');
-      if (hintEl) {
+      if (hintEl && currentSmoothVisibility >= 0.40) {
         if (smoothTorso > 42) {
           hintEl.textContent = '⚠️ Lift shoulder blades only (don’t sit up)';
           hintEl.style.display = 'block';
@@ -534,11 +543,14 @@ export const getPoseHtmlBundle = (exercise: string = 'squats') => {
       const smoothTorso = average(kneeValues, torsoAngleToFloor);
 
       const instantState = smoothTorso >= 60 ? 'BOTTOM' : smoothTorso <= 20 ? 'TOP' : 'DOWN';
-      const completedRep = updateGenericStateMachine(instantState, 'BOTTOM', 'TOP');
+      
+      const completedRep = currentSmoothVisibility >= 0.40
+        ? updateGenericStateMachine(instantState, 'BOTTOM', 'TOP')
+        : false;
       renderState(instantState === 'BOTTOM' ? 'BOTTOM' : instantState === 'TOP' ? 'TOP' : 'DOWN');
 
       const hintEl = document.getElementById('hud-hint');
-      if (hintEl) {
+      if (hintEl && currentSmoothVisibility >= 0.40) {
         if (instantState === 'DOWN' && smoothTorso < 50) {
           hintEl.textContent = 'Sit all the way up to 60°';
           hintEl.style.display = 'block';
@@ -550,6 +562,110 @@ export const getPoseHtmlBundle = (exercise: string = 'squats') => {
 
       if (completedRep && window.ReactNativeWebView) {
         window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'SQUAT_REP', repCount, poseName: 'Sit-ups' }));
+      }
+    }
+
+    // 6. Cobra Pose Engine (Bhujangasana)
+    function updateCobraPoseEngine(pose) {
+      const leftVis = ((pose[11].visibility || 1) + (pose[13].visibility || 1) + (pose[15].visibility || 1) + (pose[23].visibility || 1)) / 4.0;
+      const rightVis = ((pose[12].visibility || 1) + (pose[14].visibility || 1) + (pose[16].visibility || 1) + (pose[24].visibility || 1)) / 4.0;
+      const activeSide = leftVis >= rightVis ? 'left' : 'right';
+
+      const leftElbowAng = angle(pose[11], pose[13], pose[15]);
+      const rightElbowAng = angle(pose[12], pose[14], pose[16]);
+      const leftKneeAng = angle(pose[23], pose[25], pose[27]);
+      const rightKneeAng = angle(pose[24], pose[26], pose[28]);
+      const leftHipAng = angle(pose[11], pose[23], pose[25]);
+      const rightHipAng = angle(pose[12], pose[24], pose[26]);
+
+      const activeElbow = activeSide === 'left' ? leftElbowAng : rightElbowAng;
+      const activeKnee = activeSide === 'left' ? leftKneeAng : rightKneeAng;
+      const activeHip = activeSide === 'left' ? leftHipAng : rightHipAng;
+
+      const midShoulderY = (pose[11].y + pose[12].y) / 2.0;
+      const midShoulderX = (pose[11].x + pose[12].x) / 2.0;
+      const midHipY = (pose[23].y + pose[24].y) / 2.0;
+      const midHipX = (pose[23].x + pose[24].x) / 2.0;
+      const midKneeY = (pose[25].y + pose[26].y) / 2.0;
+      const midAnkleY = (pose[27].y + pose[28].y) / 2.0;
+
+      const chestLiftY = midHipY - midShoulderY;
+      const torsoDx = Math.abs(midShoulderX - midHipX);
+      const torsoDy = Math.abs(midShoulderY - midHipY);
+      const torsoToHorizontal = Math.atan2(torsoDy, torsoDx) * 180 / Math.PI;
+
+      const floorBaselineY = Math.max(midKneeY, midAnkleY);
+      const pelvisLiftY = floorBaselineY - midHipY;
+
+      const issues = [];
+      if (pelvisLiftY > 0.08) {
+        issues.push('Keep hips & pelvis grounded on the mat');
+      }
+      if (chestLiftY < 0.12 || torsoToHorizontal < 22) {
+        issues.push('Lift chest higher off the mat');
+      }
+      if (activeElbow < 155) {
+        issues.push('Extend elbows to Full Cobra (' + Math.round(activeElbow) + '°)');
+      } else if (activeElbow > 178) {
+        issues.push('Avoid hyperextending elbows');
+      }
+      if (activeKnee < 155) {
+        issues.push('Straighten legs along the mat (' + Math.round(activeKnee) + '°)');
+      }
+      if (activeHip > 162) {
+        issues.push('Arch back smoothly to lift chest');
+      } else if (activeHip < 110) {
+        issues.push('Ease off arch - maintain controlled curve');
+      }
+      if (pose[0].y > midShoulderY) {
+        issues.push('Keep neck long & gaze forward');
+      }
+
+      const isProneLift = chestLiftY > 0.04 && torsoToHorizontal >= 12 && activeKnee >= 140;
+      const hintEl = document.getElementById('hud-hint');
+
+      if (currentSmoothVisibility < 0.40) {
+        renderState('LOW_VISIBILITY');
+        correctHoldFrames = 0;
+        return;
+      }
+
+      if (!isProneLift) {
+        renderState('SETUP');
+        if (hintEl) {
+          hintEl.textContent = '🐍 Lie prone & press chest upward (Side view recommended)';
+          hintEl.style.display = 'block';
+          hintEl.style.color = '#A7F3D0';
+        }
+        correctHoldFrames = 0;
+      } else if (issues.length === 0) {
+        renderState('PERFECT');
+        correctHoldFrames += 1;
+        const totalHoldSecs = (correctHoldFrames / 25).toFixed(1);
+        if (hintEl) {
+          hintEl.textContent = '✨ Perfect Full Cobra! Hold: ' + totalHoldSecs + 's';
+          hintEl.style.display = 'block';
+          hintEl.style.color = '#34D399';
+        }
+        if (correctHoldFrames % 75 === 0) {
+          repCount += 1;
+          if (window.ReactNativeWebView) {
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: 'SQUAT_REP',
+              repCount: repCount,
+              holdSeconds: Math.floor(correctHoldFrames / 25),
+              poseName: 'Cobra Pose'
+            }));
+          }
+        }
+      } else {
+        renderState('ADJUST');
+        correctHoldFrames = Math.max(0, correctHoldFrames - 2);
+        if (hintEl) {
+          hintEl.textContent = '⚠️ ' + issues[0];
+          hintEl.style.display = 'block';
+          hintEl.style.color = '#FBBF24';
+        }
       }
     }
 
@@ -656,6 +772,8 @@ export const getPoseHtmlBundle = (exercise: string = 'squats') => {
               updateCrunchEngine(landmarks);
             } else if (EXERCISE_MODE === 'situp') {
               updateSitupEngine(landmarks);
+            } else if (EXERCISE_MODE === 'cobra_pose') {
+              updateCobraPoseEngine(landmarks);
             } else {
               updateSquatEngine(landmarks);
             }
@@ -786,6 +904,8 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
   const [poseStatus, setPoseStatus] = useState<string>('Initializing Pose Engine…');
   const [poseDetected, setPoseDetected] = useState<boolean>(false);
   const [repCount, setRepCount] = useState<number>(0);
+  const [isModelLoading, setIsModelLoading] = useState<boolean>(true);
+  const [visibility, setVisibility] = useState<number>(1);
 
   const webViewRef = useRef<WebView>(null);
   const repScaleAnim = useRef(new Animated.Value(1)).current;
@@ -795,7 +915,10 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
     exerciseId === '4';
   const isHoldPose =
     exerciseName.toLowerCase().includes('triangle') ||
-    exerciseId === '3';
+    exerciseName.toLowerCase().includes('cobra') ||
+    exerciseName.toLowerCase().includes('bhujanga') ||
+    exerciseId === '3' ||
+    exerciseId === '6';
 
   const countLabel = isHoldPose ? 'POINTS' : isStepCount ? 'STEPS' : 'REPS';
 
@@ -827,7 +950,11 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
   const handleMessage = (event: any) => {
     try {
       const data = JSON.parse(event.nativeEvent.data);
-      if (data.type === 'SQUAT_REP' && typeof data.repCount === 'number') {
+      if (data.type === 'MODEL_READY') {
+        setIsModelLoading(false);
+      } else if (data.type === 'POSE_VISIBILITY' && typeof data.visibility === 'number') {
+        setVisibility(data.visibility);
+      } else if (data.type === 'SQUAT_REP' && typeof data.repCount === 'number') {
         setRepCount(data.repCount);
         triggerRepBump();
       } else if (data.type === 'POSE_DETECTED') {
@@ -842,6 +969,7 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
       } else if (data.type === 'NO_PERSON') {
         setPoseStatus('🔍 Searching for Person in Frame...');
         setPoseDetected(false);
+        setVisibility(0);
       }
     } catch (e) {}
   };
@@ -937,6 +1065,16 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
         </View>
       </View>
 
+      {/* Low Visibility Banner Overlay in Solo Mode */}
+      {!isModelLoading && visibility < 0.40 && (
+        <View style={styles.soloLowVisibilityOverlay} pointerEvents="none">
+          <View style={styles.soloLowVisibilityPill}>
+            <Text style={styles.soloLowVisibilityText}>⚠️ LOW VISIBILITY</Text>
+            <Text style={styles.soloLowVisibilitySub}>Step back into full camera frame to count reps</Text>
+          </View>
+        </View>
+      )}
+
       {/* Single Draggable Floating Actions Widget */}
       <SoloDraggableActionsWidget
         onLeave={handleClose}
@@ -944,6 +1082,16 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
         onToggleOrientation={handleToggleOrientation}
         onReset={handleRestartSession}
       />
+
+      {/* Unified Animated Loading Screen for Solo Mode */}
+      {isModelLoading && (
+        <LoadingScreen
+          title={`PREPARING ${exerciseName.toUpperCase()}`}
+          message="Loading AI camera and pose tracking engine..."
+          fullScreen={false}
+          onCancel={handleClose}
+        />
+      )}
     </View>
   );
 };
@@ -1176,5 +1324,42 @@ const styles = StyleSheet.create({
   },
   resetActionBtn: {
     backgroundColor: '#E8D5C4',
+  },
+  soloLowVisibilityOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 95,
+    pointerEvents: 'none',
+  },
+  soloLowVisibilityPill: {
+    backgroundColor: 'rgba(239, 68, 68, 0.9)',
+    borderColor: '#EF4444',
+    borderWidth: 1.5,
+    borderRadius: 24,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 10,
+    elevation: 6,
+  },
+  soloLowVisibilityText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '900',
+    letterSpacing: 1.2,
+  },
+  soloLowVisibilitySub: {
+    color: '#FEE2E2',
+    fontSize: 11,
+    fontWeight: '700',
+    marginTop: 2,
   },
 });

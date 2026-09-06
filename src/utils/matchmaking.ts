@@ -10,9 +10,10 @@ export interface FFALeaderboardPlayer {
 
 export type MatchMessage =
   | { type: 'joined'; user_id: string }
-  | { type: 'matched'; match_id: string; exercise_id?: string; role: 'player1' | 'player2'; opponent: string }
-  | { type: 'ffa_lobby_update'; match_id: string; exercise_id: string; players: string[]; player_count: number; countdown: number; status: string }
-  | { type: 'ffa_matched'; match_id: string; exercise_id: string; mode: 'ffa'; players: string[]; player_count: number }
+  | { type: 'join'; user_id: string; exercise_id: string }
+  | { type: 'matched'; match_id: string; room_id?: string; room_number?: number; exercise_id?: string; role: 'player1' | 'player2'; opponent: string }
+  | { type: 'ffa_lobby_update'; match_id: string; room_id?: string; room_number?: number; exercise_id: string; players: string[]; player_count: number; countdown: number; status: string }
+  | { type: 'ffa_matched'; match_id: string; room_id?: string; room_number?: number; exercise_id: string; mode: 'ffa'; players: string[]; player_count: number }
   | { type: 'ffa_leaderboard'; match_id: string; leaderboard: FFALeaderboardPlayer[]; sender?: string; score?: number }
   | { type: 'ffa_game_end'; match_id: string; leaderboard: FFALeaderboardPlayer[]; sender?: string }
   | { type: 'player_left_ffa'; match_id?: string; sender?: string; players?: string[] }
@@ -56,24 +57,33 @@ export const isMatchSocketConnected = () => {
   return socket !== null && socket.readyState === WebSocket.OPEN;
 };
 
-export const connectMatchSocket = (userId?: string, roomIdOrExerciseId?: string) => {
+export const connectMatchSocket = (userId?: string, roomIdOrExerciseId?: string, forceReconnect: boolean = false) => {
   const url = `${getWsUrl(BACKEND_URL)}/ws/match`;
   const nextUserId = userId || `anon_${Date.now()}`;
   const nextRoomId = roomIdOrExerciseId || 'default_room';
 
-  // If already connected for the same user and room/queue, don't destroy and reconnect
-  if (
-    socket &&
-    (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING) &&
-    currentSenderUserId === nextUserId &&
-    currentMatchRoomId === nextRoomId
-  ) {
-    return;
-  }
-
   currentSenderUserId = nextUserId;
   currentMatchRoomId = nextRoomId;
   wsUrl = url;
+
+  // If socket is already open and alive, reuse it by sending a join event
+  if (
+    !forceReconnect &&
+    socket &&
+    socket.readyState === WebSocket.OPEN
+  ) {
+    console.log(`[Matchmaking] Reusing WebSocket for ${nextUserId} in queue ${nextRoomId}`);
+    try {
+      socket.send(
+        JSON.stringify({
+          type: 'join',
+          user_id: nextUserId,
+          exercise_id: nextRoomId,
+        })
+      );
+    } catch (e) {}
+    return;
+  }
 
   if (socket) {
     try {
@@ -115,24 +125,33 @@ export const connectMatchSocket = (userId?: string, roomIdOrExerciseId?: string)
       if (socket !== ws) return;
       try {
         const msg: MatchMessage = JSON.parse(event.data);
+        if (msg.type === 'matched') {
+          currentMatchRoomId = msg.room_id || msg.match_id;
+          console.log(`[Matchmaking] ⚔️ Matched in Room #${msg.room_number || msg.match_id} (ID: ${currentMatchRoomId}) against @${msg.opponent}`);
+        } else if (msg.type === 'ffa_matched') {
+          currentMatchRoomId = msg.room_id || msg.match_id;
+          console.log(`[Matchmaking] 👑 Matched in FFA Room #${msg.room_number || msg.match_id} (ID: ${currentMatchRoomId}) with ${msg.player_count} athletes`);
+        }
         messageListeners.forEach((cb) => cb(msg));
       } catch (e) {
         console.warn('[Matchmaking] Failed to parse message payload:', event.data, e);
       }
     };
 
-    ws.onerror = (e) => {
-      console.warn('[Matchmaking] WebSocket error encountered:', e);
+    ws.onerror = (e: any) => {
+      const errorMsg = e?.message || e?.error?.message || 'surrender / connection closed';
+      console.log(`[Matchmaking] WebSocket note: ${errorMsg}`);
     };
 
     ws.onclose = (event) => {
-      console.log(`[Matchmaking] WebSocket closed (code: ${event.code}, reason: ${event.reason || 'none'})`);
+      const closeReason = event.reason || (event.code === 1006 ? 'surrender / match ended' : 'match concluded');
+      console.log(`[Matchmaking] WebSocket closed (code: ${event.code}, reason: ${closeReason})`);
       if (socket === ws) {
         socket = null;
       }
     };
-  } catch (e) {
-    console.error('[Matchmaking] Failed to instantiate WebSocket:', e);
+  } catch (e: any) {
+    console.warn('[Matchmaking] Failed to instantiate WebSocket:', e?.message || e);
   }
 };
 
@@ -221,8 +240,9 @@ export const connectPresenceSocket = (userId?: string) => {
       }
     };
 
-    ws.onerror = (event) => {
-      console.warn('[Presence] WebSocket error:', event);
+    ws.onerror = (event: any) => {
+      const errorMsg = event?.message || event?.error?.message || 'Presence socket interrupted';
+      console.warn(`[Presence] WebSocket note: ${errorMsg}`);
     };
 
     ws.onclose = (event) => {
@@ -231,8 +251,8 @@ export const connectPresenceSocket = (userId?: string) => {
         presenceSocket = null;
       }
     };
-  } catch (e) {
-    console.error('[Presence] Failed to connect:', e);
+  } catch (e: any) {
+    console.warn('[Presence] Failed to connect:', e?.message || e);
   }
 };
 

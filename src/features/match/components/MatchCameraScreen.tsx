@@ -39,9 +39,12 @@ import {
 import { getPoseHtmlBundle } from '../../camera/components/CameraScreen';
 import { recordExerciseMatchResult } from '../../../utils/rankingService';
 import { useUserStore } from '../../../store/userStore';
+import { useMatchmakingStore } from '../../../store/matchmakingStore';
 import { sendFriendRequest } from '../../../utils/friendService';
 import { sendCustomBattleInvite } from '../../../utils/customBattleService';
 import { LoadingScreen } from '../../../screens/LoadingScreen';
+import { Avatar } from '../../../components/Avatar';
+import { supabase } from '../../../utils/supabase';
 
 export type MatchMode = 'faceoff' | 'quickjoin' | 'ffa';
 
@@ -49,6 +52,7 @@ type MatchPhase = 'loading_resources' | 'setup_countdown' | 'active_match' | 'ma
 
 interface MatchCameraScreenProps {
   onClose: () => void;
+  onRequeue?: (mode: MatchMode, exerciseId: string) => void;
   selectedModel?: string;
   mode: MatchMode;
   opponentUsername?: string;
@@ -102,6 +106,7 @@ const OPPONENT_STREAM_HTML = `
 
 export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
   onClose,
+  onRequeue,
   selectedModel = 'medium',
   mode = 'faceoff',
   opponentUsername = 'opponent',
@@ -136,6 +141,46 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
   const hasReceivedFirstOpponentFrame = useRef(false);
   const matchPhaseRef = useRef<MatchPhase>('loading_resources');
   const [dimensions, setDimensions] = useState(() => Dimensions.get('window'));
+  const [autoCountdown, setAutoCountdown] = useState<number>(5);
+  const [opponentAvatarUrl, setOpponentAvatarUrl] = useState<string | null>(null);
+  const [currentPoseState, setCurrentPoseState] = useState<{ text: string; color: string; bg: string; border: string }>({
+    text: 'READY',
+    color: '#FFFFFF',
+    bg: 'rgba(15, 23, 42, 0.95)',
+    border: '#38BDF8',
+  });
+
+  const { autoRematch, toggleAutoRematch, setAutoRematch } = useMatchmakingStore();
+
+  // Fetch opponent's avatar from Supabase profiles
+  useEffect(() => {
+    if (!opponentUsername || opponentUsername === 'opponent' || opponentUsername === 'Free For All') {
+      return;
+    }
+
+    let isMounted = true;
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('avatar_url, avatar_config')
+          .eq('username', opponentUsername)
+          .maybeSingle();
+
+        if (!error && data && isMounted) {
+          if (data.avatar_url) {
+            setOpponentAvatarUrl(data.avatar_url);
+          }
+        }
+      } catch (e) {
+        console.warn('[MatchCamera] Failed to fetch opponent profile from Supabase:', e);
+      }
+    })();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [opponentUsername]);
 
   useEffect(() => {
     const sub = Dimensions.addEventListener('change', ({ window }) => {
@@ -256,9 +301,20 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
       }
 
       if (msg.type === 'rematch_request') {
+        const getExerciseTitle = (exId?: string) => {
+          switch (exId) {
+            case '1': return 'Squats';
+            case '2': return 'Sit-ups';
+            case '3': return 'Triangle Pose';
+            case '4': return 'Lunges';
+            case '5': return 'Crunches';
+            case '6': return 'Cobra Pose';
+            default: return 'the Match';
+          }
+        };
         Alert.alert(
           'Rematch Request! ⚔️',
-          `@${opponentUsername} wants to rematch in ${exerciseId === '3' ? 'Triangle Pose' : 'Squats'}!`,
+          `@${opponentUsername} wants to rematch in ${getExerciseTitle(exerciseId)}!`,
           [
             {
               text: 'Decline',
@@ -378,6 +434,35 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
     return () => clearInterval(duelTimer);
   }, [matchPhase, selfUsername]);
 
+  // 5-Second Post-Match Auto Requeue / Countdown Timer
+  useEffect(() => {
+    if (matchPhase !== 'match_ended') {
+      setAutoCountdown(5);
+      return;
+    }
+
+    if (!autoRematch) return;
+
+    setAutoCountdown(5);
+    const interval = setInterval(() => {
+      setAutoCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          // Trigger instant rematch / requeue
+          if (onRequeue) {
+            onRequeue(mode, exerciseId);
+          } else {
+            handleRestartMatch();
+          }
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [matchPhase, autoRematch, onRequeue, mode, exerciseId]);
+
   const handleWebViewMessage = useCallback(
     (event: WebViewMessageEvent) => {
       try {
@@ -387,6 +472,16 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
         if (data.type === 'MODEL_READY') {
           setLocalReady(true);
           sendMatchMessage({ type: 'peer_ready' });
+        }
+
+        // Live pose state (TOP, DOWN, BOTTOM, PERFECT, etc.)
+        if (data.type === 'POSE_STATE' && data.text) {
+          setCurrentPoseState({
+            text: data.text,
+            color: data.color || '#FFFFFF',
+            bg: data.bg || 'rgba(15, 23, 42, 0.95)',
+            border: data.border || '#38BDF8',
+          });
         }
 
         // Live pose visibility during camera adjustment mode
@@ -556,7 +651,7 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
     }
   };
 
-  const htmlBundle = getPoseHtmlBundle(exerciseId || 'squats');
+  const htmlBundle = getPoseHtmlBundle(exerciseId || 'squats', true);
 
   return (
     <View style={styles.container}>
@@ -788,9 +883,135 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
           timeLeft={timeLeft}
           ended={matchEnded}
           selfUsername={selfUsername}
+          selfAvatarUrl={profile?.avatar_url}
           opponentUsername={opponentUsername}
+          opponentAvatarUrl={opponentAvatarUrl}
           ffaLeaderboard={ffaLeaderboard}
+          poseState={currentPoseState}
         />
+      )}
+
+      {/* Active Match Low Visibility Alert Banner (Shown if visibility < 40% during game) */}
+      {matchPhase === 'active_match' && visibility < 0.40 && (
+        <View style={styles.activeLowVisibilityOverlay} pointerEvents="none">
+          <View style={styles.activeLowVisibilityPill}>
+            <Text style={styles.activeLowVisibilityText}>⚠️ LOW VISIBILITY</Text>
+            <Text style={styles.activeLowVisibilitySub}>Step back into full camera frame to count reps</Text>
+          </View>
+        </View>
+      )}
+
+      {/* MATCH ENDED POPUP & AUTO-REMATCH / CONTINUOUS PLAY OVERLAY */}
+      {matchPhase === 'match_ended' && (
+        <View style={styles.matchEndedOverlay}>
+          <View style={styles.matchEndedCard}>
+            {/* Header Badge: Result */}
+            {(() => {
+              const isFFA = mode === 'ffa';
+              const myRank = isFFA
+                ? ffaLeaderboard.findIndex((p) => p.username === selfUsername || p.username === user?.id) + 1
+                : 0;
+              const isWin = isFFA ? myRank === 1 : selfScore > opponentScore;
+              const isDraw = isFFA ? myRank > 1 && myRank <= 3 : selfScore === opponentScore;
+
+              const title = isWin
+                ? '🏆 VICTORY!'
+                : isDraw
+                ? isFFA ? `🥈 PODIUM #${myRank || 2}!` : '🤝 DRAW!'
+                : '💪 DEFEAT';
+              const subtitle = isWin
+                ? isFFA ? `Rank #1 Champion with ${selfScore} reps!` : `Crushed it with ${selfScore} reps!`
+                : isDraw
+                ? `${selfScore} reps recorded`
+                : `${selfScore} reps - Great effort!`;
+
+              return (
+                <View style={styles.matchEndedHeader}>
+                  <Text style={styles.matchEndedTitle}>{title}</Text>
+                  <Text style={styles.matchEndedSubtitle}>{subtitle}</Text>
+                </View>
+              );
+            })()}
+
+            {/* Score Comparison Badge */}
+            <View style={styles.matchEndedScoreRow}>
+              <View style={styles.matchEndedScoreBox}>
+                <Text style={styles.matchEndedScoreLabel}>YOUR SCORE</Text>
+                <Text style={styles.matchEndedScoreNum}>{selfScore}</Text>
+              </View>
+              {mode !== 'ffa' && (
+                <>
+                  <Text style={styles.matchEndedScoreVs}>VS</Text>
+                  <View style={styles.matchEndedScoreBox}>
+                    <Text style={styles.matchEndedScoreLabel}>{opponentUsername?.toUpperCase() || 'RIVAL'}</Text>
+                    <Text style={styles.matchEndedScoreNum}>{opponentScore}</Text>
+                  </View>
+                </>
+              )}
+            </View>
+
+            {/* Auto Rematch Toggle & 5s Countdown */}
+            <View style={styles.autoRematchContainer}>
+              <TouchableOpacity
+                style={[
+                  styles.autoRematchTogglePill,
+                  autoRematch ? styles.autoRematchToggleActive : styles.autoRematchToggleInactive,
+                ]}
+                activeOpacity={0.8}
+                onPress={toggleAutoRematch}
+              >
+                <Zap size={18} color={autoRematch ? '#11141A' : '#8E95A0'} />
+                <View style={{ flex: 1 }}>
+                  <Text
+                    style={[
+                      styles.autoRematchToggleTitle,
+                      autoRematch ? styles.autoRematchToggleTitleActive : styles.autoRematchToggleTitleInactive,
+                    ]}
+                  >
+                    Auto-Queue Next Battle: {autoRematch ? 'ON' : 'OFF'}
+                  </Text>
+                  <Text style={styles.autoRematchToggleSub}>
+                    {autoRematch
+                      ? `Starting next match in ${autoCountdown}s...`
+                      : 'Toggle on for non-stop matches'}
+                  </Text>
+                </View>
+                {autoRematch && (
+                  <View style={styles.countdownBadgeSmall}>
+                    <Text style={styles.countdownBadgeText}>{autoCountdown}s</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            </View>
+
+            {/* Action Buttons */}
+            <View style={styles.matchEndedActionsRow}>
+              <TouchableOpacity
+                style={styles.matchEndedCloseBtn}
+                activeOpacity={0.8}
+                onPress={() => handleClose(true)}
+              >
+                <LogOut size={16} color="#CBD5E1" />
+                <Text style={styles.matchEndedCloseBtnText}>Exit to Workout</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.matchEndedNextBtn}
+                activeOpacity={0.8}
+                onPress={() => {
+                  if (onRequeue) {
+                    onRequeue(mode, exerciseId);
+                  } else {
+                    handleRestartMatch();
+                  }
+                }}
+              >
+                <Swords size={16} color="#11141A" />
+                <Text style={styles.matchEndedNextBtnText}>Next Battle ⚡</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
       )}
 
       {/* FLOATING DRAGGABLE ACTIONS WIDGET */}
@@ -799,7 +1020,15 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
         onFlipCamera={handleFlipCamera}
         onToggleOrientation={handleToggleOrientation}
         onTryAgain={handleRestartMatch}
-        onChallengeSamePlayer={handleChallengeSamePlayer}
+        onToggleAutoRematch={toggleAutoRematch}
+        autoRematch={autoRematch}
+        onNextBattle={() => {
+          if (onRequeue) {
+            onRequeue(mode, exerciseId);
+          } else {
+            handleRestartMatch();
+          }
+        }}
         onSendFriendRequest={handleSendFriendRequest}
       />
     </View>
@@ -814,7 +1043,9 @@ interface DraggableWidgetProps {
   onFlipCamera: () => void;
   onToggleOrientation: () => void;
   onTryAgain: () => void;
-  onChallengeSamePlayer: () => void;
+  onToggleAutoRematch: () => void;
+  autoRematch: boolean;
+  onNextBattle: () => void;
   onSendFriendRequest: () => void;
 }
 
@@ -823,7 +1054,9 @@ const DraggableActionsWidget: React.FC<DraggableWidgetProps> = ({
   onFlipCamera,
   onToggleOrientation,
   onTryAgain,
-  onChallengeSamePlayer,
+  onToggleAutoRematch,
+  autoRematch,
+  onNextBattle,
   onSendFriendRequest,
 }) => {
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
@@ -924,13 +1157,18 @@ const DraggableActionsWidget: React.FC<DraggableWidgetProps> = ({
               <RotateCcw size={16} color="#11141A" />
             </TouchableOpacity>
 
-            {/* 5. Challenge Same Player */}
+            {/* 5. Addictive Auto-Rematch / Next Battle Toggle (Swords) */}
             <TouchableOpacity
-              style={[styles.widgetActionBtn, styles.challengeActionBtn]}
+              style={[
+                styles.widgetActionBtn,
+                styles.addictiveActionBtn,
+                autoRematch && styles.addictiveActionBtnActive,
+              ]}
               activeOpacity={0.75}
-              onPress={onChallengeSamePlayer}
+              onPress={onToggleAutoRematch}
             >
-              <Swords size={16} color="#11141A" />
+              <Swords size={16} color={autoRematch ? '#11141A' : '#64748B'} strokeWidth={2.5} />
+              {autoRematch && <View style={styles.addictiveActiveDot} />}
             </TouchableOpacity>
 
             {/* 6. Send Friend Request */}
@@ -992,8 +1230,11 @@ const ScoreBoard: React.FC<{
   timeLeft: number;
   ended: boolean;
   selfUsername?: string;
+  selfAvatarUrl?: string | null;
   opponentUsername?: string;
+  opponentAvatarUrl?: string | null;
   ffaLeaderboard?: FFALeaderboardPlayer[];
+  poseState?: { text: string; color: string; bg: string; border: string };
 }> = ({
   mode = 'faceoff',
   selfScore,
@@ -1001,8 +1242,11 @@ const ScoreBoard: React.FC<{
   timeLeft,
   ended,
   selfUsername = 'user',
+  selfAvatarUrl,
   opponentUsername = 'opponent',
+  opponentAvatarUrl,
   ffaLeaderboard = [],
+  poseState,
 }) => {
   const selfScale = useBumpAnim(selfScore);
   const opponentScale = useBumpAnim(opponentScore);
@@ -1069,32 +1313,51 @@ const ScoreBoard: React.FC<{
             <Text style={styles.ffaMyStatsScore}>{selfScore} REPS</Text>
           </View>
 
-          <Animated.View
-            style={[
-              styles.timerBadge,
-              ended && styles.timerBadgeEnded,
-              { borderColor: timerColor },
-              ended && { backgroundColor: timerColor + '26' },
-              { transform: [{ scale: pulseScale }] },
-            ]}
-          >
-            {ended ? (
-              <Text style={[styles.timerOutcome, { color: timerColor }]} numberOfLines={1}>
-                {myRank === 1
-                  ? 'VICTORY (+15)'
-                  : myRank <= 3
-                  ? `PODIUM #${myRank} (+10)`
-                  : 'FINISHED (+5)'}
-              </Text>
-            ) : (
-              <>
-                <Text style={[styles.timerValue, { color: timerColor }]}>
-                  {formatMatchTime(timeLeft)}
+          <View style={styles.timerColumn}>
+            <Animated.View
+              style={[
+                styles.timerBadge,
+                ended && styles.timerBadgeEnded,
+                { borderColor: timerColor },
+                ended && { backgroundColor: timerColor + '26' },
+                { transform: [{ scale: pulseScale }] },
+              ]}
+            >
+              {ended ? (
+                <Text style={[styles.timerOutcome, { color: timerColor }]} numberOfLines={1}>
+                  {myRank === 1
+                    ? 'VICTORY (+15)'
+                    : myRank <= 3
+                    ? `PODIUM #${myRank} (+10)`
+                    : 'FINISHED (+5)'}
                 </Text>
-                <Text style={styles.timerUnit}>{timeLeft >= 60 ? 'MIN' : 'SEC'}</Text>
-              </>
+              ) : (
+                <>
+                  <Text style={[styles.timerValue, { color: timerColor }]}>
+                    {formatMatchTime(timeLeft)}
+                  </Text>
+                  <Text style={styles.timerUnit}>{timeLeft >= 60 ? 'MIN' : 'SEC'}</Text>
+                </>
+              )}
+            </Animated.View>
+
+            {/* Live State showcase below timer */}
+            {!ended && poseState && (
+              <View
+                style={[
+                  styles.liveStateBadge,
+                  {
+                    backgroundColor: poseState.bg,
+                    borderColor: poseState.border,
+                  },
+                ]}
+              >
+                <Text style={[styles.liveStateText, { color: poseState.color }]}>
+                  {poseState.text}
+                </Text>
+              </View>
             )}
-          </Animated.View>
+          </View>
 
           <View style={styles.ffaLobbyCountBadge}>
             <Text style={styles.ffaLobbyCountLabel}>ATHLETES</Text>
@@ -1102,7 +1365,7 @@ const ScoreBoard: React.FC<{
           </View>
         </View>
 
-        {/* Live Clean FFA Leaderboard: Sorted highest reps on top (No boxes/emojis) */}
+        {/* Live Clean FFA Leaderboard: Sorted highest reps on top */}
         <View style={styles.ffaLeaderboardCard}>
           <View style={styles.ffaLeaderboardHeaderRow}>
             <Text style={styles.ffaLeaderboardHeading}>LEADERBOARD</Text>
@@ -1112,7 +1375,21 @@ const ScoreBoard: React.FC<{
           <ScrollView style={styles.ffaLeaderboardScroll} showsVerticalScrollIndicator={false}>
             {activeFfaList.map((player, idx) => {
               const isMe = player.username === selfUsername;
-              const isTop = idx === 0;
+              const isTop3 = idx < 3;
+              const isFirst = idx === 0;
+              const isSecond = idx === 1;
+              const isThird = idx === 2;
+
+              const rankColor = isFirst ? '#FDE047' : isSecond ? '#E2E8F0' : isThird ? '#FDBA74' : '#8E95A0';
+              const repColor = isFirst
+                ? '#FDE047'
+                : isSecond
+                ? '#FFFFFF'
+                : isThird
+                ? '#FDBA74'
+                : isMe
+                ? '#E8D5C4'
+                : '#94A3B8';
 
               return (
                 <View
@@ -1120,33 +1397,45 @@ const ScoreBoard: React.FC<{
                   style={[
                     styles.ffaLeaderboardRow,
                     isMe && styles.ffaLeaderboardRowMe,
+                    isTop3 && styles.ffaLeaderboardRowTop3,
                   ]}
                 >
-                  <Text style={[styles.ffaRankText, isTop && { color: '#E8D5C4' }, isMe && { color: '#E8D5C4' }]}>
+                  <Text style={[styles.ffaRankText, { color: rankColor, fontWeight: isTop3 ? '900' : '700' }]}>
                     #{idx + 1}
                   </Text>
+
+                  <Avatar
+                    username={player.username}
+                    avatarUrl={isMe ? selfAvatarUrl : undefined}
+                    size={isTop3 ? 26 : 22}
+                  />
 
                   <Text
                     style={[
                       styles.ffaPlayerUsername,
                       isMe && styles.ffaPlayerUsernameMe,
-                      isTop && styles.ffaPlayerUsernameTop,
+                      isFirst && styles.ffaPlayerUsernameTop,
+                      isTop3 && { fontWeight: '800' },
+                      { marginLeft: 8 },
                     ]}
                     numberOfLines={1}
                   >
                     @{player.username} {isMe ? '(You)' : ''}
                   </Text>
 
-                  <View style={styles.ffaPlayerScoreBox}>
+                  <View style={[styles.ffaPlayerScoreBox, isTop3 && styles.ffaPlayerScoreBoxTop3]}>
                     <Text
                       style={[
                         styles.ffaPlayerScoreText,
-                        isMe ? { color: '#E8D5C4' } : isTop ? { color: '#E8D5C4' } : { color: '#FFFFFF' },
+                        isTop3 && styles.ffaPlayerScoreTextTop3,
+                        { color: repColor },
                       ]}
                     >
                       {player.score}
                     </Text>
-                    <Text style={styles.ffaPlayerScoreUnit}>reps</Text>
+                    <Text style={[styles.ffaPlayerScoreUnit, isTop3 && { color: repColor, opacity: 0.85, fontWeight: '800' }]}>
+                      reps
+                    </Text>
                   </View>
                 </View>
               );
@@ -1163,42 +1452,63 @@ const ScoreBoard: React.FC<{
         isSelf
         label="YOU"
         username={selfUsername}
+        avatarUrl={selfAvatarUrl}
         score={selfScore}
         color={SELF_COLOR}
         leading={!ended && leader === 'self'}
         scale={selfScale}
       />
 
-      <Animated.View
-        style={[
-          styles.timerBadge,
-          ended && styles.timerBadgeEnded,
-          { borderColor: timerColor },
-          ended && { backgroundColor: timerColor + '26' },
-          { transform: [{ scale: pulseScale }] },
-        ]}
-      >
-        {ended ? (
-          <Text style={[styles.timerOutcome, { color: timerColor }]} numberOfLines={1}>
-            {outcome === 'WIN'
-              ? 'VICTORY (+10)'
-              : outcome === 'DRAW'
-              ? 'DRAW (+5)'
-              : 'DEFEAT (-10)'}
-          </Text>
-        ) : (
-          <>
-            <Text style={[styles.timerValue, { color: timerColor }]}>
-              {formatMatchTime(timeLeft)}
+      <View style={styles.timerColumn}>
+        <Animated.View
+          style={[
+            styles.timerBadge,
+            ended && styles.timerBadgeEnded,
+            { borderColor: timerColor },
+            ended && { backgroundColor: timerColor + '26' },
+            { transform: [{ scale: pulseScale }] },
+          ]}
+        >
+          {ended ? (
+            <Text style={[styles.timerOutcome, { color: timerColor }]} numberOfLines={1}>
+              {outcome === 'WIN'
+                ? 'VICTORY (+10)'
+                : outcome === 'DRAW'
+                ? 'DRAW (+5)'
+                : 'DEFEAT (-10)'}
             </Text>
-            <Text style={styles.timerUnit}>{timeLeft >= 60 ? 'MIN' : 'SEC'}</Text>
-          </>
+          ) : (
+            <>
+              <Text style={[styles.timerValue, { color: timerColor }]}>
+                {formatMatchTime(timeLeft)}
+              </Text>
+              <Text style={styles.timerUnit}>{timeLeft >= 60 ? 'MIN' : 'SEC'}</Text>
+            </>
+          )}
+        </Animated.View>
+
+        {/* Live State showcase below timer */}
+        {!ended && poseState && (
+          <View
+            style={[
+              styles.liveStateBadge,
+              {
+                backgroundColor: poseState.bg,
+                borderColor: poseState.border,
+              },
+            ]}
+          >
+            <Text style={[styles.liveStateText, { color: poseState.color }]}>
+              {poseState.text}
+            </Text>
+          </View>
         )}
-      </Animated.View>
+      </View>
 
       <PlayerBadge
         label={(opponentUsername || 'OPPONENT').toUpperCase()}
         username={opponentUsername}
+        avatarUrl={opponentAvatarUrl}
         score={opponentScore}
         color={OPPONENT_COLOR}
         leading={!ended && leader === 'opponent'}
@@ -1212,28 +1522,33 @@ const PlayerBadge: React.FC<{
   isSelf?: boolean;
   label: string;
   username: string;
+  avatarUrl?: string | null;
   score: number;
   color: string;
   leading: boolean;
   scale: Animated.Value;
-}> = ({ isSelf = false, label, username, score, color, leading, scale }) => {
-  const initial = (username || '?').trim().charAt(0).toUpperCase() || '?';
-
+}> = ({ isSelf = false, label, username, avatarUrl, score, color, leading, scale }) => {
   return (
-    <View style={[styles.playerBadge, !isSelf && styles.playerBadgeReverse]}>
+    <View style={[styles.playerBadge, !isSelf && styles.playerBadgeReverse, leading && styles.playerBadgeLeading]}>
       <View style={styles.avatarWrap}>
         {leading && <Text style={styles.crown}>👑</Text>}
-        <View style={[styles.avatar, { borderColor: color, backgroundColor: color + '26' }]}>
-          <Text style={[styles.avatarInitial, { color }]}>{initial}</Text>
-        </View>
+        <Avatar username={username} avatarUrl={avatarUrl} size={36} />
       </View>
       <View style={isSelf ? styles.playerTextLeft : styles.playerTextRight}>
         <Text style={styles.playerLabel} numberOfLines={1}>
           {label}
         </Text>
-        <Animated.Text style={[styles.playerScore, { color, transform: [{ scale }] }]}>
-          {score}
-        </Animated.Text>
+        <Animated.View style={{ transform: [{ scale }] }}>
+          <Text
+            style={[
+              styles.playerScore,
+              { color },
+              styles.playerScoreHighContrast,
+            ]}
+          >
+            {score}
+          </Text>
+        </Animated.View>
       </View>
     </View>
   );
@@ -1383,6 +1698,43 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     textTransform: 'uppercase',
   },
+  activeLowVisibilityOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 95,
+    pointerEvents: 'none',
+  },
+  activeLowVisibilityPill: {
+    backgroundColor: 'rgba(239, 68, 68, 0.9)',
+    borderColor: '#EF4444',
+    borderWidth: 1.5,
+    borderRadius: 24,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 10,
+    elevation: 6,
+  },
+  activeLowVisibilityText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '900',
+    letterSpacing: 1.2,
+  },
+  activeLowVisibilitySub: {
+    color: '#FEE2E2',
+    fontSize: 11,
+    fontWeight: '700',
+    marginTop: 2,
+  },
   scoreBoard: {
     position: 'absolute',
     top: 14,
@@ -1396,12 +1748,21 @@ const styles = StyleSheet.create({
   playerBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(12, 15, 20, 0.75)',
-    borderRadius: 20,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: 'rgba(12, 15, 20, 0.88)',
+    borderRadius: 24,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.5,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  playerBadgeLeading: {
+    borderColor: 'rgba(232, 213, 196, 0.5)',
+    backgroundColor: 'rgba(20, 24, 33, 0.92)',
   },
   playerBadgeReverse: {
     flexDirection: 'row-reverse',
@@ -1411,44 +1772,58 @@ const styles = StyleSheet.create({
   },
   crown: {
     position: 'absolute',
-    top: -12,
+    top: -14,
     left: 4,
-    fontSize: 12,
+    fontSize: 14,
+    zIndex: 10,
   },
   avatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    borderWidth: 1.5,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarInitial: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '900',
   },
   playerTextLeft: {
-    marginLeft: 8,
+    marginLeft: 10,
   },
   playerTextRight: {
-    marginRight: 8,
+    marginRight: 10,
     alignItems: 'flex-end',
   },
   playerLabel: {
-    color: '#8E95A0',
-    fontSize: 9,
-    fontWeight: '800',
+    color: '#CBD5E1',
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 0.6,
   },
   playerScore: {
-    fontSize: 18,
+    fontSize: 26,
     fontWeight: '900',
+    lineHeight: 28,
+  },
+  playerScoreHighContrast: {
+    textShadowColor: 'rgba(0, 0, 0, 0.9)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 6,
+    fontWeight: '900',
+  },
+  timerColumn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: 8,
+    gap: 10,
   },
   timerBadge: {
     width: 64,
     height: 64,
     borderRadius: 32,
     borderWidth: 2,
-    marginHorizontal: 8,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(12, 15, 20, 0.85)',
@@ -1469,6 +1844,29 @@ const styles = StyleSheet.create({
     fontSize: 8,
     fontWeight: '800',
     color: '#8E95A0',
+  },
+  liveStateBadge: {
+    paddingHorizontal: 16,
+    paddingVertical: 7,
+    borderRadius: 16,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.5,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  liveStateText: {
+    fontSize: 18,
+    fontWeight: '900',
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+    textShadowColor: 'rgba(0, 0, 0, 0.9)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 6,
   },
   timerOutcome: {
     fontSize: 12,
@@ -1526,6 +1924,31 @@ const styles = StyleSheet.create({
   leaveActionBtn: {
     backgroundColor: '#EF4444',
   },
+  addictiveActionBtn: {
+    backgroundColor: '#F1F5F9',
+    position: 'relative',
+  },
+  addictiveActionBtnActive: {
+    backgroundColor: '#E8D5C4',
+    borderWidth: 1.5,
+    borderColor: '#E8D5C4',
+    shadowColor: '#E8D5C4',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.6,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  addictiveActiveDot: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#10B981',
+    borderWidth: 1,
+    borderColor: '#FFFFFF',
+  },
   challengeActionBtn: {
     backgroundColor: '#E8D5C4',
   },
@@ -1548,23 +1971,32 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   ffaMyStatsBadge: {
-    backgroundColor: 'rgba(12, 15, 20, 0.85)',
-    borderRadius: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderWidth: 1.5,
+    backgroundColor: 'rgba(12, 15, 20, 0.92)',
+    borderRadius: 22,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderWidth: 2,
     borderColor: '#E8D5C4',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.5,
+    shadowRadius: 8,
+    elevation: 8,
   },
   ffaMyStatsLabel: {
     color: '#E8D5C4',
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.5,
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 0.8,
   },
   ffaMyStatsScore: {
     color: '#FFFFFF',
-    fontSize: 16,
+    fontSize: 22,
     fontWeight: '900',
+    marginTop: 2,
+    textShadowColor: 'rgba(0, 0, 0, 0.8)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 6,
   },
   ffaLobbyCountBadge: {
     backgroundColor: 'rgba(12, 15, 20, 0.85)',
@@ -1629,32 +2061,35 @@ const styles = StyleSheet.create({
   ffaLeaderboardRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 3,
-    paddingHorizontal: 5,
+    paddingVertical: 4,
+    paddingHorizontal: 6,
     borderRadius: 8,
     marginVertical: 1,
   },
+  ffaLeaderboardRowTop3: {
+    backgroundColor: 'rgba(255, 255, 255, 0.07)',
+  },
   ffaLeaderboardRowMe: {
-    backgroundColor: 'rgba(232, 213, 196, 0.14)',
+    backgroundColor: 'rgba(232, 213, 196, 0.18)',
     borderWidth: 1,
-    borderColor: 'rgba(232, 213, 196, 0.3)',
+    borderColor: 'rgba(232, 213, 196, 0.4)',
   },
   ffaRankBadge: {
-    width: 20,
+    width: 22,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 4,
   },
   ffaRankText: {
     color: '#8E95A0',
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '900',
     marginRight: 6,
   },
   ffaPlayerUsername: {
     flex: 1,
     color: '#CBD5E1',
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
   },
   ffaPlayerUsernameMe: {
@@ -1668,15 +2103,195 @@ const styles = StyleSheet.create({
   ffaPlayerScoreBox: {
     flexDirection: 'row',
     alignItems: 'baseline',
-    gap: 2,
+    gap: 3,
+  },
+  ffaPlayerScoreBoxTop3: {
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
   },
   ffaPlayerScoreText: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '900',
+  },
+  ffaPlayerScoreTextTop3: {
+    fontSize: 17,
+    fontWeight: '900',
+    textShadowColor: 'rgba(0, 0, 0, 0.8)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
   },
   ffaPlayerScoreUnit: {
     color: '#64748B',
-    fontSize: 8,
+    fontSize: 9,
     fontWeight: '700',
+  },
+  matchEndedOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(12, 15, 20, 0.88)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 9990,
+    padding: 20,
+  },
+  matchEndedCard: {
+    width: '100%',
+    maxWidth: 400,
+    backgroundColor: '#161B22',
+    borderRadius: 24,
+    borderWidth: 1.5,
+    borderColor: 'rgba(232, 213, 196, 0.3)',
+    padding: 24,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.5,
+    shadowRadius: 20,
+    elevation: 20,
+  },
+  matchEndedHeader: {
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  matchEndedTitle: {
+    color: '#E8D5C4',
+    fontSize: 26,
+    fontWeight: '900',
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  matchEndedSubtitle: {
+    color: '#94A3B8',
+    fontSize: 14,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  matchEndedScoreRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    borderRadius: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    marginVertical: 12,
+    width: '100%',
+    gap: 16,
+  },
+  matchEndedScoreBox: {
+    alignItems: 'center',
+  },
+  matchEndedScoreLabel: {
+    color: '#8E95A0',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+  },
+  matchEndedScoreNum: {
+    color: '#FFFFFF',
+    fontSize: 28,
+    fontWeight: '900',
+    marginTop: 2,
+  },
+  matchEndedScoreVs: {
+    color: '#E8D5C4',
+    fontSize: 14,
+    fontWeight: '900',
+  },
+  autoRematchContainer: {
+    width: '100%',
+    marginVertical: 12,
+  },
+  autoRematchTogglePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    gap: 12,
+  },
+  autoRematchToggleActive: {
+    backgroundColor: '#E8D5C4',
+    borderColor: '#E8D5C4',
+  },
+  autoRematchToggleInactive: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  autoRematchToggleTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  autoRematchToggleTitleActive: {
+    color: '#11141A',
+  },
+  autoRematchToggleTitleInactive: {
+    color: '#CBD5E1',
+  },
+  autoRematchToggleSub: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  countdownBadgeSmall: {
+    backgroundColor: '#11141A',
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  countdownBadgeText: {
+    color: '#E8D5C4',
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  matchEndedActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 14,
+    width: '100%',
+  },
+  matchEndedCloseBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderRadius: 14,
+    paddingVertical: 14,
+    gap: 8,
+  },
+  matchEndedCloseBtnText: {
+    color: '#CBD5E1',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  matchEndedNextBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#E8D5C4',
+    borderRadius: 14,
+    paddingVertical: 14,
+    gap: 8,
+    shadowColor: '#E8D5C4',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  matchEndedNextBtnText: {
+    color: '#11141A',
+    fontSize: 13,
+    fontWeight: '900',
   },
 });

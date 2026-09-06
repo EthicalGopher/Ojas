@@ -47,5 +47,4 @@ ON storage.objects FOR DELETE
 TO authenticated
 USING (bucket_id = 'Images');
 
--- 4. Enable RLS on storage.objects if not already enabled
-ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
+-- 4. Enable RLS on storage.objects if not already enabled (managed by Supabase)

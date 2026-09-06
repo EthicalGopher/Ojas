@@ -18,12 +18,18 @@ export const DEFAULT_QUEUE_COUNTS: QueueCounts = {
 };
 
 interface MatchmakingState extends QueueCounts {
+  autoRematch: boolean;
+  setAutoRematch: (enabled: boolean) => void;
+  toggleAutoRematch: () => void;
   setCounts: (counts: QueueCounts) => void;
   resetCounts: () => void;
 }
 
 export const useMatchmakingStore = create<MatchmakingState>((set) => ({
   ...DEFAULT_QUEUE_COUNTS,
+  autoRematch: true,
+  setAutoRematch: (autoRematch) => set({ autoRematch }),
+  toggleAutoRematch: () => set((state) => ({ autoRematch: !state.autoRematch })),
   setCounts: (counts) => set({
     total_online: counts.total_online,
     exercise_counts: {

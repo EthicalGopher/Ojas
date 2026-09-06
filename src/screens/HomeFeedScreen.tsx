@@ -44,6 +44,7 @@ export interface ExerciseItem {
   bgGradient?: string;
   description?: string;
   image_url?: string;
+  type?: string;
 }
 
 interface HomeFeedScreenProps {
