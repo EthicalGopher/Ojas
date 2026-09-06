@@ -28,12 +28,6 @@ export const getDeviceInfo = (): DeviceInfo => {
 
 export type ModelComplexity = 'light' | 'medium' | 'high';
 
-export const getRecommendedModel = (ramGb: number): ModelComplexity => {
-  if (ramGb <= 3.5) {
-    return 'light';
-  } else if (ramGb <= 6.5) {
-    return 'medium';
-  } else {
-    return 'high';
-  }
+export const getRecommendedModel = (ramGb?: number): ModelComplexity => {
+  return 'medium';
 };

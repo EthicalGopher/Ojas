@@ -309,6 +309,7 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
             case '4': return 'Lunges';
             case '5': return 'Crunches';
             case '6': return 'Cobra Pose';
+            case '7': return 'Push-ups';
             default: return 'the Match';
           }
         };

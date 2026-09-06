@@ -51,6 +51,9 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
   } else if (norm.includes('cobra') || norm.includes('bhujanga') || norm === '6') {
     exerciseMode = 'cobra_pose';
     exerciseTitle = 'Cobra Pose';
+  } else if (norm.includes('pushup') || norm.includes('push-up') || norm.includes('push up') || norm === '7') {
+    exerciseMode = 'pushup';
+    exerciseTitle = 'Push-ups';
   }
 
   return `
@@ -218,6 +221,7 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
     const SMOOTHING_WINDOW = 5;
     const DEBOUNCE_FRAMES = 4;
     const kneeValues = [];
+    const hipValues = [];
     const visibilityValues = [];
     let repCount = 0;
     let lastVisMsgTime = 0;
@@ -230,6 +234,7 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
       reachedApexOrBottom = false;
       correctHoldFrames = 0;
       kneeValues.length = 0;
+      hipValues.length = 0;
       visibilityValues.length = 0;
     }
 
@@ -430,6 +435,13 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
           hintEl.style.display = 'block';
           hintEl.style.color = '#34D399';
         }
+        if (window.ReactNativeWebView && (correctHoldFrames % 5 === 0 || correctHoldFrames === 1)) {
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'POSE_HOLD_TIME',
+            holdSeconds: parseFloat(totalHoldSecs),
+            poseName: 'Triangle Pose'
+          }));
+        }
         if (correctHoldFrames % 75 === 0) {
           repCount += 1;
           if (window.ReactNativeWebView) {
@@ -617,7 +629,7 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
       } else if (activeHip < 110) {
         issues.push('Ease off arch - maintain controlled curve');
       }
-      if (pose[0].y > midShoulderY) {
+      if (pose[0] && pose[0].y > midShoulderY) {
         issues.push('Keep neck long & gaze forward');
       }
 
@@ -638,7 +650,10 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
           hintEl.style.color = '#A7F3D0';
         }
         correctHoldFrames = 0;
-      } else if (issues.length === 0) {
+        return;
+      }
+
+      if (issues.length === 0) {
         renderState('PERFECT');
         correctHoldFrames += 1;
         const totalHoldSecs = (correctHoldFrames / 25).toFixed(1);
@@ -646,6 +661,13 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
           hintEl.textContent = '✨ Perfect Full Cobra! Hold: ' + totalHoldSecs + 's';
           hintEl.style.display = 'block';
           hintEl.style.color = '#34D399';
+        }
+        if (window.ReactNativeWebView && (correctHoldFrames % 5 === 0 || correctHoldFrames === 1)) {
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'POSE_HOLD_TIME',
+            holdSeconds: parseFloat(totalHoldSecs),
+            poseName: 'Cobra Pose'
+          }));
         }
         if (correctHoldFrames % 75 === 0) {
           repCount += 1;
@@ -666,6 +688,73 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
           hintEl.style.display = 'block';
           hintEl.style.color = '#FBBF24';
         }
+      }
+    }
+
+    // 7. Push-ups Engine
+    function updatePushupEngine(pose) {
+      const leftVis = ((pose[11].visibility || 1) + (pose[13].visibility || 1) + (pose[15].visibility || 1) + (pose[23].visibility || 1) + (pose[25].visibility || 1)) / 5.0;
+      const rightVis = ((pose[12].visibility || 1) + (pose[14].visibility || 1) + (pose[16].visibility || 1) + (pose[24].visibility || 1) + (pose[26].visibility || 1)) / 5.0;
+      const isLeft = leftVis >= rightVis;
+
+      const shoulder = isLeft ? pose[11] : pose[12];
+      const elbow = isLeft ? pose[13] : pose[14];
+      const wrist = isLeft ? pose[15] : pose[16];
+      const hip = isLeft ? pose[23] : pose[24];
+      const knee = isLeft ? pose[25] : pose[26];
+
+      const rawElbowAngle = angle(shoulder, elbow, wrist);
+      const rawHipAngle = angle(shoulder, hip, knee);
+      const smoothElbow = average(kneeValues, rawElbowAngle);
+      const smoothHip = average(hipValues, rawHipAngle);
+
+      const depthDiff = shoulder.y - elbow.y;
+      const torsoDx = shoulder.x - hip.x;
+      const torsoDy = shoulder.y - hip.y;
+      const torsoToVertical = Math.abs(Math.atan2(Math.abs(torsoDx), Math.abs(torsoDy)) * 180 / Math.PI);
+
+      // Body in horizontal plank alignment (torso tilted 35°-145°, hip reasonably straight)
+      const isPlank = torsoToVertical >= 35 && torsoToVertical <= 145 && smoothHip >= 120 && smoothHip <= 220;
+
+      // Bottom position: elbow <= 105 deg and chest lowering toward elbow level
+      // Top position: elbow >= 150 deg
+      const instantState = (depthDiff >= -0.02 && smoothElbow <= 105)
+        ? 'BOTTOM'
+        : (smoothElbow >= 150)
+        ? 'TOP'
+        : 'DOWN';
+
+      const completedRep = (currentSmoothVisibility >= 0.40 && isPlank)
+        ? updateGenericStateMachine(instantState, 'BOTTOM', 'TOP')
+        : false;
+
+      renderState(instantState === 'BOTTOM' ? 'BOTTOM' : instantState === 'TOP' ? 'TOP' : 'DOWN');
+
+      const hintEl = document.getElementById('hud-hint');
+      if (hintEl && currentSmoothVisibility >= 0.40) {
+        if (!isPlank && smoothHip < 135) {
+          hintEl.textContent = '⚠️ Hips sagging - tighten core';
+          hintEl.style.display = 'block';
+          hintEl.style.color = '#FBBF24';
+        } else if (!isPlank && smoothHip > 195) {
+          hintEl.textContent = '⚠️ Hips piking - lower hips into line';
+          hintEl.style.display = 'block';
+          hintEl.style.color = '#FBBF24';
+        } else if (instantState === 'DOWN' && smoothElbow > 110) {
+          hintEl.textContent = 'Lower chest to elbow level (' + Math.round(smoothElbow) + '°)';
+          hintEl.style.display = 'block';
+          hintEl.style.color = '#FFD6E0';
+        } else if (instantState === 'BOTTOM') {
+          hintEl.textContent = '🔥 Great depth! Press back up!';
+          hintEl.style.display = 'block';
+          hintEl.style.color = '#34D399';
+        } else {
+          hintEl.style.display = 'none';
+        }
+      }
+
+      if (completedRep && window.ReactNativeWebView) {
+        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'SQUAT_REP', repCount, poseName: 'Push-ups' }));
       }
     }
 
@@ -741,7 +830,21 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
           const landmarks = results.poseLandmarks;
 
           if (landmarks && landmarks.length > 0) {
-            const visibility = Math.min(...REQUIRED_LANDMARKS.map((index) => landmarks[index]?.visibility ?? 1));
+            // For side profile exercises (pushup, cobra_pose, lunge, crunch, situp), one side is occluded.
+            // Check visibility using max of left/right pairs for limbs so far-side occlusion doesn't fail the gate.
+            let visibility;
+            if (['pushup', 'cobra_pose', 'lunge', 'crunch', 'situp'].includes(EXERCISE_MODE)) {
+              const noseVis = landmarks[0]?.visibility ?? 1;
+              const shoulderVis = Math.max(landmarks[11]?.visibility ?? 1, landmarks[12]?.visibility ?? 1);
+              const elbowVis = Math.max(landmarks[13]?.visibility ?? 1, landmarks[14]?.visibility ?? 1);
+              const wristVis = Math.max(landmarks[15]?.visibility ?? 1, landmarks[16]?.visibility ?? 1);
+              const hipVis = Math.max(landmarks[23]?.visibility ?? 1, landmarks[24]?.visibility ?? 1);
+              const kneeVis = Math.max(landmarks[25]?.visibility ?? 1, landmarks[26]?.visibility ?? 1);
+              visibility = Math.min(noseVis, shoulderVis, elbowVis, wristVis, hipVis, kneeVis);
+            } else {
+              visibility = Math.min(...REQUIRED_LANDMARKS.map((index) => landmarks[index]?.visibility ?? 1));
+            }
+
             const smoothVisibility = average(visibilityValues, visibility);
             renderVisibility(smoothVisibility);
 
@@ -774,6 +877,8 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
               updateSitupEngine(landmarks);
             } else if (EXERCISE_MODE === 'cobra_pose') {
               updateCobraPoseEngine(landmarks);
+            } else if (EXERCISE_MODE === 'pushup') {
+              updatePushupEngine(landmarks);
             } else {
               updateSquatEngine(landmarks);
             }
@@ -815,14 +920,34 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
 
         let currentFacingMode = 'user';
         let currentStream = null;
+        let isProcessingFrame = false;
+        let animationFrameId = null;
 
         function startCamera(facingMode) {
+          if (animationFrameId) {
+            cancelAnimationFrame(animationFrameId);
+            animationFrameId = null;
+          }
+          isProcessingFrame = false;
+
           if (currentStream) {
-            currentStream.getTracks().forEach((track) => track.stop());
+            currentStream.getTracks().forEach((track) => {
+              try { track.stop(); } catch (e) {}
+            });
+            currentStream = null;
+          }
+
+          if (video) {
+            try { video.pause(); } catch (e) {}
+            video.srcObject = null;
           }
 
           const constraints = {
-            video: { facingMode, width: { ideal: 1280 }, height: { ideal: 720 } },
+            video: {
+              facingMode: { ideal: facingMode },
+              width: { ideal: 640 },
+              height: { ideal: 480 }
+            },
             audio: false
           };
 
@@ -836,30 +961,70 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
               currentStream = stream;
               video.srcObject = stream;
               video.onloadedmetadata = () => {
-                video.play();
-                canvas.width = video.videoWidth;
-                canvas.height = video.videoHeight;
-                processFrame();
+                video.play()
+                  .then(() => {
+                    canvas.width = video.videoWidth || 640;
+                    canvas.height = video.videoHeight || 480;
+                    scheduleNextFrame();
+                  })
+                  .catch(() => {
+                    scheduleNextFrame();
+                  });
               };
             })
             .catch((err) => {
-              setProgress(currentProgress, 'Camera permission denied or camera unavailable', true);
+              // Fallback to basic video constraint without strict facing mode
+              navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+                .then((stream) => {
+                  currentStream = stream;
+                  video.srcObject = stream;
+                  video.onloadedmetadata = () => {
+                    video.play().catch(() => {});
+                    canvas.width = video.videoWidth || 640;
+                    canvas.height = video.videoHeight || 480;
+                    scheduleNextFrame();
+                  };
+                })
+                .catch(() => {
+                  setProgress(currentProgress, 'Camera permission denied or camera unavailable', true);
+                });
             });
         }
 
+        function scheduleNextFrame() {
+          if (animationFrameId) {
+            cancelAnimationFrame(animationFrameId);
+          }
+          animationFrameId = requestAnimationFrame(processFrame);
+        }
+
         function processFrame() {
-          if (!video || video.paused || video.ended || !poseInstance) return;
+          if (!video || video.paused || video.ended || !poseInstance) {
+            scheduleNextFrame();
+            return;
+          }
+
+          if (video.readyState < 2 || video.videoWidth === 0 || video.videoHeight === 0) {
+            scheduleNextFrame();
+            return;
+          }
+
+          if (isProcessingFrame) {
+            scheduleNextFrame();
+            return;
+          }
+
+          isProcessingFrame = true;
 
           poseInstance.send({ image: video })
             .then(() => {
-              if (window.requestVideoFrameCallback) {
-                video.requestVideoFrameCallback(processFrame);
-              } else {
-                requestAnimationFrame(processFrame);
-              }
+              isProcessingFrame = false;
+              scheduleNextFrame();
             })
-            .catch(() => {
-              requestAnimationFrame(processFrame);
+            .catch((e) => {
+              // Gracefully handle obstructed/black/flipped frames without stopping loop
+              isProcessingFrame = false;
+              scheduleNextFrame();
             });
         }
 
@@ -871,7 +1036,9 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
         window.setInitialComplexity = (val) => {
           selectedComplexity = val;
           if (poseInstance) {
-            poseInstance.setOptions({ modelComplexity: val });
+            try {
+              poseInstance.setOptions({ modelComplexity: val });
+            } catch (e) {}
           }
         };
 
@@ -904,6 +1071,7 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
   const [poseStatus, setPoseStatus] = useState<string>('Initializing Pose Engine…');
   const [poseDetected, setPoseDetected] = useState<boolean>(false);
   const [repCount, setRepCount] = useState<number>(0);
+  const [holdSeconds, setHoldSeconds] = useState<number>(0);
   const [isModelLoading, setIsModelLoading] = useState<boolean>(true);
   const [visibility, setVisibility] = useState<number>(1);
 
@@ -954,8 +1122,13 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
         setIsModelLoading(false);
       } else if (data.type === 'POSE_VISIBILITY' && typeof data.visibility === 'number') {
         setVisibility(data.visibility);
+      } else if (data.type === 'POSE_HOLD_TIME' && typeof data.holdSeconds === 'number') {
+        setHoldSeconds(data.holdSeconds);
       } else if (data.type === 'SQUAT_REP' && typeof data.repCount === 'number') {
         setRepCount(data.repCount);
+        if (typeof data.holdSeconds === 'number') {
+          setHoldSeconds(data.holdSeconds);
+        }
         triggerRepBump();
       } else if (data.type === 'POSE_DETECTED') {
         const label =
@@ -998,6 +1171,7 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
 
   const handleRestartSession = () => {
     setRepCount(0);
+    setHoldSeconds(0);
     if (webViewRef.current) {
       webViewRef.current.injectJavaScript('window.resetSessionScore && window.resetSessionScore(); true;');
     }
@@ -1044,24 +1218,35 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
         onLoadEnd={handleWebViewLoad}
       />
 
-      {/* Top HUD Header: Solo Exercise Name & Rep / Step Counter */}
+      {/* Top HUD Header: Solo Exercise Name & Rep / Step / Hold Timer Counter */}
       <View style={styles.topHudContainer} pointerEvents="none">
         <View style={styles.exerciseBadgePill}>
           <Flame size={14} color="#E8D5C4" style={{ marginRight: 5 }} />
           <Text style={styles.exerciseBadgeText}>{exerciseName.toUpperCase()} SOLO</Text>
         </View>
 
-        {/* Solo Rep / Step Score Badge */}
-        <View style={styles.scoreBadgePill}>
-          <Text style={styles.scoreBadgeLabel}>{countLabel}</Text>
-          <Animated.Text
-            style={[
-              styles.scoreBadgeNumber,
-              { transform: [{ scale: repScaleAnim }] },
-            ]}
-          >
-            {repCount}
-          </Animated.Text>
+        {/* Solo Rep / Step / Hold Score Badge */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          {isHoldPose && (
+            <View style={[styles.scoreBadgePill, { borderColor: '#34D399', backgroundColor: 'rgba(6, 78, 59, 0.92)' }]}>
+              <Text style={[styles.scoreBadgeLabel, { color: '#6EE7B7' }]}>HOLD</Text>
+              <Text style={[styles.scoreBadgeNumber, { color: '#34D399', fontSize: 16, minWidth: 40 }]}>
+                {holdSeconds.toFixed(1)}s
+              </Text>
+            </View>
+          )}
+
+          <View style={styles.scoreBadgePill}>
+            <Text style={styles.scoreBadgeLabel}>{countLabel}</Text>
+            <Animated.Text
+              style={[
+                styles.scoreBadgeNumber,
+                { transform: [{ scale: repScaleAnim }] },
+              ]}
+            >
+              {repCount}
+            </Animated.Text>
+          </View>
         </View>
       </View>
 

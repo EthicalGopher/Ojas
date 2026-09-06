@@ -27,6 +27,9 @@
         "CAMERA"
       ]
     },
+    "assetBundlePatterns": [
+      "assets/**/*"
+    ],
     "plugins": [
       "expo-asset",
       "expo-status-bar",

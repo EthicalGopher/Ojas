@@ -109,6 +109,22 @@ export const DEFAULT_EXERCISES: ExerciseItem[] = [
     image_url: 'https://locsjrjekkyjbeapgreu.supabase.co/storage/v1/object/public/Images/Excercise/a-female-doing-yoga.svg',
     type: 'Yoga',
   },
+  {
+    id: '7',
+    name: 'Push-ups',
+    category: 'strength',
+    icon: '🤸',
+    description: 'AI Real-time Push-up Depth, Elbow Flexion & Plank Alignment Rep Tracker',
+    bgGradient: '#FFD6E0',
+    isFavorite: true,
+    duration_mins: 20,
+    muscle_groups: 'Chest / Triceps / Shoulders / Core',
+    reps_target: 15,
+    difficulty: 'Intermediate',
+    bg_theme: '#FFD6E0',
+    image_url: 'https://locsjrjekkyjbeapgreu.supabase.co/storage/v1/object/public/Images/Excercise/a-guy-doing-pushups.svg',
+    type: 'Common exercises',
+  },
 ];
 
 export async function fetchExercisesFromSupabase(): Promise<ExerciseItem[]> {
