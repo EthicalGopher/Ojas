@@ -33,7 +33,7 @@ const ICON = 50;   // diameter of the actual colored, tappable icon circle
 
 const TAB_ITEMS = [
   { key: 'home' as const, icon: Home },
-  { key: 'explore' as const, icon: Activity },
+  { key: 'explore' as const, icon: Users },
   { key: 'workouts' as const, icon: Dumbbell },
   { key: 'profile' as const, icon: User },
 ];

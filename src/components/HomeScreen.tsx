@@ -25,6 +25,7 @@ import { ExerciseDetailScreen } from '../screens/ExerciseDetailScreen';
 import { ExercisesScreen, ExerciseItem } from '../screens/ExercisesScreen';
 import { HomeFeedScreen } from '../screens/HomeFeedScreen';
 import { ProfileScreen } from '../screens/ProfileScreen';
+import { CommunityScreen } from '../screens/CommunityScreen';
 import { DEFAULT_EXERCISES, fetchExercisesFromSupabase } from '../utils/exerciseService';
 import { Header } from './Header';
 
@@ -298,10 +299,17 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       );
     }
 
-    if (activeTab !== 'home') {
-      return renderUnderDevelopment(
-        activeTab === 'explore' ? 'Explore Section' : 'Special Events'
+    if (activeTab === 'explore') {
+      return (
+        <CommunityScreen
+          currentUser={currentUser}
+          onBack={() => onTabChange('home')}
+        />
       );
+    }
+
+    if (activeTab !== 'home') {
+      return renderUnderDevelopment('Special Events');
     }
 
     if (activeSubTab === 'news') {
