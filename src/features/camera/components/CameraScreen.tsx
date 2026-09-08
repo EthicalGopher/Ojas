@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   StyleSheet,
   Text,
@@ -12,6 +12,7 @@ import {
 import { WebView } from 'react-native-webview';
 import { Camera } from 'expo-camera';
 import * as ScreenOrientation from 'expo-screen-orientation';
+import * as Speech from 'expo-speech';
 import {
   Dumbbell,
   LogOut,
@@ -19,6 +20,10 @@ import {
   Smartphone,
   SwitchCamera,
   Flame,
+  Volume2,
+  VolumeX,
+  Bot,
+  Sparkles,
 } from 'lucide-react-native';
 import { LoadingScreen } from '../../../screens/LoadingScreen';
 
@@ -29,6 +34,7 @@ interface CameraScreenProps {
   selectedModel: ModelComplexity;
   exerciseId?: string;
   exerciseName?: string;
+  isAiTutor?: boolean;
 }
 
 export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean = false) => {
@@ -105,48 +111,36 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
     /* ---------- HUD ---------- */
     #hud {
       position: absolute;
-      top: 80px;
+      top: 68px;
       left: 0;
       right: 0;
       display: ${isMatch ? 'none' : 'flex'};
       flex-direction: column;
       align-items: center;
-      justifyContent: center;
-      gap: 8px;
+      justify-content: center;
+      gap: 6px;
       z-index: 50;
       pointer-events: none;
     }
     @media (orientation: landscape) {
       #hud {
-        top: 75px;
+        top: 60px;
       }
     }
     .state-badge {
-      display: inline-flex; align-items: center; gap: 12px;
-      background: rgba(10, 12, 18, 0.94);
-      border: 2.5px solid #FFFFFF;
-      border-radius: 30px;
-      padding: 10px 28px;
+      display: inline-flex; align-items: center; justify-content: center;
+      background: rgba(10, 14, 23, 0.88);
+      border: 2px solid rgba(255, 255, 255, 0.4);
+      border-radius: 24px;
+      padding: 7px 22px;
       backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.7), 0 0 16px rgba(0, 0, 0, 0.5);
-      transition: all 0.15s ease;
-    }
-    .state-dot {
-      width: 14px; height: 14px; border-radius: 50%; background: #FFFFFF;
-      box-shadow: 0 0 14px 4px rgba(255, 255, 255, 0.8); transition: all 0.15s ease;
-      flex-shrink: 0;
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.6);
+      transition: all 0.2s ease;
     }
     .state-text {
-      font-size: 26px; font-weight: 900; letter-spacing: 0.12em; color: #FFFFFF;
+      font-size: 20px; font-weight: 900; letter-spacing: 0.1em; color: #FFFFFF;
       text-transform: uppercase; transition: color 0.15s ease;
-      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.9);
-    }
-    #hud-hint {
-      margin-top: 4px; padding: 6px 16px; border-radius: 12px;
-      background: rgba(220, 38, 38, 0.9); border: 1.5px solid #FCA5A5;
-      font-size: 13px; font-weight: 800; color: #FFFFFF; display: none; text-align: center;
-      box-shadow: 0 4px 16px rgba(0,0,0,0.5);
-      max-width: 280px;
+      text-shadow: 0 2px 6px rgba(0, 0, 0, 0.8);
     }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1675466862/camera_utils.js" crossorigin="anonymous"></script>
@@ -174,10 +168,8 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
     ${!isMatch ? `
     <div id="hud">
       <div id="state-badge" class="state-badge">
-        <span id="state-dot" class="state-dot"></span>
         <span id="state-value" class="state-text">Ready</span>
       </div>
-      <div id="hud-hint">⚠️ Step back into frame</div>
     </div>
     ` : ''}
   </div>
@@ -223,6 +215,7 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
     const kneeValues = [];
     const hipValues = [];
     const visibilityValues = [];
+    const errorLandmarks = new Set();
     let repCount = 0;
     let lastVisMsgTime = 0;
 
@@ -236,6 +229,7 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
       kneeValues.length = 0;
       hipValues.length = 0;
       visibilityValues.length = 0;
+      errorLandmarks.clear();
     }
 
     function angle(a, b, c) {
@@ -243,6 +237,13 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
       let deg = Math.abs((radians * 180.0) / Math.PI);
       if (deg > 180.0) deg = 360.0 - deg;
       return deg;
+    }
+
+    function midpoint(a, b) {
+      return {
+        x: (a.x + b.x) / 2,
+        y: (a.y + b.y) / 2
+      };
     }
 
     function average(arr, val) {
@@ -312,13 +313,8 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
     function renderState(state) {
       const effectiveState = currentSmoothVisibility < 0.40 ? 'LOW_VISIBILITY' : state;
       const cfg = STATE_STYLE[effectiveState] || STATE_STYLE.TOP;
-      const dot = document.getElementById('state-dot');
       const label = document.getElementById('state-value');
       const badge = document.getElementById('state-badge');
-      if (dot) {
-        dot.style.background = cfg.color;
-        dot.style.boxShadow = '0 0 8px 1px ' + cfg.color;
-      }
       if (label) {
         label.textContent = cfg.text;
         label.style.color = cfg.color;
@@ -341,18 +337,29 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
 
     function renderVisibility(value) {
       currentSmoothVisibility = value;
-      const hintEl = document.getElementById('hud-hint');
-      if (hintEl) {
-        if (value < 0.40) {
-          hintEl.textContent = '⚠️ Low Visibility: Step back into full frame';
-          hintEl.style.display = 'block';
-          hintEl.style.color = '#F87171';
+      if (value < 0.40) {
+        setHint('⚠️ Low Visibility: Step back into full frame', '#F87171');
+      }
+    }
+
+    let lastSentHint = '';
+    function setHint(text, color) {
+      if (text) {
+        if (window.ReactNativeWebView && lastSentHint !== text) {
+          lastSentHint = text;
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'POSE_HINT',
+            hint: text
+          }));
         }
+      } else {
+        lastSentHint = '';
       }
     }
 
     // 1. Squats Engine
     function updateSquatEngine(pose) {
+      errorLandmarks.clear();
       const leftKnee = angle(pose[23], pose[25], pose[27]);
       const rightKnee = angle(pose[24], pose[26], pose[28]);
       const smoothKnee = average(kneeValues, (leftKnee + rightKnee) / 2);
@@ -365,11 +372,15 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
         : false;
       renderState(instantState);
 
-      const hintEl = document.getElementById('hud-hint');
-      if (hintEl && currentSmoothVisibility >= 0.40) {
-        hintEl.style.display = smoothKnee > 115 && smoothKnee < 145 ? 'block' : 'none';
-        hintEl.textContent = 'Squat deeper to parallel';
-        hintEl.style.color = '#C8B6FF';
+      if (currentSmoothVisibility >= 0.40) {
+        if (smoothKnee > 115 && smoothKnee < 145) {
+          setHint('Squat deeper to parallel', '#C8B6FF');
+          errorLandmarks.add(23); errorLandmarks.add(24);
+          errorLandmarks.add(25); errorLandmarks.add(26);
+          errorLandmarks.add(27); errorLandmarks.add(28);
+        } else {
+          setHint(null);
+        }
       }
 
       if (completedRep && window.ReactNativeWebView) {
@@ -379,6 +390,7 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
 
     // 2. Triangle Pose Engine
     function updateTrianglePoseEngine(pose) {
+      errorLandmarks.clear();
       const leftKnee = angle(pose[23], pose[25], pose[27]);
       const rightKnee = angle(pose[24], pose[26], pose[28]);
       const leftElbow = angle(pose[11], pose[13], pose[15]);
@@ -401,16 +413,41 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
       const shoulderZDiff = Math.abs((topShoulderPos.z ?? 0) - (botShoulderPos.z ?? 0));
 
       const issues = [];
-      if (frontKnee < 155) issues.push('Keep front leg straight (' + Math.round(frontKnee) + '°)');
-      if (backKnee < 155) issues.push('Keep back leg straight (' + Math.round(backKnee) + '°)');
-      if (topArmShoulder < 135) issues.push('Reach top arm straight up');
-      if (topArmElbow < 150) issues.push('Extend top elbow fully');
-      if (bottomArmElbow < 150) issues.push('Extend bottom arm along leg');
-      if (shoulderTilt < 25) issues.push('Hinge deeper laterally from hip');
-      if (shoulderZDiff > 0.35) issues.push('Open chest & stack shoulders');
+      if (frontKnee < 155) {
+        issues.push('Keep front leg straight (' + Math.round(frontKnee) + '°)');
+        if (topSide === 'left') { errorLandmarks.add(24); errorLandmarks.add(26); errorLandmarks.add(28); }
+        else { errorLandmarks.add(23); errorLandmarks.add(25); errorLandmarks.add(27); }
+      }
+      if (backKnee < 155) {
+        issues.push('Keep back leg straight (' + Math.round(backKnee) + '°)');
+        if (topSide === 'left') { errorLandmarks.add(23); errorLandmarks.add(25); errorLandmarks.add(27); }
+        else { errorLandmarks.add(24); errorLandmarks.add(26); errorLandmarks.add(28); }
+      }
+      if (topArmShoulder < 135) {
+        issues.push('Reach top arm straight up');
+        if (topSide === 'left') { errorLandmarks.add(11); errorLandmarks.add(13); errorLandmarks.add(15); }
+        else { errorLandmarks.add(12); errorLandmarks.add(14); errorLandmarks.add(16); }
+      }
+      if (topArmElbow < 150) {
+        issues.push('Extend top elbow fully');
+        if (topSide === 'left') { errorLandmarks.add(13); errorLandmarks.add(15); }
+        else { errorLandmarks.add(14); errorLandmarks.add(16); }
+      }
+      if (bottomArmElbow < 150) {
+        issues.push('Extend bottom arm along leg');
+        if (topSide === 'left') { errorLandmarks.add(14); errorLandmarks.add(16); }
+        else { errorLandmarks.add(13); errorLandmarks.add(15); }
+      }
+      if (shoulderTilt < 25) {
+        issues.push('Hinge deeper laterally from hip');
+        errorLandmarks.add(11); errorLandmarks.add(12); errorLandmarks.add(23); errorLandmarks.add(24);
+      }
+      if (shoulderZDiff > 0.35) {
+        issues.push('Open chest & stack shoulders');
+        errorLandmarks.add(11); errorLandmarks.add(12);
+      }
 
       const isTopWristUp = topWrist.y < topShoulderPos.y;
-      const hintEl = document.getElementById('hud-hint');
 
       if (currentSmoothVisibility < 0.40) {
         renderState('LOW_VISIBILITY');
@@ -420,21 +457,14 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
 
       if (!isTopWristUp) {
         renderState('SETUP');
-        if (hintEl) {
-          hintEl.textContent = '📐 Reach one arm up & hinge sideways';
-          hintEl.style.display = 'block';
-          hintEl.style.color = '#C8B6FF';
-        }
+        setHint('Reach one arm up & hinge sideways', '#C8B6FF');
+        errorLandmarks.add(11); errorLandmarks.add(12); errorLandmarks.add(13); errorLandmarks.add(14); errorLandmarks.add(15); errorLandmarks.add(16);
         correctHoldFrames = 0;
       } else if (issues.length === 0) {
         renderState('PERFECT');
         correctHoldFrames += 1;
         const totalHoldSecs = (correctHoldFrames / 25).toFixed(1);
-        if (hintEl) {
-          hintEl.textContent = '✨ Perfect Alignment! Hold: ' + totalHoldSecs + 's';
-          hintEl.style.display = 'block';
-          hintEl.style.color = '#34D399';
-        }
+        setHint('Perfect Alignment! Hold: ' + totalHoldSecs + 's', '#34D399');
         if (window.ReactNativeWebView && (correctHoldFrames % 5 === 0 || correctHoldFrames === 1)) {
           window.ReactNativeWebView.postMessage(JSON.stringify({
             type: 'POSE_HOLD_TIME',
@@ -456,16 +486,13 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
       } else {
         renderState('ADJUST');
         correctHoldFrames = Math.max(0, correctHoldFrames - 2);
-        if (hintEl) {
-          hintEl.textContent = '⚠️ ' + issues[0];
-          hintEl.style.display = 'block';
-          hintEl.style.color = '#FBBF24';
-        }
+        setHint(issues[0], '#FBBF24');
       }
     }
 
     // 3. Lunges Engine
     function updateLungeEngine(pose) {
+      errorLandmarks.clear();
       const midHipX = (pose[23].x + pose[24].x) / 2;
       const noseX = pose[0].x;
       const facingDir = (noseX - midHipX) >= 0 ? 1 : -1;
@@ -489,18 +516,16 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
         : false;
       renderState(instantState);
 
-      const hintEl = document.getElementById('hud-hint');
-      if (hintEl && currentSmoothVisibility >= 0.40) {
+      if (currentSmoothVisibility >= 0.40) {
         if (torsoAngle > 22) {
-          hintEl.textContent = '⚠️ Keep torso & chest upright';
-          hintEl.style.display = 'block';
-          hintEl.style.color = '#FBBF24';
+          setHint('Keep torso & chest upright', '#FBBF24');
+          errorLandmarks.add(11); errorLandmarks.add(12); errorLandmarks.add(23); errorLandmarks.add(24);
         } else if (smoothFrontKnee > 105 && instantState === 'DOWN') {
-          hintEl.textContent = 'Bend front knee to 90°';
-          hintEl.style.display = 'block';
-          hintEl.style.color = '#C8B6FF';
+          setHint('Bend front knee to 90°', '#C8B6FF');
+          if (isLeftLead) { errorLandmarks.add(23); errorLandmarks.add(25); errorLandmarks.add(27); }
+          else { errorLandmarks.add(24); errorLandmarks.add(26); errorLandmarks.add(28); }
         } else {
-          hintEl.style.display = 'none';
+          setHint(null);
         }
       }
 
@@ -511,6 +536,7 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
 
     // 4. Crunches Engine
     function updateCrunchEngine(pose) {
+      errorLandmarks.clear();
       const shMid = midpoint(pose[11], pose[12]);
       const hipMid = midpoint(pose[23], pose[24]);
       const dx = Math.abs(shMid.x - hipMid.x);
@@ -525,18 +551,15 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
         : false;
       renderState(instantState === 'BOTTOM' ? 'BOTTOM' : instantState === 'TOP' ? 'TOP' : 'DOWN');
 
-      const hintEl = document.getElementById('hud-hint');
-      if (hintEl && currentSmoothVisibility >= 0.40) {
+      if (currentSmoothVisibility >= 0.40) {
         if (smoothTorso > 42) {
-          hintEl.textContent = '⚠️ Lift shoulder blades only (don’t sit up)';
-          hintEl.style.display = 'block';
-          hintEl.style.color = '#FBBF24';
+          setHint('Lift shoulder blades only (don’t sit up)', '#FBBF24');
+          errorLandmarks.add(11); errorLandmarks.add(12); errorLandmarks.add(23); errorLandmarks.add(24);
         } else if (smoothTorso < 18 && instantState === 'DOWN') {
-          hintEl.textContent = 'Crunch up & contract abs';
-          hintEl.style.display = 'block';
-          hintEl.style.color = '#C8B6FF';
+          setHint('Crunch up & contract abs', '#C8B6FF');
+          errorLandmarks.add(11); errorLandmarks.add(12);
         } else {
-          hintEl.style.display = 'none';
+          setHint(null);
         }
       }
 
@@ -547,6 +570,7 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
 
     // 5. Sit-ups Engine
     function updateSitupEngine(pose) {
+      errorLandmarks.clear();
       const shMid = midpoint(pose[11], pose[12]);
       const hipMid = midpoint(pose[23], pose[24]);
       const dx = Math.abs(shMid.x - hipMid.x);
@@ -561,14 +585,12 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
         : false;
       renderState(instantState === 'BOTTOM' ? 'BOTTOM' : instantState === 'TOP' ? 'TOP' : 'DOWN');
 
-      const hintEl = document.getElementById('hud-hint');
-      if (hintEl && currentSmoothVisibility >= 0.40) {
+      if (currentSmoothVisibility >= 0.40) {
         if (instantState === 'DOWN' && smoothTorso < 50) {
-          hintEl.textContent = 'Sit all the way up to 60°';
-          hintEl.style.display = 'block';
-          hintEl.style.color = '#C8B6FF';
+          setHint('Sit all the way up to 60°', '#C8B6FF');
+          errorLandmarks.add(11); errorLandmarks.add(12); errorLandmarks.add(23); errorLandmarks.add(24);
         } else {
-          hintEl.style.display = 'none';
+          setHint(null);
         }
       }
 
@@ -579,6 +601,7 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
 
     // 6. Cobra Pose Engine (Bhujangasana)
     function updateCobraPoseEngine(pose) {
+      errorLandmarks.clear();
       const leftVis = ((pose[11].visibility || 1) + (pose[13].visibility || 1) + (pose[15].visibility || 1) + (pose[23].visibility || 1)) / 4.0;
       const rightVis = ((pose[12].visibility || 1) + (pose[14].visibility || 1) + (pose[16].visibility || 1) + (pose[24].visibility || 1)) / 4.0;
       const activeSide = leftVis >= rightVis ? 'left' : 'right';
@@ -612,29 +635,36 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
       const issues = [];
       if (pelvisLiftY > 0.08) {
         issues.push('Keep hips & pelvis grounded on the mat');
+        errorLandmarks.add(23); errorLandmarks.add(24);
       }
       if (chestLiftY < 0.12 || torsoToHorizontal < 22) {
         issues.push('Lift chest higher off the mat');
+        errorLandmarks.add(11); errorLandmarks.add(12);
       }
       if (activeElbow < 155) {
         issues.push('Extend elbows to Full Cobra (' + Math.round(activeElbow) + '°)');
+        errorLandmarks.add(13); errorLandmarks.add(14); errorLandmarks.add(15); errorLandmarks.add(16);
       } else if (activeElbow > 178) {
         issues.push('Avoid hyperextending elbows');
+        errorLandmarks.add(13); errorLandmarks.add(14);
       }
       if (activeKnee < 155) {
         issues.push('Straighten legs along the mat (' + Math.round(activeKnee) + '°)');
+        errorLandmarks.add(25); errorLandmarks.add(26); errorLandmarks.add(27); errorLandmarks.add(28);
       }
       if (activeHip > 162) {
         issues.push('Arch back smoothly to lift chest');
+        errorLandmarks.add(23); errorLandmarks.add(24);
       } else if (activeHip < 110) {
         issues.push('Ease off arch - maintain controlled curve');
+        errorLandmarks.add(23); errorLandmarks.add(24);
       }
       if (pose[0] && pose[0].y > midShoulderY) {
         issues.push('Keep neck long & gaze forward');
+        errorLandmarks.add(0);
       }
 
       const isProneLift = chestLiftY > 0.04 && torsoToHorizontal >= 12 && activeKnee >= 140;
-      const hintEl = document.getElementById('hud-hint');
 
       if (currentSmoothVisibility < 0.40) {
         renderState('LOW_VISIBILITY');
@@ -644,11 +674,8 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
 
       if (!isProneLift) {
         renderState('SETUP');
-        if (hintEl) {
-          hintEl.textContent = '🐍 Lie prone & press chest upward (Side view recommended)';
-          hintEl.style.display = 'block';
-          hintEl.style.color = '#A7F3D0';
-        }
+        setHint('Lie prone & press chest upward (Side view recommended)', '#A7F3D0');
+        errorLandmarks.add(11); errorLandmarks.add(12); errorLandmarks.add(13); errorLandmarks.add(14);
         correctHoldFrames = 0;
         return;
       }
@@ -657,11 +684,7 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
         renderState('PERFECT');
         correctHoldFrames += 1;
         const totalHoldSecs = (correctHoldFrames / 25).toFixed(1);
-        if (hintEl) {
-          hintEl.textContent = '✨ Perfect Full Cobra! Hold: ' + totalHoldSecs + 's';
-          hintEl.style.display = 'block';
-          hintEl.style.color = '#34D399';
-        }
+        setHint('Perfect Full Cobra! Hold: ' + totalHoldSecs + 's', '#34D399');
         if (window.ReactNativeWebView && (correctHoldFrames % 5 === 0 || correctHoldFrames === 1)) {
           window.ReactNativeWebView.postMessage(JSON.stringify({
             type: 'POSE_HOLD_TIME',
@@ -683,16 +706,13 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
       } else {
         renderState('ADJUST');
         correctHoldFrames = Math.max(0, correctHoldFrames - 2);
-        if (hintEl) {
-          hintEl.textContent = '⚠️ ' + issues[0];
-          hintEl.style.display = 'block';
-          hintEl.style.color = '#FBBF24';
-        }
+        setHint(issues[0], '#FBBF24');
       }
     }
 
     // 7. Push-ups Engine
     function updatePushupEngine(pose) {
+      errorLandmarks.clear();
       const leftVis = ((pose[11].visibility || 1) + (pose[13].visibility || 1) + (pose[15].visibility || 1) + (pose[23].visibility || 1) + (pose[25].visibility || 1)) / 5.0;
       const rightVis = ((pose[12].visibility || 1) + (pose[14].visibility || 1) + (pose[16].visibility || 1) + (pose[24].visibility || 1) + (pose[26].visibility || 1)) / 5.0;
       const isLeft = leftVis >= rightVis;
@@ -730,26 +750,20 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
 
       renderState(instantState === 'BOTTOM' ? 'BOTTOM' : instantState === 'TOP' ? 'TOP' : 'DOWN');
 
-      const hintEl = document.getElementById('hud-hint');
-      if (hintEl && currentSmoothVisibility >= 0.40) {
+      if (currentSmoothVisibility >= 0.40) {
         if (!isPlank && smoothHip < 135) {
-          hintEl.textContent = '⚠️ Hips sagging - tighten core';
-          hintEl.style.display = 'block';
-          hintEl.style.color = '#FBBF24';
+          setHint('Hips sagging - tighten core', '#FBBF24');
+          errorLandmarks.add(23); errorLandmarks.add(24);
         } else if (!isPlank && smoothHip > 195) {
-          hintEl.textContent = '⚠️ Hips piking - lower hips into line';
-          hintEl.style.display = 'block';
-          hintEl.style.color = '#FBBF24';
+          setHint('Hips piking - lower hips into line', '#FBBF24');
+          errorLandmarks.add(23); errorLandmarks.add(24);
         } else if (instantState === 'DOWN' && smoothElbow > 110) {
-          hintEl.textContent = 'Lower chest to elbow level (' + Math.round(smoothElbow) + '°)';
-          hintEl.style.display = 'block';
-          hintEl.style.color = '#FFD6E0';
+          setHint('Lower chest to elbow level (' + Math.round(smoothElbow) + '°)', '#FFD6E0');
+          errorLandmarks.add(13); errorLandmarks.add(14); errorLandmarks.add(11); errorLandmarks.add(12);
         } else if (instantState === 'BOTTOM') {
-          hintEl.textContent = '🔥 Great depth! Press back up!';
-          hintEl.style.display = 'block';
-          hintEl.style.color = '#34D399';
+          setHint('Great depth! Press back up!', '#34D399');
         } else {
-          hintEl.style.display = 'none';
+          setHint(null);
         }
       }
 
@@ -830,8 +844,7 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
           const landmarks = results.poseLandmarks;
 
           if (landmarks && landmarks.length > 0) {
-            // For side profile exercises (pushup, cobra_pose, lunge, crunch, situp), one side is occluded.
-            // Check visibility using max of left/right pairs for limbs so far-side occlusion doesn't fail the gate.
+            // Compute visibility based on key tracking points
             let visibility;
             if (['pushup', 'cobra_pose', 'lunge', 'crunch', 'situp'].includes(EXERCISE_MODE)) {
               const noseVis = landmarks[0]?.visibility ?? 1;
@@ -840,7 +853,7 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
               const wristVis = Math.max(landmarks[15]?.visibility ?? 1, landmarks[16]?.visibility ?? 1);
               const hipVis = Math.max(landmarks[23]?.visibility ?? 1, landmarks[24]?.visibility ?? 1);
               const kneeVis = Math.max(landmarks[25]?.visibility ?? 1, landmarks[26]?.visibility ?? 1);
-              visibility = Math.min(noseVis, shoulderVis, elbowVis, wristVis, hipVis, kneeVis);
+              visibility = (noseVis + shoulderVis + elbowVis + wristVis + hipVis + kneeVis) / 6.0;
             } else {
               visibility = Math.min(...REQUIRED_LANDMARKS.map((index) => landmarks[index]?.visibility ?? 1));
             }
@@ -855,40 +868,36 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
                 visibility: smoothVisibility
               }));
             }
-          } else {
-            renderVisibility(0);
-            if (window.ReactNativeWebView && Date.now() - lastVisMsgTime > 200) {
-              lastVisMsgTime = Date.now();
-              window.ReactNativeWebView.postMessage(JSON.stringify({
-                type: 'POSE_VISIBILITY',
-                visibility: 0
-              }));
-            }
-          }
 
-          if (landmarks && landmarks.length > 0) {
-            if (EXERCISE_MODE === 'triangle_pose') {
-              updateTrianglePoseEngine(landmarks);
-            } else if (EXERCISE_MODE === 'lunge') {
-              updateLungeEngine(landmarks);
-            } else if (EXERCISE_MODE === 'crunch') {
-              updateCrunchEngine(landmarks);
-            } else if (EXERCISE_MODE === 'situp') {
-              updateSitupEngine(landmarks);
-            } else if (EXERCISE_MODE === 'cobra_pose') {
-              updateCobraPoseEngine(landmarks);
-            } else if (EXERCISE_MODE === 'pushup') {
-              updatePushupEngine(landmarks);
-            } else {
-              updateSquatEngine(landmarks);
+            // Execute specific exercise engine logic safely
+            try {
+              if (EXERCISE_MODE === 'triangle_pose') {
+                updateTrianglePoseEngine(landmarks);
+              } else if (EXERCISE_MODE === 'lunge') {
+                updateLungeEngine(landmarks);
+              } else if (EXERCISE_MODE === 'crunch') {
+                updateCrunchEngine(landmarks);
+              } else if (EXERCISE_MODE === 'situp') {
+                updateSitupEngine(landmarks);
+              } else if (EXERCISE_MODE === 'cobra_pose') {
+                updateCobraPoseEngine(landmarks);
+              } else if (EXERCISE_MODE === 'pushup') {
+                updatePushupEngine(landmarks);
+              } else {
+                updateSquatEngine(landmarks);
+              }
+            } catch (err) {
+              console.warn('Exercise calculation error:', err);
             }
 
+            // Draw skeleton connections (Green for correct form, Red if connecting to faulty body part)
             ctx.lineWidth = 4;
-            ctx.strokeStyle = '#6366F1';
             for (const [startIdx, endIdx] of POSE_CONNECTIONS) {
               const start = landmarks[startIdx];
               const end = landmarks[endIdx];
-              if (start && end && (start.visibility ?? 1) > 0.3 && (end.visibility ?? 1) > 0.3) {
+              if (start && end) {
+                const isConnectionError = errorLandmarks.has(startIdx) || errorLandmarks.has(endIdx);
+                ctx.strokeStyle = isConnectionError ? '#EF4444' : '#10B981';
                 ctx.beginPath();
                 ctx.moveTo(start.x * canvas.width, start.y * canvas.height);
                 ctx.lineTo(end.x * canvas.width, end.y * canvas.height);
@@ -896,11 +905,14 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
               }
             }
 
-            for (const lm of landmarks) {
-              if ((lm.visibility ?? 1) > 0.3) {
+            // Draw joint landmarks (Green for correct, Red for faulty body parts)
+            for (let i = 0; i < landmarks.length; i++) {
+              const lm = landmarks[i];
+              if (lm) {
+                const isError = errorLandmarks.has(i);
                 ctx.beginPath();
-                ctx.arc(lm.x * canvas.width, lm.y * canvas.height, 6, 0, 2 * Math.PI);
-                ctx.fillStyle = '#10B981';
+                ctx.arc(lm.x * canvas.width, lm.y * canvas.height, isError ? 7 : 5.5, 0, 2 * Math.PI);
+                ctx.fillStyle = isError ? '#EF4444' : '#10B981';
                 ctx.fill();
                 ctx.lineWidth = 2;
                 ctx.strokeStyle = '#FFFFFF';
@@ -911,8 +923,18 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
             if (window.ReactNativeWebView) {
               window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'POSE_DETECTED', count: landmarks.length }));
             }
-          } else if (window.ReactNativeWebView) {
-            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'NO_PERSON', count: 0 }));
+          } else {
+            renderVisibility(0);
+            if (window.ReactNativeWebView && Date.now() - lastVisMsgTime > 200) {
+              lastVisMsgTime = Date.now();
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                type: 'POSE_VISIBILITY',
+                visibility: 0
+              }));
+            }
+            if (window.ReactNativeWebView) {
+              window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'NO_PERSON', count: 0 }));
+            }
           }
         });
 
@@ -1067,6 +1089,7 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
   selectedModel,
   exerciseId = '1',
   exerciseName = 'Squats',
+  isAiTutor = false,
 }) => {
   const [poseStatus, setPoseStatus] = useState<string>('Initializing Pose Engine…');
   const [poseDetected, setPoseDetected] = useState<boolean>(false);
@@ -1074,7 +1097,11 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
   const [holdSeconds, setHoldSeconds] = useState<number>(0);
   const [isModelLoading, setIsModelLoading] = useState<boolean>(true);
   const [visibility, setVisibility] = useState<number>(1);
+  const [isVoiceMuted, setIsVoiceMuted] = useState<boolean>(false);
+  const [currentTutorHint, setCurrentTutorHint] = useState<string>('');
 
+  const lastSpokenTimeRef = useRef<number>(0);
+  const lastSpokenPhraseRef = useRef<string>('');
   const webViewRef = useRef<WebView>(null);
   const repScaleAnim = useRef(new Animated.Value(1)).current;
 
@@ -1089,6 +1116,51 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
     exerciseId === '6';
 
   const countLabel = isHoldPose ? 'POINTS' : isStepCount ? 'STEPS' : 'REPS';
+
+  // Speak with 10-second rate limiter (only in AI Tutor mode or when voice unmuted)
+  const speakTutorFeedback = useCallback((rawPhrase: string, force: boolean = false) => {
+    if (!isAiTutor || isVoiceMuted) return;
+    const cleanPhrase = rawPhrase.replace(/[⚠️🏋️‍♂️🧠🏆📱✨]/g, '').trim();
+    if (!cleanPhrase) return;
+
+    const now = Date.now();
+    // 10s rate limit window
+    if (!force && now - lastSpokenTimeRef.current < 10000) {
+      return;
+    }
+
+    lastSpokenTimeRef.current = now;
+    lastSpokenPhraseRef.current = cleanPhrase;
+    try {
+      Speech.stop();
+      Speech.speak(cleanPhrase, {
+        language: 'en-US',
+        pitch: 1.05,
+        rate: 0.95,
+      });
+    } catch (e) {
+      console.warn('Speech synthesis error:', e);
+    }
+  }, [isAiTutor, isVoiceMuted]);
+
+  // Initial welcome greeting when AI Tutor starts
+  useEffect(() => {
+    if (isAiTutor && !isModelLoading) {
+      const timer = setTimeout(() => {
+        speakTutorFeedback(`Welcome to AI Tutor for ${exerciseName}. Let's get into position!`, true);
+      }, 800);
+      return () => clearTimeout(timer);
+    }
+  }, [isAiTutor, isModelLoading, exerciseName, speakTutorFeedback]);
+
+  // Cleanup speech on unmount
+  useEffect(() => {
+    return () => {
+      try {
+        Speech.stop();
+      } catch (e) {}
+    };
+  }, []);
 
   useEffect(() => {
     async function requestPermissions() {
@@ -1124,12 +1196,23 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
         setVisibility(data.visibility);
       } else if (data.type === 'POSE_HOLD_TIME' && typeof data.holdSeconds === 'number') {
         setHoldSeconds(data.holdSeconds);
+      } else if (data.type === 'POSE_HINT' && typeof data.hint === 'string') {
+        setCurrentTutorHint(data.hint);
+        speakTutorFeedback(data.hint);
       } else if (data.type === 'SQUAT_REP' && typeof data.repCount === 'number') {
         setRepCount(data.repCount);
         if (typeof data.holdSeconds === 'number') {
           setHoldSeconds(data.holdSeconds);
         }
         triggerRepBump();
+        // Provide positive rep verbal reinforcement if interval elapsed
+        if (data.repCount > 0 && data.repCount % 5 === 0) {
+          speakTutorFeedback(`Great job! ${data.repCount} reps completed.`);
+        }
+      } else if (data.type === 'POSE_STATE' && typeof data.state === 'string') {
+        if (data.state === 'PERFECT') {
+          speakTutorFeedback('Perfect form, keep holding!');
+        }
       } else if (data.type === 'POSE_DETECTED') {
         const label =
           selectedModel === 'light'
@@ -1179,6 +1262,7 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
 
   const handleClose = async () => {
     try {
+      Speech.stop();
       await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
     } catch (e) {}
     onClose();
@@ -1220,17 +1304,28 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
 
       {/* Top HUD Header: Solo Exercise Name & Rep / Step / Hold Timer Counter */}
       <View style={styles.topHudContainer} pointerEvents="none">
-        <View style={styles.exerciseBadgePill}>
-          <Flame size={14} color="#E8D5C4" style={{ marginRight: 5 }} />
-          <Text style={styles.exerciseBadgeText}>{exerciseName.toUpperCase()} SOLO</Text>
+        <View style={[styles.exerciseBadgePill, isAiTutor && styles.aiTutorBadgePill]}>
+          {isAiTutor ? (
+            <Bot size={14} color="#E25822" style={{ marginRight: 5 }} />
+          ) : (
+            <Flame size={14} color="#E25822" style={{ marginRight: 5 }} />
+          )}
+          <Text style={[styles.exerciseBadgeText, isAiTutor && styles.aiTutorBadgeText]}>
+            {exerciseName.toUpperCase()}
+          </Text>
+          {isAiTutor && (
+            <View style={styles.tutorTag}>
+              <Text style={styles.tutorTagText}>AI TUTOR</Text>
+            </View>
+          )}
         </View>
 
         {/* Solo Rep / Step / Hold Score Badge */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           {isHoldPose && (
-            <View style={[styles.scoreBadgePill, { borderColor: '#34D399', backgroundColor: 'rgba(6, 78, 59, 0.92)' }]}>
+            <View style={[styles.scoreBadgePill, { borderColor: '#10B981', backgroundColor: 'rgba(6, 78, 59, 0.85)' }]}>
               <Text style={[styles.scoreBadgeLabel, { color: '#6EE7B7' }]}>HOLD</Text>
-              <Text style={[styles.scoreBadgeNumber, { color: '#34D399', fontSize: 16, minWidth: 40 }]}>
+              <Text style={[styles.scoreBadgeNumber, { color: '#10B981', fontSize: 16, minWidth: 40 }]}>
                 {holdSeconds.toFixed(1)}s
               </Text>
             </View>
@@ -1250,12 +1345,14 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
         </View>
       </View>
 
-      {/* Low Visibility Banner Overlay in Solo Mode */}
-      {!isModelLoading && visibility < 0.40 && (
-        <View style={styles.soloLowVisibilityOverlay} pointerEvents="none">
-          <View style={styles.soloLowVisibilityPill}>
-            <Text style={styles.soloLowVisibilityText}>⚠️ LOW VISIBILITY</Text>
-            <Text style={styles.soloLowVisibilitySub}>Step back into full camera frame to count reps</Text>
+      {/* AI Tutor Live Audio Hint Banner */}
+      {isAiTutor && currentTutorHint && !isModelLoading && (
+        <View style={styles.tutorAudioHintOverlay} pointerEvents="none">
+          <View style={styles.tutorAudioHintPill}>
+            <Volume2 size={13} color="#E25822" style={{ marginRight: 6 }} />
+            <Text style={styles.tutorAudioHintText} numberOfLines={1}>
+              {currentTutorHint}
+            </Text>
           </View>
         </View>
       )}
@@ -1266,13 +1363,21 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
         onFlipCamera={handleToggleFlip}
         onToggleOrientation={handleToggleOrientation}
         onReset={handleRestartSession}
+        isAiTutor={isAiTutor}
+        isVoiceMuted={isVoiceMuted}
+        onToggleVoiceMute={() => {
+          if (!isVoiceMuted) {
+            Speech.stop();
+          }
+          setIsVoiceMuted(!isVoiceMuted);
+        }}
       />
 
       {/* Unified Animated Loading Screen for Solo Mode */}
       {isModelLoading && (
         <LoadingScreen
           title={`PREPARING ${exerciseName.toUpperCase()}`}
-          message="Loading AI camera and pose tracking engine..."
+          message={isAiTutor ? "Loading AI voice coach and pose tracking engine..." : "Loading AI camera and pose tracking engine..."}
           fullScreen={false}
           onCancel={handleClose}
         />
@@ -1289,6 +1394,9 @@ interface SoloDraggableWidgetProps {
   onFlipCamera: () => void;
   onToggleOrientation: () => void;
   onReset: () => void;
+  isAiTutor?: boolean;
+  isVoiceMuted?: boolean;
+  onToggleVoiceMute?: () => void;
 }
 
 const SoloDraggableActionsWidget: React.FC<SoloDraggableWidgetProps> = ({
@@ -1296,6 +1404,9 @@ const SoloDraggableActionsWidget: React.FC<SoloDraggableWidgetProps> = ({
   onFlipCamera,
   onToggleOrientation,
   onReset,
+  isAiTutor = false,
+  isVoiceMuted = false,
+  onToggleVoiceMute,
 }) => {
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const isLandscape = windowWidth > windowHeight;
@@ -1304,7 +1415,7 @@ const SoloDraggableActionsWidget: React.FC<SoloDraggableWidgetProps> = ({
     ? Math.max(12, windowHeight - 64)
     : Math.max(12, windowHeight - 120);
   const defaultX = isLandscape
-    ? Math.max(12, (windowWidth - 240) / 2)
+    ? Math.max(12, (windowWidth - 280) / 2)
     : 16;
 
   const pan = useRef(new Animated.ValueXY({ x: defaultX, y: defaultY })).current;
@@ -1348,18 +1459,22 @@ const SoloDraggableActionsWidget: React.FC<SoloDraggableWidgetProps> = ({
       {...panResponder.panHandlers}
     >
       <View style={styles.widgetPillBox}>
-        {/* Dumbbell Icon Floating Handle & Toggle */}
+        {/* Main Handle & Expand/Collapse Toggle */}
         <TouchableOpacity
-          style={styles.dumbbellHandleBtn}
+          style={[styles.dumbbellHandleBtn, isAiTutor && styles.aiTutorHandleBtn]}
           activeOpacity={0.8}
           onPress={() => setIsExpanded(!isExpanded)}
         >
-          <Dumbbell size={18} color="#11141A" strokeWidth={2.5} />
+          {isAiTutor ? (
+            <Bot size={18} color="#FFFFFF" strokeWidth={2.5} />
+          ) : (
+            <Dumbbell size={18} color="#FFFFFF" strokeWidth={2.5} />
+          )}
         </TouchableOpacity>
 
         {isExpanded && (
           <View style={styles.actionButtonsRow}>
-            {/* 1. Leave Solo Practice */}
+            {/* 1. Leave Solo / Tutor Practice */}
             <TouchableOpacity
               style={[styles.widgetActionBtn, styles.leaveActionBtn]}
               activeOpacity={0.75}
@@ -1368,31 +1483,46 @@ const SoloDraggableActionsWidget: React.FC<SoloDraggableWidgetProps> = ({
               <LogOut size={16} color="#FFFFFF" />
             </TouchableOpacity>
 
-            {/* 2. Flip Camera */}
+            {/* 2. Voice Mute Toggle (for AI Tutor) */}
+            {isAiTutor && onToggleVoiceMute && (
+              <TouchableOpacity
+                style={[styles.widgetActionBtn, isVoiceMuted ? styles.mutedActionBtn : styles.voiceActiveActionBtn]}
+                activeOpacity={0.75}
+                onPress={onToggleVoiceMute}
+              >
+                {isVoiceMuted ? (
+                  <VolumeX size={16} color="#EF4444" />
+                ) : (
+                  <Volume2 size={16} color="#E25822" />
+                )}
+              </TouchableOpacity>
+            )}
+
+            {/* 3. Flip Camera */}
             <TouchableOpacity
               style={styles.widgetActionBtn}
               activeOpacity={0.75}
               onPress={onFlipCamera}
             >
-              <SwitchCamera size={16} color="#11141A" />
+              <SwitchCamera size={16} color="#E2E8F0" />
             </TouchableOpacity>
 
-            {/* 3. Rotate Orientation (Portrait / Landscape) */}
+            {/* 4. Rotate Orientation (Portrait / Landscape) */}
             <TouchableOpacity
               style={styles.widgetActionBtn}
               activeOpacity={0.75}
               onPress={onToggleOrientation}
             >
-              <Smartphone size={16} color="#11141A" />
+              <Smartphone size={16} color="#E2E8F0" />
             </TouchableOpacity>
 
-            {/* 4. Reset Count */}
+            {/* 5. Reset Count */}
             <TouchableOpacity
               style={[styles.widgetActionBtn, styles.resetActionBtn]}
               activeOpacity={0.75}
               onPress={onReset}
             >
-              <RotateCcw size={16} color="#11141A" />
+              <RotateCcw size={16} color="#FFFFFF" />
             </TouchableOpacity>
           </View>
         )}
@@ -1419,38 +1549,96 @@ const styles = StyleSheet.create({
   exerciseBadgePill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(12, 15, 20, 0.85)',
+    backgroundColor: 'rgba(15, 23, 42, 0.85)',
     borderRadius: 20,
     paddingHorizontal: 12,
     paddingVertical: 7,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.12)',
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  aiTutorBadgePill: {
+    borderColor: 'rgba(226, 88, 34, 0.5)',
+    backgroundColor: 'rgba(26, 17, 16, 0.9)',
   },
   exerciseBadgeText: {
-    color: '#E8D5C4',
+    color: '#FFFFFF',
     fontSize: 12,
-    fontWeight: '900',
+    fontWeight: '800',
     letterSpacing: 0.6,
+  },
+  aiTutorBadgeText: {
+    color: '#FFFFFF',
+  },
+  tutorTag: {
+    backgroundColor: '#E25822',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
+    marginLeft: 6,
+  },
+  tutorTagText: {
+    color: '#FFFFFF',
+    fontSize: 9,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
+  tutorAudioHintOverlay: {
+    position: 'absolute',
+    top: 128,
+    left: 20,
+    right: 20,
+    alignItems: 'center',
+    zIndex: 75,
+  },
+  tutorAudioHintPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(20, 15, 12, 0.94)',
+    borderColor: '#E25822',
+    borderWidth: 1,
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  tutorAudioHintText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
   },
   scoreBadgePill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(12, 15, 20, 0.85)',
+    backgroundColor: 'rgba(15, 23, 42, 0.85)',
     borderRadius: 20,
     paddingHorizontal: 14,
     paddingVertical: 6,
-    borderWidth: 1.5,
-    borderColor: '#E8D5C4',
+    borderWidth: 1,
+    borderColor: 'rgba(226, 88, 34, 0.6)',
     gap: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
   scoreBadgeLabel: {
-    color: '#8E95A0',
+    color: '#94A3B8',
     fontSize: 10,
     fontWeight: '800',
     letterSpacing: 0.6,
   },
   scoreBadgeNumber: {
-    color: '#E8D5C4',
+    color: '#E25822',
     fontSize: 22,
     fontWeight: '900',
     lineHeight: 24,
@@ -1463,7 +1651,7 @@ const styles = StyleSheet.create({
     elevation: 25,
   },
   widgetPillBox: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'rgba(15, 23, 42, 0.92)',
     borderRadius: 32,
     paddingHorizontal: 8,
     paddingVertical: 6,
@@ -1471,25 +1659,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
-    shadowRadius: 12,
+    shadowOpacity: 0.5,
+    shadowRadius: 14,
     elevation: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.8)',
+    borderColor: 'rgba(255, 255, 255, 0.12)',
     gap: 6,
   },
   dumbbellHandleBtn: {
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: '#E8D5C4',
+    backgroundColor: '#334155',
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
+    shadowOpacity: 0.2,
     shadowRadius: 4,
     elevation: 3,
+  },
+  aiTutorHandleBtn: {
+    backgroundColor: '#E25822',
   },
   actionButtonsRow: {
     flexDirection: 'row',
@@ -1500,51 +1691,24 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   leaveActionBtn: {
     backgroundColor: '#EF4444',
   },
-  resetActionBtn: {
-    backgroundColor: '#E8D5C4',
+  voiceActiveActionBtn: {
+    backgroundColor: 'rgba(226, 88, 34, 0.25)',
+    borderWidth: 1,
+    borderColor: '#E25822',
   },
-  soloLowVisibilityOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 95,
-    pointerEvents: 'none',
-  },
-  soloLowVisibilityPill: {
-    backgroundColor: 'rgba(239, 68, 68, 0.9)',
+  mutedActionBtn: {
+    backgroundColor: 'rgba(239, 68, 68, 0.25)',
+    borderWidth: 1,
     borderColor: '#EF4444',
-    borderWidth: 1.5,
-    borderRadius: 24,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 10,
-    elevation: 6,
   },
-  soloLowVisibilityText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '900',
-    letterSpacing: 1.2,
-  },
-  soloLowVisibilitySub: {
-    color: '#FEE2E2',
-    fontSize: 11,
-    fontWeight: '700',
-    marginTop: 2,
+  resetActionBtn: {
+    backgroundColor: '#E25822',
   },
 });

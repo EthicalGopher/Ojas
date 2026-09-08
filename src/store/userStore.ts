@@ -9,10 +9,12 @@ interface UserState {
   profile: UserProfile | null;
   activeTab: MainTab;
   selectedExerciseId: string | null;
+  isGuest: boolean;
   setUser: (user: any | null) => void;
   setProfile: (profile: UserProfile | null) => void;
   setActiveTab: (tab: MainTab) => void;
   setSelectedExerciseId: (id: string | null) => void;
+  setIsGuest: (isGuest: boolean) => void;
   refreshProfile: () => Promise<UserProfile | null>;
 }
 
@@ -21,10 +23,28 @@ export const useUserStore = create<UserState>((set, get) => ({
   profile: null,
   activeTab: 'home',
   selectedExerciseId: null,
+  isGuest: false,
   setUser: (user) => {
-    set({ user });
-    if (user) {
+    set({ user, isGuest: user?.isGuest || false });
+    if (user && !user?.isGuest) {
       get().refreshProfile();
+    } else if (user?.isGuest) {
+      set({
+        profile: {
+          id: 'guest',
+          username: 'Guest Athlete',
+          full_name: 'Guest Athlete',
+          avatar_url: null,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          fitness_goal: 'Offline Training',
+          preferred_complexity: 'medium',
+          total_matches_played: 0,
+          total_matches_won: 0,
+          total_points: 0,
+          ranking_tier: 'Rookie',
+        } as any,
+      });
     } else {
       set({ profile: null });
     }
@@ -32,9 +52,10 @@ export const useUserStore = create<UserState>((set, get) => ({
   setProfile: (profile) => set({ profile }),
   setActiveTab: (activeTab) => set({ activeTab }),
   setSelectedExerciseId: (selectedExerciseId) => set({ selectedExerciseId }),
+  setIsGuest: (isGuest) => set({ isGuest }),
   refreshProfile: async () => {
-    const { user } = get();
-    if (!user) return null;
+    const { user, isGuest } = get();
+    if (!user || isGuest) return null;
     try {
       const profileData = await getOrCreateUserProfile(user);
       set({ profile: profileData });

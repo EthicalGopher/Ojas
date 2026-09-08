@@ -17,11 +17,13 @@ const MASCOT_WIDTH = (SCREEN_WIDTH - 48) / 2;
 interface GetStartedScreenProps {
   onGetStarted: () => void;
   onLogIn: () => void;
+  onContinueAsGuest?: () => void;
 }
 
 export const GetStartedScreen: React.FC<GetStartedScreenProps> = ({
   onGetStarted,
   onLogIn,
+  onContinueAsGuest,
 }) => {
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -68,6 +70,17 @@ export const GetStartedScreen: React.FC<GetStartedScreenProps> = ({
           >
             <Text style={styles.getStartedButtonText}>Get Started</Text>
           </TouchableOpacity>
+
+          {/* Continue as Guest (Offline Mode) Button */}
+          {onContinueAsGuest && (
+            <TouchableOpacity
+              style={styles.guestButton}
+              activeOpacity={0.8}
+              onPress={onContinueAsGuest}
+            >
+              <Text style={styles.guestButtonText}>Continue as Guest</Text>
+            </TouchableOpacity>
+          )}
 
           {/* Log In Link */}
           <View style={styles.loginRow}>
@@ -156,6 +169,23 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '900',
     letterSpacing: 0.2,
+  },
+  guestButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+    width: '100%',
+    paddingVertical: 14,
+    borderRadius: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 12,
+  },
+  guestButtonText: {
+    color: '#E8D5C4',
+    fontSize: 14,
+    fontWeight: '800',
+    letterSpacing: 0.3,
   },
   loginRow: {
     flexDirection: 'row',

@@ -53,6 +53,7 @@ export default function AppShell() {
 
   const [soloExerciseId, setSoloExerciseId] = useState<string>('1');
   const [soloExerciseName, setSoloExerciseName] = useState<string>('Squats');
+  const [isAiTutorMode, setIsAiTutorMode] = useState<boolean>(false);
   const { activeTab, setActiveTab, setUser } = useUserStore();
 
   // Listen for incoming 1v1 battle invites from friends
@@ -179,6 +180,20 @@ export default function AppShell() {
               setAuthMode('signin');
               setShowAuthModal(true);
             }}
+            onContinueAsGuest={() => {
+              const guestUser = {
+                id: 'guest_athlete_local',
+                email: 'guest@offline.local',
+                isGuest: true,
+                user_metadata: {
+                  username: 'Guest Athlete',
+                  fitness_goal: 'Offline Training',
+                },
+              };
+              setCurrentUser(guestUser);
+              setUser(guestUser);
+              setActiveTab('home');
+            }}
           />
         ) : isMatchCamera ? (
           <MatchCameraScreen
@@ -278,8 +293,10 @@ export default function AppShell() {
             selectedModel={selectedModel}
             exerciseId={soloExerciseId}
             exerciseName={soloExerciseName}
+            isAiTutor={isAiTutorMode}
             onClose={() => {
               setIsFullscreen(false);
+              setIsAiTutorMode(false);
               setActiveTab('home');
               if (soloExerciseId) {
                 useUserStore.getState().setSelectedExerciseId(soloExerciseId);
@@ -291,9 +308,10 @@ export default function AppShell() {
             <HomeScreen
               activeTab={activeTab as MainTab}
               onTabChange={setActiveTab}
-              onOpenCamera={(exerciseId?: string, exerciseName?: string) => {
+              onOpenCamera={(exerciseId?: string, exerciseName?: string, isTutor?: boolean) => {
                 if (exerciseId) setSoloExerciseId(exerciseId);
                 if (exerciseName) setSoloExerciseName(exerciseName);
+                setIsAiTutorMode(!!isTutor);
                 setIsFullscreen(true);
               }}
               onOpenMatchCamera={(opponent: string, mode: 'faceoff' | 'quickjoin' | 'ffa', exerciseId?: string) => {
@@ -348,6 +366,11 @@ export default function AppShell() {
               onTabPress={(tab) => setActiveTab(tab)}
               onProfilePress={() => {
                 setActiveTab('profile');
+              }}
+              isGuest={!!currentUser?.isGuest}
+              onRequireAuth={() => {
+                setAuthMode('signin');
+                setShowAuthModal(true);
               }}
             />
           </View>

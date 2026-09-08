@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Modal,
   ScrollView,
   StyleSheet,
@@ -10,6 +11,7 @@ import {
 } from 'react-native';
 import {
   BookOpen,
+  Bot,
   Camera,
   CheckCircle2,
   ChevronRight,
@@ -17,6 +19,7 @@ import {
   HelpCircle,
   Info,
   Lightbulb,
+  Lock,
   Play,
   Plus,
   Settings,
@@ -27,6 +30,7 @@ import {
   Trophy,
   UserPlus,
   Users,
+  Volume2,
   X,
   Zap,
 } from 'lucide-react-native';
@@ -34,6 +38,7 @@ import { Avatar } from '../components/Avatar';
 import { ExerciseIcon } from '../components/ExerciseIcon';
 import { useUserStore } from '../store/userStore';
 import { fetchFriends, FriendshipItem } from '../utils/friendService';
+import { DEFAULT_EXERCISES } from '../utils/exerciseService';
 
 export interface ExerciseItem {
   id: string;
@@ -50,9 +55,10 @@ export interface ExerciseItem {
 interface HomeFeedScreenProps {
   onlineCount: number;
   selectedModel: 'light' | 'medium' | 'high';
+  exercises?: ExerciseItem[];
   onExerciseSelect: (exercise: ExerciseItem) => void;
   onSettingsPress: () => void;
-  onOpenCamera: (exerciseId?: string, exerciseName?: string) => void;
+  onOpenCamera: (exerciseId?: string, exerciseName?: string, isTutor?: boolean) => void;
   onNavigateToTab?: (tab: 'profile' | 'workouts') => void;
   featuredExercise?: ExerciseItem;
 }
@@ -68,13 +74,14 @@ interface TutorialModalData {
 export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
   onlineCount,
   selectedModel,
+  exercises = DEFAULT_EXERCISES,
   onExerciseSelect,
   onSettingsPress,
   onOpenCamera,
   onNavigateToTab,
   featuredExercise,
 }) => {
-  const { user } = useUserStore();
+  const { user, isGuest } = useUserStore();
   const [friends, setFriends] = useState<FriendshipItem[]>([]);
   const [loadingFriends, setLoadingFriends] = useState<boolean>(false);
   const [selectedTutorial, setSelectedTutorial] = useState<TutorialModalData | null>(null);
@@ -268,10 +275,34 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
               {activeExercise.description || 'Real-time MediaPipe AI Pose Tracker'}
             </Text>
 
-            <View style={styles.caloriesBadgePill}>
-              <Swords size={13} color="#FFFFFF" style={{ marginRight: 4 }} />
-              <Text style={styles.caloriesBadgeText}>Enter 1v1 Battle</Text>
-            </View>
+            <TouchableOpacity
+              style={[styles.caloriesBadgePill, isGuest && { backgroundColor: '#1E293B', opacity: 0.85 }]}
+              activeOpacity={0.8}
+              onPress={(e) => {
+                if (isGuest) {
+                  e.stopPropagation();
+                  Alert.alert(
+                    '🔒 1v1 Arena Locked',
+                    'Sign in or create a free athlete account to duel live players in real-time battles.',
+                    [{ text: 'OK' }]
+                  );
+                } else {
+                  onExerciseSelect(activeExercise);
+                }
+              }}
+            >
+              {isGuest ? (
+                <>
+                  <Lock size={12} color="#94A3B8" style={{ marginRight: 5 }} />
+                  <Text style={[styles.caloriesBadgeText, { color: '#94A3B8' }]}>1v1 Arena (Sign In to Unlock)</Text>
+                </>
+              ) : (
+                <>
+                  <Swords size={13} color="#FFFFFF" style={{ marginRight: 4 }} />
+                  <Text style={styles.caloriesBadgeText}>Enter 1v1 Battle</Text>
+                </>
+              )}
+            </TouchableOpacity>
           </View>
 
           <View style={styles.heroLimeRight}>
@@ -287,7 +318,51 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
         </View>
       </TouchableOpacity>
 
-      {/* 3. DYNAMIC TUTORIALS & GUIDES SECTION */}
+      {/* 3. AI TUTOR SECTION FOR ALL EXERCISES */}
+      <View style={styles.sectionHeaderRow}>
+        <View style={styles.headerLeftRow}>
+          <Bot size={16} color="#E25822" style={{ marginRight: 6 }} />
+          <Text style={styles.sectionHeaderTitle}>AI TUTOR</Text>
+        </View>
+      </View>
+
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.tutorHorizontalList}
+      >
+        {exercises.map((item) => (
+          <TouchableOpacity
+            key={item.id}
+            style={styles.tutorCard}
+            activeOpacity={0.88}
+            onPress={() => onOpenCamera(item.id, item.name, true)}
+          >
+            <View style={styles.tutorCardTop}>
+              <View style={styles.tutorIconCircle}>
+                <ExerciseIcon
+                  imageUrl={item.image_url}
+                  icon={item.icon || '🏋️'}
+                  size={36}
+                  fontSize={20}
+                />
+              </View>
+            </View>
+
+            <Text style={styles.tutorCardTitle} numberOfLines={1}>{item.name}</Text>
+            <Text style={styles.tutorCardSub} numberOfLines={2}>
+              {item.description || `Real-time pose guidance & correction`}
+            </Text>
+
+            <View style={styles.tutorStartButton}>
+              <Play size={11} color="#FFFFFF" fill="#FFFFFF" style={{ marginRight: 4 }} />
+              <Text style={styles.tutorStartButtonText}>Start Tutor</Text>
+            </View>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+
+      {/* 4. DYNAMIC TUTORIALS & GUIDES SECTION */}
       <View style={styles.sectionHeaderRow}>
         <View style={styles.headerLeftRow}>
           <Lightbulb size={14} color="#E8D5C4" style={{ marginRight: 6 }} />
@@ -670,6 +745,72 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 10,
     marginBottom: 14,
+  },
+  ttsRateLimitBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E25822',
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  ttsRateLimitText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '900',
+  },
+  tutorHorizontalList: {
+    paddingBottom: 16,
+    gap: 12,
+  },
+  tutorCard: {
+    width: 175,
+    backgroundColor: '#161B22',
+    borderRadius: 20,
+    padding: 14,
+    borderWidth: 1.5,
+    borderColor: 'rgba(226, 88, 34, 0.25)',
+    justifyContent: 'space-between',
+  },
+  tutorCardTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  tutorIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#262A32',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tutorCardTitle: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '800',
+    marginBottom: 4,
+  },
+  tutorCardSub: {
+    color: '#8E95A0',
+    fontSize: 11,
+    lineHeight: 15,
+    marginBottom: 12,
+    minHeight: 30,
+  },
+  tutorStartButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#E25822',
+    borderRadius: 14,
+    paddingVertical: 7,
+  },
+  tutorStartButtonText: {
+    color: '#FFFFFF',
+    fontSize: 11.5,
+    fontWeight: '900',
   },
   headerLeftRow: {
     flexDirection: 'row',

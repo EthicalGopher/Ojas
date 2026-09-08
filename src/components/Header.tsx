@@ -23,7 +23,7 @@ export const Header: React.FC<HeaderProps> = ({
   rightAction,
 }) => {
   const storeOnline = useMatchmakingStore((state) => state.total_online);
-  const { profile, user, setActiveTab } = useUserStore();
+  const { profile, user, setActiveTab, isGuest } = useUserStore();
 
   const activeUsername =
     propUsername ||
@@ -31,13 +31,18 @@ export const Header: React.FC<HeaderProps> = ({
     profile?.full_name ||
     user?.user_metadata?.username ||
     user?.email?.split('@')[0] ||
-    'James';
+    'Guest Athlete';
 
   const avatarConfig = profile?.avatar_config;
   const avatarUrl = profile?.avatar_url;
   const displayOnlineCount = propOnlineCount !== undefined ? propOnlineCount : storeOnline;
 
   const handleProfilePress = () => {
+    if (isGuest) {
+      // In guest mode, prompt to create account
+      setActiveTab('profile');
+      return;
+    }
     if (onProfilePress) {
       onProfilePress();
     } else {
@@ -48,7 +53,7 @@ export const Header: React.FC<HeaderProps> = ({
   const fitnessGoal =
     profile?.fitness_goal ||
     user?.user_metadata?.fitness_goal ||
-    'Fitness Freak';
+    (isGuest ? 'Offline Athlete' : 'Fitness Freak');
 
   const leftContent = leftAction ?? (
     <TouchableOpacity
@@ -78,7 +83,11 @@ export const Header: React.FC<HeaderProps> = ({
     </TouchableOpacity>
   );
 
-  const defaultRightAction = (
+  const defaultRightAction = isGuest ? (
+    <View style={[styles.onlinePillBadge, { backgroundColor: 'rgba(100, 116, 139, 0.2)', borderColor: 'rgba(148, 163, 184, 0.25)' }]}>
+      <Text style={[styles.onlineCountText, { color: '#94A3B8', fontSize: 11 }]}>OFFLINE</Text>
+    </View>
+  ) : (
     <View style={styles.onlinePillBadge}>
       <Text style={styles.onlineCountText}>{displayOnlineCount}</Text>
     </View>

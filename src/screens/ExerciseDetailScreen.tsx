@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import {
   ArrowLeft,
+  Bot,
   Camera,
   Check,
   ChevronRight,
@@ -20,6 +21,7 @@ import {
   Flame,
   Gamepad2,
   Info,
+  Lock,
   Play,
   Plus,
   RefreshCw,
@@ -34,6 +36,7 @@ import {
   UserPlus,
   Users,
   Video,
+  Volume2,
   X,
   Zap,
 } from 'lucide-react-native';
@@ -80,7 +83,7 @@ interface ExerciseDetailScreenProps {
     exerciseId: string,
     customRoomId?: string
   ) => void;
-  onOpenCamera?: (exerciseId?: string, exerciseName?: string) => void;
+  onOpenCamera?: (exerciseId?: string, exerciseName?: string, isTutor?: boolean) => void;
   onSettingsPress?: () => void;
 }
 
@@ -94,7 +97,7 @@ export const ExerciseDetailScreen: React.FC<ExerciseDetailScreenProps> = ({
   onOpenCamera,
   onSettingsPress,
 }) => {
-  const { profile, user, refreshProfile } = useUserStore();
+  const { profile, user, refreshProfile, isGuest } = useUserStore();
   const [exerciseStats, setExerciseStats] = useState<UserExerciseStats | null>(null);
   const [leaderboard, setLeaderboard] = useState<ExerciseLeaderboardEntry[]>([]);
   const [loadingLeaderboard, setLoadingLeaderboard] = useState(false);
@@ -395,18 +398,31 @@ export const ExerciseDetailScreen: React.FC<ExerciseDetailScreenProps> = ({
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.detailSubTabItem, detailTab === 'leaderboard' && styles.detailSubTabItemActive]}
+          style={[styles.detailSubTabItem, detailTab === 'leaderboard' && styles.detailSubTabItemActive, isGuest && { opacity: 0.7 }]}
           activeOpacity={0.8}
-          onPress={() => onDetailTabChange('leaderboard')}
+          onPress={() => {
+            if (isGuest) {
+              Alert.alert(
+                '🔒 Leaderboard Locked',
+                'Sign in or create an account to view global rankings and record your scores.',
+                [{ text: 'OK' }]
+              );
+              return;
+            }
+            onDetailTabChange('leaderboard');
+          }}
         >
-          <Text
-            style={[
-              styles.detailSubTabText,
-              detailTab === 'leaderboard' && styles.detailSubTabTextActive,
-            ]}
-          >
-            LEADERBOARD
-          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <Text
+              style={[
+                styles.detailSubTabText,
+                detailTab === 'leaderboard' && styles.detailSubTabTextActive,
+              ]}
+            >
+              LEADERBOARD
+            </Text>
+            {isGuest && <Lock size={10} color="#94A3B8" />}
+          </View>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -425,18 +441,31 @@ export const ExerciseDetailScreen: React.FC<ExerciseDetailScreenProps> = ({
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.detailSubTabItem, detailTab === 'shop' && styles.detailSubTabItemActive]}
+          style={[styles.detailSubTabItem, detailTab === 'shop' && styles.detailSubTabItemActive, isGuest && { opacity: 0.7 }]}
           activeOpacity={0.8}
-          onPress={() => onDetailTabChange('shop')}
+          onPress={() => {
+            if (isGuest) {
+              Alert.alert(
+                '🔒 Shop Locked',
+                'Sign in to customize athlete gear and items.',
+                [{ text: 'OK' }]
+              );
+              return;
+            }
+            onDetailTabChange('shop');
+          }}
         >
-          <Text
-            style={[
-              styles.detailSubTabText,
-              detailTab === 'shop' && styles.detailSubTabTextActive,
-            ]}
-          >
-            SHOP
-          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <Text
+              style={[
+                styles.detailSubTabText,
+                detailTab === 'shop' && styles.detailSubTabTextActive,
+              ]}
+            >
+              SHOP
+            </Text>
+            {isGuest && <Lock size={10} color="#94A3B8" />}
+          </View>
         </TouchableOpacity>
       </View>
 
@@ -458,9 +487,20 @@ export const ExerciseDetailScreen: React.FC<ExerciseDetailScreenProps> = ({
             {/* QUEUE CARDS MATCHING SCREENSHOT */}
             {[
               {
+                id: 'ai_tutor',
+                title: 'AI Tutor',
+                description: 'Real-time pose guidance & correction',
+                iconComponent: <Bot size={20} color="#FFFFFF" />,
+                actionText: 'START',
+                isFriendQueue: false,
+                isSoloMode: false,
+                isAiTutor: true,
+                badge: 'AI TUTOR',
+              },
+              {
                 id: 'solo_practice',
                 title: 'Solo Practice',
-                description: 'AI form coaching & feedback',
+                description: 'AI form tracking & feedback',
                 iconComponent: <Camera size={20} color="#FFFFFF" />,
                 actionText: 'START',
                 isFriendQueue: false,
@@ -509,9 +549,12 @@ export const ExerciseDetailScreen: React.FC<ExerciseDetailScreenProps> = ({
                 badge: 'INVITE',
               },
             ].map((queue) => {
+              const isOnlineQueue = !queue.isAiTutor && !queue.isSoloMode;
+              const isLocked = isGuest && isOnlineQueue;
+
               return (
-                <View key={queue.id} style={styles.queueItemCard}>
-                  <View style={styles.queueIconBox}>
+                <View key={queue.id} style={[styles.queueItemCard, isLocked && { opacity: 0.65 }]}>
+                  <View style={[styles.queueIconBox, isLocked && { backgroundColor: '#1E293B' }]}>
                     {queue.iconComponent}
                   </View>
 
@@ -520,13 +563,20 @@ export const ExerciseDetailScreen: React.FC<ExerciseDetailScreenProps> = ({
                       <Text style={styles.queueTitleText} numberOfLines={1}>
                         {queue.title}
                       </Text>
-                      {queue.badge && (
+                      {isLocked ? (
+                        <View style={[styles.queueBadgePill, { backgroundColor: 'rgba(100, 116, 139, 0.25)', borderColor: 'rgba(148, 163, 184, 0.3)' }]}>
+                          <Lock size={9} color="#94A3B8" style={{ marginRight: 3 }} />
+                          <Text style={[styles.queueBadgePillText, { color: '#94A3B8' }]}>
+                            LOCKED
+                          </Text>
+                        </View>
+                      ) : queue.badge ? (
                         <View style={styles.queueBadgePill}>
                           <Text style={styles.queueBadgePillText}>
                             {queue.badge}
                           </Text>
                         </View>
-                      )}
+                      ) : null}
                     </View>
                     <Text style={styles.queueDescText} numberOfLines={1}>
                       {queue.description}
@@ -534,12 +584,25 @@ export const ExerciseDetailScreen: React.FC<ExerciseDetailScreenProps> = ({
                   </View>
 
                   <TouchableOpacity
-                    style={styles.joinButton}
+                    style={[styles.joinButton, isLocked && { backgroundColor: 'rgba(255, 255, 255, 0.08)', borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.15)' }]}
                     activeOpacity={0.85}
                     onPress={() => {
-                      if (queue.isSoloMode) {
+                      if (isLocked) {
+                        Alert.alert(
+                          '🔒 Account Required',
+                          'Sign in or create a free athlete account to battle live players in online duels.',
+                          [{ text: 'OK' }]
+                        );
+                        return;
+                      }
+
+                      if (queue.isAiTutor) {
                         if (onOpenCamera) {
-                          onOpenCamera(exercise.id, exercise.name);
+                          onOpenCamera(exercise.id, exercise.name, true);
+                        }
+                      } else if (queue.isSoloMode) {
+                        if (onOpenCamera) {
+                          onOpenCamera(exercise.id, exercise.name, false);
                         }
                       } else if (queue.isFriendQueue) {
                         setShowFriendChallengeModal(true);
@@ -549,9 +612,13 @@ export const ExerciseDetailScreen: React.FC<ExerciseDetailScreenProps> = ({
                       }
                     }}
                   >
-                    <Text style={styles.joinButtonText}>
-                      {queue.actionText}
-                    </Text>
+                    {isLocked ? (
+                      <Lock size={14} color="#94A3B8" />
+                    ) : (
+                      <Text style={styles.joinButtonText}>
+                        {queue.actionText}
+                      </Text>
+                    )}
                   </TouchableOpacity>
                 </View>
               );

@@ -38,7 +38,7 @@ type ExerciseCategory = 'all' | 'strength' | 'cardio' | 'flexibility';
 interface HomeScreenProps {
   activeTab: MainTab;
   onTabChange: (tab: MainTab) => void;
-  onOpenCamera: (exerciseId?: string, exerciseName?: string) => void;
+  onOpenCamera: (exerciseId?: string, exerciseName?: string, isTutor?: boolean) => void;
   onOpenMatchCamera: (opponent: string, mode: 'faceoff' | 'quickjoin' | 'ffa', exerciseId?: string) => void;
   onEnterQueue: (title?: string, message?: string, badge?: string, subInfo?: string, isFFA?: boolean) => void;
   onUpdateQueueStatus?: (title?: string, message?: string, badge?: string, subInfo?: string, countdown?: number, playerCount?: number) => void;
@@ -320,6 +320,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       <HomeFeedScreen
         onlineCount={onlineCount}
         selectedModel={selectedModel}
+        exercises={exercisesList}
         onExerciseSelect={setSelectedExercise}
         onSettingsPress={() => setShowSettingsModal(true)}
         onOpenCamera={onOpenCamera}
