@@ -198,7 +198,6 @@ export const ExercisesScreen: React.FC<ExercisesScreenProps> = ({
                     </View>
 
                     <View style={styles.activePlayersPill}>
-                      <Flame size={12} color="#11141A" style={{ marginRight: 3 }} />
                       <Text style={styles.activePlayersText} numberOfLines={1}>
                         {exercise.type || (exercise.category === 'flexibility' ? 'Yoga' : 'Common exercises')}
                       </Text>

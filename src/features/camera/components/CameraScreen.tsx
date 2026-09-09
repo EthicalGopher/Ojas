@@ -15,6 +15,8 @@ import * as ScreenOrientation from 'expo-screen-orientation';
 import * as Speech from 'expo-speech';
 import {
   Dumbbell,
+  Eye,
+  EyeOff,
   LogOut,
   RotateCcw,
   Smartphone,
@@ -339,6 +341,8 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
       currentSmoothVisibility = value;
       if (value < 0.40) {
         setHint('⚠️ Low Visibility: Step back into full frame', '#F87171');
+      } else if (lastSentHint && lastSentHint.includes('Low Visibility')) {
+        setHint(null);
       }
     }
 
@@ -353,18 +357,25 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
           }));
         }
       } else {
-        lastSentHint = '';
+        if (window.ReactNativeWebView && lastSentHint !== '') {
+          lastSentHint = '';
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'POSE_HINT',
+            hint: ''
+          }));
+        }
       }
     }
 
     // 1. Squats Engine
+    let squatStallFrames = 0;
     function updateSquatEngine(pose) {
       errorLandmarks.clear();
       const leftKnee = angle(pose[23], pose[25], pose[27]);
       const rightKnee = angle(pose[24], pose[26], pose[28]);
       const smoothKnee = average(kneeValues, (leftKnee + rightKnee) / 2);
 
-      const instantState = smoothKnee <= 95 ? 'BOTTOM' : smoothKnee >= 155 ? 'TOP' : 'DOWN';
+      const instantState = smoothKnee <= 100 ? 'BOTTOM' : smoothKnee >= 155 ? 'TOP' : 'DOWN';
       
       // Enforce 40% minimum visibility to register or progress rep state
       const completedRep = currentSmoothVisibility >= 0.40
@@ -373,17 +384,25 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
       renderState(instantState);
 
       if (currentSmoothVisibility >= 0.40) {
-        if (smoothKnee > 115 && smoothKnee < 145) {
-          setHint('Squat deeper to parallel', '#C8B6FF');
-          errorLandmarks.add(23); errorLandmarks.add(24);
-          errorLandmarks.add(25); errorLandmarks.add(26);
-          errorLandmarks.add(27); errorLandmarks.add(28);
+        // Only warn about squat depth if the user stalls in a partial squat position (>= 20 frames / ~0.8s)
+        if (instantState === 'DOWN' && smoothKnee > 110 && smoothKnee < 145) {
+          squatStallFrames += 1;
+          if (squatStallFrames >= 20) {
+            setHint('Squat deeper to parallel', '#C8B6FF');
+            errorLandmarks.add(23); errorLandmarks.add(24);
+            errorLandmarks.add(25); errorLandmarks.add(26);
+            errorLandmarks.add(27); errorLandmarks.add(28);
+          }
         } else {
+          squatStallFrames = 0;
           setHint(null);
         }
+      } else {
+        squatStallFrames = 0;
       }
 
       if (completedRep && window.ReactNativeWebView) {
+        squatStallFrames = 0;
         window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'SQUAT_REP', repCount, poseName: 'Squats' }));
       }
     }
@@ -855,7 +874,10 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
               const kneeVis = Math.max(landmarks[25]?.visibility ?? 1, landmarks[26]?.visibility ?? 1);
               visibility = (noseVis + shoulderVis + elbowVis + wristVis + hipVis + kneeVis) / 6.0;
             } else {
-              visibility = Math.min(...REQUIRED_LANDMARKS.map((index) => landmarks[index]?.visibility ?? 1));
+              // Squats & generic exercises: compute average visibility of key tracking landmarks (hips, knees, ankles, shoulders)
+              const squatKeyLandmarks = [11, 12, 23, 24, 25, 26, 27, 28];
+              const visSum = squatKeyLandmarks.reduce((acc, idx) => acc + (landmarks[idx]?.visibility ?? 1), 0);
+              visibility = visSum / squatKeyLandmarks.length;
             }
 
             const smoothVisibility = average(visibilityValues, visibility);
@@ -890,33 +912,34 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
               console.warn('Exercise calculation error:', err);
             }
 
-            // Draw skeleton connections (Green for correct form, Red if connecting to faulty body part)
-            ctx.lineWidth = 4;
-            for (const [startIdx, endIdx] of POSE_CONNECTIONS) {
-              const start = landmarks[startIdx];
-              const end = landmarks[endIdx];
-              if (start && end) {
-                const isConnectionError = errorLandmarks.has(startIdx) || errorLandmarks.has(endIdx);
-                ctx.strokeStyle = isConnectionError ? '#EF4444' : '#10B981';
-                ctx.beginPath();
-                ctx.moveTo(start.x * canvas.width, start.y * canvas.height);
-                ctx.lineTo(end.x * canvas.width, end.y * canvas.height);
-                ctx.stroke();
+            // Draw skeleton connections & landmarks if enabled by user
+            if (window.showSkeleton !== false) {
+              ctx.lineWidth = 4;
+              for (const [startIdx, endIdx] of POSE_CONNECTIONS) {
+                const start = landmarks[startIdx];
+                const end = landmarks[endIdx];
+                if (start && end) {
+                  const isConnectionError = errorLandmarks.has(startIdx) || errorLandmarks.has(endIdx);
+                  ctx.strokeStyle = isConnectionError ? '#EF4444' : '#10B981';
+                  ctx.beginPath();
+                  ctx.moveTo(start.x * canvas.width, start.y * canvas.height);
+                  ctx.lineTo(end.x * canvas.width, end.y * canvas.height);
+                  ctx.stroke();
+                }
               }
-            }
 
-            // Draw joint landmarks (Green for correct, Red for faulty body parts)
-            for (let i = 0; i < landmarks.length; i++) {
-              const lm = landmarks[i];
-              if (lm) {
-                const isError = errorLandmarks.has(i);
-                ctx.beginPath();
-                ctx.arc(lm.x * canvas.width, lm.y * canvas.height, isError ? 7 : 5.5, 0, 2 * Math.PI);
-                ctx.fillStyle = isError ? '#EF4444' : '#10B981';
-                ctx.fill();
-                ctx.lineWidth = 2;
-                ctx.strokeStyle = '#FFFFFF';
-                ctx.stroke();
+              for (let i = 0; i < landmarks.length; i++) {
+                const lm = landmarks[i];
+                if (lm) {
+                  const isError = errorLandmarks.has(i);
+                  ctx.beginPath();
+                  ctx.arc(lm.x * canvas.width, lm.y * canvas.height, isError ? 7 : 5.5, 0, 2 * Math.PI);
+                  ctx.fillStyle = isError ? '#EF4444' : '#10B981';
+                  ctx.fill();
+                  ctx.lineWidth = 2;
+                  ctx.strokeStyle = '#FFFFFF';
+                  ctx.stroke();
+                }
               }
             }
 
@@ -1064,6 +1087,11 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
           }
         };
 
+        window.showSkeleton = true;
+        window.setSkeletonVisible = (val) => {
+          window.showSkeleton = !!val;
+        };
+
         window.resetSessionScore = () => {
           resetInternalScore();
         };
@@ -1098,6 +1126,7 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
   const [isModelLoading, setIsModelLoading] = useState<boolean>(true);
   const [visibility, setVisibility] = useState<number>(1);
   const [isVoiceMuted, setIsVoiceMuted] = useState<boolean>(false);
+  const [isSkeletonVisible, setIsSkeletonVisible] = useState<boolean>(true);
   const [currentTutorHint, setCurrentTutorHint] = useState<string>('');
 
   const lastSpokenTimeRef = useRef<number>(0);
@@ -1117,16 +1146,36 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
 
   const countLabel = isHoldPose ? 'POINTS' : isStepCount ? 'STEPS' : 'REPS';
 
-  // Speak with 10-second rate limiter (only in AI Tutor mode or when voice unmuted)
+  const MOTIVATIONAL_PHRASES = [
+    'Well done!',
+    'You are improving!',
+    'Great depth!',
+    'Keep that energy up!',
+    'Outstanding form!',
+    'Looking strong!',
+    'Power through!',
+    'Excellent control!',
+    'Stay focused, great work!',
+    'Unstoppable rhythm!',
+  ];
+
+  // Speak with speech synthesizer (smart rate-limited for correction hints, instant for rep counts & motivation)
   const speakTutorFeedback = useCallback((rawPhrase: string, force: boolean = false) => {
     if (!isAiTutor || isVoiceMuted) return;
-    const cleanPhrase = rawPhrase.replace(/[⚠️🏋️‍♂️🧠🏆📱✨]/g, '').trim();
+    const cleanPhrase = rawPhrase.replace(/[⚠️🏋️‍♂️🧠🏆📱✨🔥]/g, '').trim();
     if (!cleanPhrase) return;
 
     const now = Date.now();
-    // 10s rate limit window
-    if (!force && now - lastSpokenTimeRef.current < 10000) {
-      return;
+    const isSameHintAsLast = cleanPhrase === lastSpokenPhraseRef.current;
+    
+    // For non-forced feedback:
+    // If it's the exact same hint, wait at least 14 seconds before repeating so the user has time to adjust without voice spam
+    // If it's a different hint, wait at least 7 seconds
+    if (!force) {
+      const minCooldown = isSameHintAsLast ? 14000 : 7000;
+      if (now - lastSpokenTimeRef.current < minCooldown) {
+        return;
+      }
     }
 
     lastSpokenTimeRef.current = now;
@@ -1136,7 +1185,7 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
       Speech.speak(cleanPhrase, {
         language: 'en-US',
         pitch: 1.05,
-        rate: 0.95,
+        rate: 1.0,
       });
     } catch (e) {
       console.warn('Speech synthesis error:', e);
@@ -1200,14 +1249,22 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
         setCurrentTutorHint(data.hint);
         speakTutorFeedback(data.hint);
       } else if (data.type === 'SQUAT_REP' && typeof data.repCount === 'number') {
-        setRepCount(data.repCount);
+        const newReps = data.repCount;
+        setRepCount(newReps);
         if (typeof data.holdSeconds === 'number') {
           setHoldSeconds(data.holdSeconds);
         }
         triggerRepBump();
-        // Provide positive rep verbal reinforcement if interval elapsed
-        if (data.repCount > 0 && data.repCount % 5 === 0) {
-          speakTutorFeedback(`Great job! ${data.repCount} reps completed.`);
+
+        // AI Tutor: Count every rep out loud and provide unique motivational phrases
+        if (isAiTutor && newReps > 0) {
+          if (newReps % 3 === 0) {
+            const phraseIdx = Math.floor(newReps / 3) % MOTIVATIONAL_PHRASES.length;
+            const motivation = MOTIVATIONAL_PHRASES[phraseIdx];
+            speakTutorFeedback(`${newReps}! ${motivation}`, true);
+          } else {
+            speakTutorFeedback(`${newReps}`, true);
+          }
         }
       } else if (data.type === 'POSE_STATE' && typeof data.state === 'string') {
         if (data.state === 'PERFECT') {
@@ -1233,6 +1290,14 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
   const handleToggleFlip = () => {
     if (webViewRef.current) {
       webViewRef.current.injectJavaScript('window.toggleFacingMode(); true;');
+    }
+  };
+
+  const handleToggleSkeleton = () => {
+    const nextState = !isSkeletonVisible;
+    setIsSkeletonVisible(nextState);
+    if (webViewRef.current) {
+      webViewRef.current.injectJavaScript(`window.setSkeletonVisible && window.setSkeletonVisible(${nextState}); true;`);
     }
   };
 
@@ -1362,6 +1427,8 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
         onLeave={handleClose}
         onFlipCamera={handleToggleFlip}
         onToggleOrientation={handleToggleOrientation}
+        onToggleSkeleton={handleToggleSkeleton}
+        isSkeletonVisible={isSkeletonVisible}
         onReset={handleRestartSession}
         isAiTutor={isAiTutor}
         isVoiceMuted={isVoiceMuted}
@@ -1393,6 +1460,8 @@ interface SoloDraggableWidgetProps {
   onLeave: () => void;
   onFlipCamera: () => void;
   onToggleOrientation: () => void;
+  onToggleSkeleton?: () => void;
+  isSkeletonVisible?: boolean;
   onReset: () => void;
   isAiTutor?: boolean;
   isVoiceMuted?: boolean;
@@ -1403,6 +1472,8 @@ const SoloDraggableActionsWidget: React.FC<SoloDraggableWidgetProps> = ({
   onLeave,
   onFlipCamera,
   onToggleOrientation,
+  onToggleSkeleton,
+  isSkeletonVisible = true,
   onReset,
   isAiTutor = false,
   isVoiceMuted = false,
@@ -1498,7 +1569,22 @@ const SoloDraggableActionsWidget: React.FC<SoloDraggableWidgetProps> = ({
               </TouchableOpacity>
             )}
 
-            {/* 3. Flip Camera */}
+            {/* 3. Skeleton Toggle (Show / Hide Skeleton Overlay) */}
+            {onToggleSkeleton && (
+              <TouchableOpacity
+                style={[styles.widgetActionBtn, !isSkeletonVisible && styles.mutedActionBtn]}
+                activeOpacity={0.75}
+                onPress={onToggleSkeleton}
+              >
+                {isSkeletonVisible ? (
+                  <Eye size={16} color="#38BDF8" />
+                ) : (
+                  <EyeOff size={16} color="#94A3B8" />
+                )}
+              </TouchableOpacity>
+            )}
+
+            {/* 4. Flip Camera */}
             <TouchableOpacity
               style={styles.widgetActionBtn}
               activeOpacity={0.75}
@@ -1507,7 +1593,7 @@ const SoloDraggableActionsWidget: React.FC<SoloDraggableWidgetProps> = ({
               <SwitchCamera size={16} color="#E2E8F0" />
             </TouchableOpacity>
 
-            {/* 4. Rotate Orientation (Portrait / Landscape) */}
+            {/* 5. Rotate Orientation (Portrait / Landscape) */}
             <TouchableOpacity
               style={styles.widgetActionBtn}
               activeOpacity={0.75}
@@ -1516,7 +1602,7 @@ const SoloDraggableActionsWidget: React.FC<SoloDraggableWidgetProps> = ({
               <Smartphone size={16} color="#E2E8F0" />
             </TouchableOpacity>
 
-            {/* 5. Reset Count */}
+            {/* 6. Reset Count */}
             <TouchableOpacity
               style={[styles.widgetActionBtn, styles.resetActionBtn]}
               activeOpacity={0.75}

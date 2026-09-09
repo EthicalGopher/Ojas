@@ -42,7 +42,7 @@ export const FFALoadingScreen: React.FC<FFALoadingScreenProps> = ({
   serverSeconds,
   playerCount = 1,
   maxPlayers = 10,
-  title = 'FREE FOR ALL LOBBY',
+  title = 'BATTLE GROUND LOBBY',
   message = 'Gathering athletes for 10-player battle',
   onCancel,
   onTimerExpired,

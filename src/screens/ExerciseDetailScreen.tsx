@@ -509,7 +509,7 @@ export const ExerciseDetailScreen: React.FC<ExerciseDetailScreenProps> = ({
               },
               {
                 id: 'ffa',
-                title: 'Free For All',
+                title: 'Battle Ground',
                 description: '10-player live leaderboard match',
                 iconComponent: <Trophy size={20} color="#FFFFFF" />,
                 actionText: 'PLAY',
@@ -750,8 +750,80 @@ export const ExerciseDetailScreen: React.FC<ExerciseDetailScreenProps> = ({
           </View>
         ) : detailTab === 'how_to_play' ? (
           <View style={styles.rulesContainer}>
+            {/* Calorie Counting & METs Formula for this specific exercise */}
             <View style={styles.tabInfoCard}>
-              <Text style={styles.tabInfoTitle}>⚡ {exercise.name} Scoring Rules</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
+                <Text style={styles.tabInfoTitle}>{exercise.name} Calorie Counting</Text>
+              </View>
+
+              {(() => {
+                const exId = exercise.id;
+                let calPerRep = '0.35';
+                let metValue = '5.5 METs';
+                let repFormula = 'Every completed rep burned ~0.35 kcal (70kg bodyweight standard)';
+                let technique = 'Full hip lockout to parallel knee depth counts 1 valid rep.';
+
+                switch (exId) {
+                  case '7':
+                    calPerRep = '0.45';
+                    metValue = '8.0 METs';
+                    repFormula = 'High upper-body & core compound effort burns ~0.45 kcal per rep.';
+                    technique = 'Elbows bend to <= 105° in straight plank and push to full lockout.';
+                    break;
+                  case '4':
+                    calPerRep = '0.38';
+                    metValue = '6.0 METs';
+                    repFormula = 'Unilateral leg & core engagement burns ~0.38 kcal per step/rep.';
+                    technique = 'Front knee drops to 90° and back knee nears the ground.';
+                    break;
+                  case '2':
+                  case '5':
+                    calPerRep = '0.30';
+                    metValue = '4.5 METs';
+                    repFormula = 'Continuous abdominal contractions burn ~0.30 kcal per rep.';
+                    technique = 'Shoulder blades lift fully off the floor into crunch lockout.';
+                    break;
+                  case '3':
+                  case '6':
+                    calPerRep = '0.40';
+                    metValue = '5.0 METs';
+                    repFormula = 'Isometric full-body muscle holds burn ~0.40 kcal per hold milestone.';
+                    technique = 'Maintain aligned joint posture without dropping for hold duration.';
+                    break;
+                  case '1':
+                  default:
+                    calPerRep = '0.35';
+                    metValue = '5.5 METs';
+                    repFormula = 'Large quadriceps & glute muscle engagement burns ~0.35 kcal per rep.';
+                    technique = 'Hip crease drops below knee level (< 90° angle) and returns upright.';
+                    break;
+                }
+
+                return (
+                  <View style={styles.calorieRuleBox}>
+                    <View style={styles.calorieRuleHighlightRow}>
+                      <View style={styles.calRatePill}>
+                        <Text style={styles.calRatePillVal}>{calPerRep} kcal</Text>
+                        <Text style={styles.calRatePillSub}>per valid rep</Text>
+                      </View>
+                      <View style={styles.calRatePill}>
+                        <Text style={styles.calRatePillVal}>{metValue}</Text>
+                        <Text style={styles.calRatePillSub}>MET Intensity</Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.calRuleExplanationList}>
+                      <Text style={styles.calRuleText}>• <Text style={styles.calRuleBold}>Calculation Method:</Text> {repFormula}</Text>
+                      <Text style={styles.calRuleText}>• <Text style={styles.calRuleBold}>Valid Movement:</Text> {technique}</Text>
+                      <Text style={styles.calRuleText}>• <Text style={styles.calRuleBold}>Daily Profile Log:</Text> Automatically stored to your Supabase profile and date calendar.</Text>
+                    </View>
+                  </View>
+                );
+              })()}
+            </View>
+
+            <View style={styles.tabInfoCard}>
+              <Text style={styles.tabInfoTitle}>⚡ {exercise.name} Match Scoring Rules</Text>
               <View style={styles.rulePointRow}>
                 <View style={[styles.rulePointBadge, { backgroundColor: '#E8D5C4' }]}>
                   <Text style={[styles.rulePointBadgeText, { color: '#11141A' }]}>+10 PTS</Text>
@@ -831,6 +903,28 @@ export const ExerciseDetailScreen: React.FC<ExerciseDetailScreenProps> = ({
             </View>
 
             <View style={styles.infoModalBody}>
+              {/* Calorie burn rate for this exercise */}
+              <View style={styles.modalCalorieBox}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                  <Flame size={14} color="#FF6B35" style={{ marginRight: 4 }} />
+                  <Text style={styles.modalCalorieTitle}>Calorie Calculation</Text>
+                </View>
+                <Text style={styles.modalCalorieSub}>
+                  {exercise.id === '7'
+                    ? '• ~0.45 kcal / rep (8.0 METs upper body + core compound)'
+                    : exercise.id === '4'
+                    ? '• ~0.38 kcal / rep (6.0 METs unilateral leg compound)'
+                    : exercise.id === '2' || exercise.id === '5'
+                    ? '• ~0.30 kcal / rep (4.5 METs abdominal contractions)'
+                    : exercise.id === '3' || exercise.id === '6'
+                    ? '• ~0.40 kcal / hold unit (5.0 METs isometric hold)'
+                    : '• ~0.35 kcal / rep (5.5 METs squat knee flexion)'}
+                </Text>
+                <Text style={styles.modalCalorieNote}>
+                  Burned calories are automatically saved to your profile and home calendar by date.
+                </Text>
+              </View>
+
               <View style={styles.rulePointRow}>
                 <View style={[styles.rulePointBadge, { backgroundColor: '#E8D5C4' }]}>
                   <Text style={[styles.rulePointBadgeText, { color: '#11141A' }]}>+10 PTS</Text>
@@ -1325,8 +1419,73 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 18,
   },
-  tabInfoTitle: { color: '#FFFFFF', fontSize: 16, fontWeight: '900', marginBottom: 12 },
+  tabInfoTitle: { color: '#FFFFFF', fontSize: 16, fontWeight: '900' },
   tabInfoBody: { color: '#CBD5E1', fontSize: 13, lineHeight: 20 },
+  calorieRuleBox: {
+    marginTop: 6,
+  },
+  calorieRuleHighlightRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 12,
+  },
+  calRatePill: {
+    flex: 1,
+    backgroundColor: 'rgba(255, 107, 53, 0.12)',
+    borderRadius: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 107, 53, 0.3)',
+    alignItems: 'center',
+  },
+  calRatePillVal: {
+    color: '#FF6B35',
+    fontSize: 16,
+    fontWeight: '900',
+  },
+  calRatePillSub: {
+    color: '#CBD5E1',
+    fontSize: 10,
+    fontWeight: '700',
+    marginTop: 2,
+  },
+  calRuleExplanationList: {
+    gap: 6,
+  },
+  calRuleText: {
+    color: '#CBD5E1',
+    fontSize: 12.5,
+    lineHeight: 18,
+  },
+  calRuleBold: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+  },
+  modalCalorieBox: {
+    backgroundColor: 'rgba(255, 107, 53, 0.1)',
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 107, 53, 0.25)',
+    marginBottom: 14,
+  },
+  modalCalorieTitle: {
+    color: '#FF6B35',
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  modalCalorieSub: {
+    color: '#E2E8F0',
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 2,
+  },
+  modalCalorieNote: {
+    color: '#94A3B8',
+    fontSize: 10.5,
+    marginTop: 6,
+  },
   rulePointRow: {
     flexDirection: 'row',
     alignItems: 'center',

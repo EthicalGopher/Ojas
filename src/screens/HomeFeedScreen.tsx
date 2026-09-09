@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  FlatList,
   Modal,
   ScrollView,
   StyleSheet,
@@ -10,12 +11,12 @@ import {
   View,
 } from 'react-native';
 import {
+  Activity,
   BookOpen,
   Bot,
   Camera,
   CheckCircle2,
   ChevronRight,
-  Flame,
   HelpCircle,
   Info,
   Lightbulb,
@@ -38,19 +39,9 @@ import { Avatar } from '../components/Avatar';
 import { ExerciseIcon } from '../components/ExerciseIcon';
 import { useUserStore } from '../store/userStore';
 import { fetchFriends, FriendshipItem } from '../utils/friendService';
-import { DEFAULT_EXERCISES } from '../utils/exerciseService';
+import { DEFAULT_EXERCISES, ExerciseItem } from '../utils/exerciseService';
 
-export interface ExerciseItem {
-  id: string;
-  name: string;
-  category: 'all' | 'strength' | 'cardio' | 'flexibility';
-  icon: string;
-  isFavorite?: boolean;
-  bgGradient?: string;
-  description?: string;
-  image_url?: string;
-  type?: string;
-}
+export type { ExerciseItem };
 
 interface HomeFeedScreenProps {
   onlineCount: number;
@@ -81,7 +72,7 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
   onNavigateToTab,
   featuredExercise,
 }) => {
-  const { user, isGuest } = useUserStore();
+  const { user, profile, isGuest } = useUserStore();
   const [friends, setFriends] = useState<FriendshipItem[]>([]);
   const [loadingFriends, setLoadingFriends] = useState<boolean>(false);
   const [selectedTutorial, setSelectedTutorial] = useState<TutorialModalData | null>(null);
@@ -96,7 +87,7 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
   };
 
   // Dynamic Current Date & Week Days Generation
-  const { currentMonthYear, currentWeekDays, todayDateNumber } = useMemo(() => {
+  const { currentMonthYear, currentWeekDays, todayDateNumber, todayDateString } = useMemo(() => {
     const today = new Date();
     const monthNames = [
       'January', 'February', 'March', 'April', 'May', 'June',
@@ -104,6 +95,7 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
     ];
     const currentMonthYear = `${monthNames[today.getMonth()]} ${today.getFullYear()}`;
     const todayDateNumber = today.getDate();
+    const todayDateString = today.toISOString().split('T')[0]; // YYYY-MM-DD
 
     // Find the Monday of current week
     const dayOfWeek = today.getDay(); // 0 is Sunday, 1 is Monday...
@@ -115,18 +107,38 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
     const currentWeekDays = dayInitials.map((initial, i) => {
       const d = new Date(monday);
       d.setDate(monday.getDate() + i);
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      const dateString = `${yyyy}-${mm}-${dd}`;
       return {
         day: initial,
         date: d.getDate(),
+        dateString,
         fullDate: d,
         isToday: d.toDateString() === today.toDateString(),
       };
     });
 
-    return { currentMonthYear, currentWeekDays, todayDateNumber };
+    return { currentMonthYear, currentWeekDays, todayDateNumber, todayDateString };
   }, []);
 
-  const [selectedDay, setSelectedDay] = useState<number>(todayDateNumber);
+  const [selectedDateString, setSelectedDateString] = useState<string>(todayDateString);
+  const selectedDayItem = currentWeekDays.find((d) => d.dateString === selectedDateString) || currentWeekDays.find((d) => d.isToday) || currentWeekDays[0];
+
+  // Daily calories from Supabase profile table
+  const dailyCaloriesMap = profile?.daily_calories || {};
+  const selectedDayLog = dailyCaloriesMap[selectedDateString] || {
+    date: selectedDateString,
+    calories: 0,
+    reps: 0,
+    matches: 0,
+  };
+
+  const dayCaloriesBurned = selectedDayLog.calories || 0;
+  const dayRepsCompleted = selectedDayLog.reps || 0;
+  const dayMatchesPlayed = selectedDayLog.matches || 0;
+  const totalCaloriesAllTime = profile?.total_calories || 0;
 
   const loadFriendsList = useCallback(async () => {
     if (!user?.id) return;
@@ -150,8 +162,8 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
     {
       title: 'How AI Pose Tracking Works',
       subtitle: 'Real-time 33-point MediaPipe joint angle tracking for squats parallel depth.',
-      badge: 'AI TECHNOLOGY 👁️',
-      icon: '🧠',
+      badge: 'AI TECHNOLOGY',
+      icon: '',
       steps: [
         {
           title: '1. Joint Detection',
@@ -170,8 +182,8 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
     {
       title: '1v1 Battle Rules & Ranking',
       subtitle: 'Compete in live camera duels or private score battles to level up your athlete tier.',
-      badge: 'COMPETITION ⚔️',
-      icon: '🏆',
+      badge: 'COMPETITION',
+      icon: '',
       steps: [
         {
           title: 'Win Outcome (+10 PTS)',
@@ -194,8 +206,8 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
     {
       title: 'Camera Setup & Positioning',
       subtitle: 'Optimal phone placement and room lighting for accurate joint detection.',
-      badge: 'PRO TIP 📱',
-      icon: '📐',
+      badge: 'PRO TIP',
+      icon: '',
       steps: [
         {
           title: 'Distance: 5 to 7 Feet',
@@ -219,27 +231,32 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
       contentContainerStyle={styles.feedScrollContent}
       showsVerticalScrollIndicator={false}
     >
-      {/* 1. DYNAMIC CURRENT DATE CALENDAR STRIP */}
+      {/* 1. DYNAMIC CURRENT DATE CALENDAR STRIP & CALORIES BURNED TRACKER */}
       <View style={styles.calendarCard}>
         <View style={styles.calendarHeaderRow}>
           <Text style={styles.calendarMonthText}>{currentMonthYear}</Text>
           <View style={styles.calendarNavButtons}>
             <View style={styles.todayPillBadge}>
               <View style={styles.neonDot} />
-              <Text style={styles.todayPillText}>TODAY</Text>
+              <Text style={styles.todayPillText}>
+                {selectedDayItem?.isToday ? 'TODAY' : selectedDateString}
+              </Text>
             </View>
           </View>
         </View>
 
         <View style={styles.daysRow}>
           {currentWeekDays.map((item, index) => {
-            const isSelected = selectedDay === item.date;
+            const isSelected = selectedDateString === item.dateString;
+            const dayCalories = dailyCaloriesMap[item.dateString]?.calories || 0;
+            const hasActivity = dayCalories > 0;
+
             return (
               <TouchableOpacity
                 key={index}
                 style={[styles.dayItem, isSelected && styles.dayItemActive]}
                 activeOpacity={0.8}
-                onPress={() => setSelectedDay(item.date)}
+                onPress={() => setSelectedDateString(item.dateString)}
               >
                 <Text style={[styles.dayLetter, isSelected && styles.dayLetterActive]}>
                   {item.day}
@@ -249,9 +266,43 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
                     {item.date}
                   </Text>
                 </View>
+                {/* Micro activity indicator dot if calories were burned on this date */}
+                {hasActivity && (
+                  <View style={[styles.calDotBadge, isSelected && styles.calDotBadgeActive]} />
+                )}
               </TouchableOpacity>
             );
           })}
+        </View>
+
+        {/* Date-Specific Calories Burn Summary Box */}
+        <View style={styles.calendarCalorieRow}>
+          <View style={styles.calendarCalorieLeft}>
+            <View style={styles.calFlameIconCircle}>
+              <Activity size={16} color="#FF6B35" />
+            </View>
+            <View>
+              <Text style={styles.calBurnNumberText}>
+                {dayCaloriesBurned} <Text style={styles.calBurnUnitText}>kcal</Text>
+              </Text>
+              <Text style={styles.calBurnLabelText}>
+                {selectedDayItem?.isToday
+                  ? "Today's Energy Burned"
+                  : `Burned on ${selectedDayItem?.fullDate?.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) || selectedDateString}`}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.calendarCalorieStatsRight}>
+            <View style={styles.calMiniStatPill}>
+              <Text style={styles.calMiniStatVal}>{dayRepsCompleted}</Text>
+              <Text style={styles.calMiniStatLbl}>REPS</Text>
+            </View>
+            <View style={styles.calMiniStatPill}>
+              <Text style={styles.calMiniStatVal}>{dayMatchesPlayed}</Text>
+              <Text style={styles.calMiniStatLbl}>MATCHES</Text>
+            </View>
+          </View>
         </View>
       </View>
 
@@ -266,7 +317,7 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
             <View style={styles.progressTopRow}>
               <Text style={styles.heroProgressTag}>Featured Workout</Text>
               <View style={styles.circularGaugePill}>
-                <Flame size={12} color="#11141A" />
+                <Zap size={12} color="#11141A" />
               </View>
             </View>
 
@@ -318,49 +369,76 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
         </View>
       </TouchableOpacity>
 
-      {/* 3. AI TUTOR SECTION FOR ALL EXERCISES */}
+      {/* 3. AI TUTOR SECTION FOR ALL EXERCISES (Small, Rounded Square Horizontal FlatList) */}
       <View style={styles.sectionHeaderRow}>
         <View style={styles.headerLeftRow}>
           <Bot size={16} color="#E25822" style={{ marginRight: 6 }} />
           <Text style={styles.sectionHeaderTitle}>AI TUTOR</Text>
         </View>
+        <Text style={styles.sectionSubHint}>Live Pose Coach</Text>
       </View>
 
-      <ScrollView
+      <FlatList
+        data={exercises}
+        keyExtractor={(item) => item.id}
         horizontal
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.tutorHorizontalList}
-      >
-        {exercises.map((item) => (
-          <TouchableOpacity
-            key={item.id}
-            style={styles.tutorCard}
-            activeOpacity={0.88}
-            onPress={() => onOpenCamera(item.id, item.name, true)}
-          >
-            <View style={styles.tutorCardTop}>
-              <View style={styles.tutorIconCircle}>
+        contentContainerStyle={styles.tutorFlatListContent}
+        renderItem={({ item, index }) => {
+          const defaultPalettes = ['#C8B6FF', '#FFD6E0', '#E25822', '#354394'];
+          const cardBg = item.bg_theme || defaultPalettes[index % defaultPalettes.length];
+          const isDarkCard = cardBg === '#354394' || cardBg === '#E25822';
+          const textColor = isDarkCard ? '#FFFFFF' : '#11141A';
+          const subTextColor = isDarkCard ? '#E2E8F0' : '#4B5563';
+          const duration = item.duration_mins || (index % 2 === 0 ? 32 : 25);
+
+          return (
+            <TouchableOpacity
+              style={[styles.tutorSquareCard, { backgroundColor: cardBg }]}
+              activeOpacity={0.88}
+              onPress={() => onOpenCamera(item.id, item.name, true)}
+            >
+              {/* Top Row: Category Pill & Duration Badge */}
+              <View style={styles.tutorSquareTopRow}>
+                <View style={[styles.tutorSquareCategoryPill, isDarkCard && { backgroundColor: 'rgba(255, 255, 255, 0.2)' }]}>
+                  <Text style={[styles.tutorSquareCategoryText, { color: textColor }]}>
+                    {item.category?.toUpperCase() || 'FITNESS'}
+                  </Text>
+                </View>
+                <View style={styles.tutorSquareDurationBadge}>
+                  <Text style={styles.tutorSquareDurationText}>{duration}m</Text>
+                </View>
+              </View>
+
+              {/* Center: Athletic Visual Icon */}
+              <View style={styles.tutorSquareIconWrap}>
                 <ExerciseIcon
                   imageUrl={item.image_url}
-                  icon={item.icon || '🏋️'}
-                  size={36}
-                  fontSize={20}
+                  icon={item.icon}
+                  size={46}
+                  fontSize={26}
                 />
               </View>
-            </View>
 
-            <Text style={styles.tutorCardTitle} numberOfLines={1}>{item.name}</Text>
-            <Text style={styles.tutorCardSub} numberOfLines={2}>
-              {item.description || `Real-time pose guidance & correction`}
-            </Text>
+              {/* Bottom: Name & Mini Play Action */}
+              <View style={styles.tutorSquareBottomRow}>
+                <View style={{ flex: 1, marginRight: 6 }}>
+                  <Text style={[styles.tutorSquareTitle, { color: textColor }]} numberOfLines={1}>
+                    {item.name}
+                  </Text>
+                  <Text style={[styles.tutorSquareSub, { color: subTextColor }]} numberOfLines={1}>
+                    Voice & Pose
+                  </Text>
+                </View>
 
-            <View style={styles.tutorStartButton}>
-              <Play size={11} color="#FFFFFF" fill="#FFFFFF" style={{ marginRight: 4 }} />
-              <Text style={styles.tutorStartButtonText}>Start Tutor</Text>
-            </View>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
+                <View style={[styles.tutorSquarePlayCircle, isDarkCard && { backgroundColor: '#FFFFFF' }]}>
+                  <Play size={10} color={isDarkCard ? '#11141A' : '#FFFFFF'} fill={isDarkCard ? '#11141A' : '#FFFFFF'} />
+                </View>
+              </View>
+            </TouchableOpacity>
+          );
+        }}
+      />
 
       {/* 4. DYNAMIC TUTORIALS & GUIDES SECTION */}
       <View style={styles.sectionHeaderRow}>
@@ -383,7 +461,7 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
             <View style={styles.tutorialBadgeDark}>
               <Text style={styles.tutorialBadgeDarkText}>AI TRACKER</Text>
             </View>
-            <Text style={{ fontSize: 22 }}>🧠</Text>
+            <Bot size={18} color="#11141A" />
           </View>
           <Text style={styles.tutorialCardTitleDark}>How AI Tracking Works</Text>
           <Text style={styles.tutorialCardDescDark} numberOfLines={2}>
@@ -405,7 +483,7 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
             <View style={styles.tutorialBadgeDark}>
               <Text style={styles.tutorialBadgeDarkText}>RULES</Text>
             </View>
-            <Text style={{ fontSize: 22 }}>🏆</Text>
+            <Swords size={18} color="#11141A" />
           </View>
           <Text style={styles.tutorialCardTitleDark}>1v1 Battle Scoring</Text>
           <Text style={styles.tutorialCardDescDark} numberOfLines={2}>
@@ -659,6 +737,82 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '900',
   },
+  calDotBadge: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#FF6B35',
+    marginTop: 4,
+  },
+  calDotBadgeActive: {
+    backgroundColor: '#FFFFFF',
+  },
+  calendarCalorieRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    borderRadius: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginTop: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+  },
+  calendarCalorieLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  calFlameIconCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(255, 107, 53, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 107, 53, 0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  calBurnNumberText: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '900',
+  },
+  calBurnUnitText: {
+    color: '#FF6B35',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  calBurnLabelText: {
+    color: '#8E95A0',
+    fontSize: 10,
+    fontWeight: '700',
+    marginTop: 1,
+  },
+  calendarCalorieStatsRight: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  calMiniStatPill: {
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    alignItems: 'center',
+    minWidth: 46,
+  },
+  calMiniStatVal: {
+    color: '#CBD5E1',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  calMiniStatLbl: {
+    color: '#64748B',
+    fontSize: 8,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
   heroLimeCard: {
     backgroundColor: '#E25822',
     borderRadius: 26,
@@ -759,58 +913,79 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '900',
   },
-  tutorHorizontalList: {
-    paddingBottom: 16,
+  tutorFlatListContent: {
     gap: 12,
+    paddingBottom: 8,
+    marginBottom: 16,
   },
-  tutorCard: {
-    width: 175,
-    backgroundColor: '#161B22',
-    borderRadius: 20,
-    padding: 14,
-    borderWidth: 1.5,
-    borderColor: 'rgba(226, 88, 34, 0.25)',
-    justifyContent: 'space-between',
-  },
-  tutorCardTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  tutorIconCircle: {
-    width: 44,
-    height: 44,
+  tutorSquareCard: {
+    width: 142,
+    height: 142,
     borderRadius: 22,
-    backgroundColor: '#262A32',
-    alignItems: 'center',
-    justifyContent: 'center',
+    padding: 12,
+    justifyContent: 'space-between',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 3,
   },
-  tutorCardTitle: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '800',
-    marginBottom: 4,
-  },
-  tutorCardSub: {
-    color: '#8E95A0',
-    fontSize: 11,
-    lineHeight: 15,
-    marginBottom: 12,
-    minHeight: 30,
-  },
-  tutorStartButton: {
+  tutorSquareTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#E25822',
-    borderRadius: 14,
-    paddingVertical: 7,
+    justifyContent: 'space-between',
   },
-  tutorStartButtonText: {
-    color: '#FFFFFF',
-    fontSize: 11.5,
+  tutorSquareCategoryPill: {
+    backgroundColor: 'rgba(17, 20, 26, 0.08)',
+    borderRadius: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  tutorSquareCategoryText: {
+    fontSize: 8.5,
+    fontWeight: '800',
+    letterSpacing: 0.4,
+  },
+  tutorSquareDurationBadge: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  tutorSquareDurationText: {
+    color: '#11141A',
+    fontSize: 9,
     fontWeight: '900',
+  },
+  tutorSquareIconWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: 2,
+  },
+  tutorSquareBottomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 4,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(17, 20, 26, 0.08)',
+  },
+  tutorSquareTitle: {
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  tutorSquareSub: {
+    fontSize: 9,
+    fontWeight: '700',
+    marginTop: 1,
+  },
+  tutorSquarePlayCircle: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#11141A',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerLeftRow: {
     flexDirection: 'row',

@@ -17,7 +17,6 @@ import {
   Users,
   Search,
   Plus,
-  Crown,
   Shield,
   UserPlus,
   UserX,
@@ -35,7 +34,14 @@ import {
   Camera,
   CheckCircle2,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
   Edit3,
+  Swords,
+  Flame,
+  Play,
+  Award,
+  Calendar,
 } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Avatar } from '../components/Avatar';
@@ -55,21 +61,41 @@ import {
   cancelJoinRequest,
   uploadCommunityLogo,
 } from '../utils/communityService';
+import {
+  Tournament,
+  TournamentEntry,
+  TournamentMatch,
+  TournamentFormat,
+  TOURNAMENT_EXERCISES,
+  fetchTournaments,
+  fetchTournamentById,
+  fetchTournamentEntries,
+  fetchTournamentMatches,
+  createTournament,
+  registerCommunityForTournament,
+  startTournamentAndGenerateBracket,
+  recordTournamentMatchBattle,
+} from '../utils/tournamentService';
 
 interface CommunityScreenProps {
   currentUser: any;
   onBack: () => void;
+  onOpenMatchCamera?: (opponent: string, mode: 'faceoff' | 'quickjoin' | 'ffa', exerciseId?: string) => void;
 }
 
 const CATEGORIES = ['All', 'School', 'University', 'Gym', 'Sports Club', 'Organization', 'General'] as const;
 
-export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, onBack }) => {
+export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, onBack, onOpenMatchCamera }) => {
   const [resolvedUserId, setResolvedUserId] = useState<string>(
     currentUser?.id || currentUser?.user?.id || ''
   );
 
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState<boolean>(false);
+
+  // User Profile & Admin Check
+  const [userProfile, setUserProfile] = useState<any>(null);
+  const [isAdmin, setIsAdmin] = useState<boolean>(false);
 
   // User Status & Community State
   const [userStatus, setUserStatus] = useState<UserCommunityStatus>({
@@ -89,8 +115,31 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
 
-  // Active View Tab: 'hub' | 'explore' | 'proposals'
-  const [activeTab, setActiveTab] = useState<'hub' | 'explore' | 'proposals'>('hub');
+  // Active View Tab: 'hub' | 'explore' | 'proposals' | 'battles'
+  const [activeTab, setActiveTab] = useState<'hub' | 'explore' | 'proposals' | 'battles'>('hub');
+
+  // Battles / Tournaments State
+  const [tournaments, setTournaments] = useState<Tournament[]>([]);
+  const [selectedTournament, setSelectedTournament] = useState<Tournament | null>(null);
+  const [tournamentEntries, setTournamentEntries] = useState<TournamentEntry[]>([]);
+  const [tournamentMatches, setTournamentMatches] = useState<TournamentMatch[]>([]);
+  const [isLoadingTournamentData, setIsLoadingTournamentData] = useState<boolean>(false);
+  const [showTournamentsSection, setShowTournamentsSection] = useState<boolean>(false);
+
+  // Tournament Modals
+  const [showCreateTournamentModal, setShowCreateTournamentModal] = useState<boolean>(false);
+  const [showNominateModal, setShowNominateModal] = useState<boolean>(false);
+  const [selectedAthleteIds, setSelectedAthleteIds] = useState<string[]>([]);
+  const [isSubmittingTournament, setIsSubmittingTournament] = useState<boolean>(false);
+
+  // Form State for Admin Creating Tournament
+  const [tournTitle, setTournTitle] = useState<string>('');
+  const [tournDesc, setTournDesc] = useState<string>('');
+  const [tournExerciseId, setTournExerciseId] = useState<string>('1'); // Default: Squats
+  const [tournFormat, setTournFormat] = useState<TournamentFormat>('single_elimination');
+  const [tournMaxComms, setTournMaxComms] = useState<number>(8);
+  const [tournAthletesPerMatch, setTournAthletesPerMatch] = useState<number>(1);
+  const [tournPrize, setTournPrize] = useState<string>('Grand Trophy & Leaderboard Glory');
 
   // Modals
   const [showCreateModal, setShowCreateModal] = useState<boolean>(false);
@@ -118,15 +167,47 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
   // Ensure resolved user id is populated from auth if needed
   useEffect(() => {
     async function resolveAuthUser() {
-      if (!resolvedUserId) {
+      let uid = resolvedUserId;
+      if (!uid) {
         const { data } = await supabase.auth.getUser();
         if (data?.user?.id) {
-          setResolvedUserId(data.user.id);
+          uid = data.user.id;
+          setResolvedUserId(uid);
+        }
+      }
+
+      if (uid) {
+        // Fetch user profile to verify admin role
+        try {
+          const { data: prof } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', uid)
+            .maybeSingle();
+
+          if (prof) {
+            setUserProfile(prof);
+            const adminFlag = !!(
+              prof.admin ||
+              prof.is_admin ||
+              currentUser?.user_metadata?.admin ||
+              currentUser?.user_metadata?.is_admin
+            );
+            setIsAdmin(adminFlag);
+          } else {
+            const adminFlag = !!(
+              currentUser?.user_metadata?.admin ||
+              currentUser?.user_metadata?.is_admin
+            );
+            setIsAdmin(adminFlag);
+          }
+        } catch (e) {
+          console.warn('Error fetching profile admin status:', e);
         }
       }
     }
     resolveAuthUser();
-  }, [resolvedUserId]);
+  }, [resolvedUserId, currentUser]);
 
   // Load Data
   const loadData = useCallback(async () => {
@@ -143,26 +224,32 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
     }
 
     try {
-      const [status, comms] = await Promise.all([
+      const [status, comms, tourns] = await Promise.all([
         fetchUserCommunityStatus(uid),
         fetchCommunities(searchQuery, selectedCategory),
+        fetchTournaments(uid),
       ]);
 
       setUserStatus(status);
       setExploreCommunities(comms);
+      setTournaments(tourns);
 
-      // If user is a member of a community, prioritize showing their community in hub
-      if (status.hasCommunity && status.community) {
-        if (!viewingCommunity || viewingCommunity.id === status.community.id) {
-          setViewingCommunity(status.community);
-          const memberList = await fetchCommunityMembers(status.community.id);
-          setViewingCommunityMembers(memberList);
-          setActiveTab('hub');
-        }
-      } else {
-        if (!viewingCommunity) {
-          setActiveTab('explore');
-        }
+      // If user is currently viewing a community in detail, refresh its member data
+      if (viewingCommunity) {
+        const memberList = await fetchCommunityMembers(viewingCommunity.id);
+        setViewingCommunityMembers(memberList);
+      }
+
+      // If viewing a specific tournament, refresh its entries & matches
+      if (selectedTournament) {
+        const [entries, matches, updatedTourn] = await Promise.all([
+          fetchTournamentEntries(selectedTournament.id),
+          fetchTournamentMatches(selectedTournament.id),
+          fetchTournamentById(selectedTournament.id),
+        ]);
+        setTournamentEntries(entries);
+        setTournamentMatches(matches);
+        if (updatedTourn) setSelectedTournament(updatedTourn);
       }
     } catch (e) {
       console.warn('Error loading community data:', e);
@@ -170,7 +257,7 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
       setIsLoading(false);
       setRefreshing(false);
     }
-  }, [resolvedUserId, searchQuery, selectedCategory, viewingCommunity?.id]);
+  }, [resolvedUserId, searchQuery, selectedCategory, viewingCommunity?.id, selectedTournament?.id]);
 
   useEffect(() => {
     loadData();
@@ -179,6 +266,218 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
   const onRefresh = () => {
     setRefreshing(true);
     loadData();
+  };
+
+  // Open Tournament Details & Load Matches/Bracket
+  const handleOpenTournament = async (tournament: Tournament) => {
+    setSelectedTournament(tournament);
+    setIsLoadingTournamentData(true);
+    try {
+      const [entries, matches] = await Promise.all([
+        fetchTournamentEntries(tournament.id),
+        fetchTournamentMatches(tournament.id),
+      ]);
+      setTournamentEntries(entries);
+      setTournamentMatches(matches);
+    } catch (e) {
+      console.warn('Error fetching tournament bracket details:', e);
+    } finally {
+      setIsLoadingTournamentData(false);
+    }
+  };
+
+  // Admin: Handle Create Tournament
+  const handleAdminCreateTournament = async () => {
+    if (!tournTitle.trim()) {
+      Alert.alert('Validation Error', 'Please enter a tournament title.');
+      return;
+    }
+
+    if (!isAdmin) {
+      Alert.alert('Access Denied', 'Only designated platform admins can create and host community tournaments.');
+      return;
+    }
+
+    setIsSubmittingTournament(true);
+    try {
+      const adminName = userProfile?.username || currentUser?.user_metadata?.username || currentUser?.email?.split('@')[0] || 'Admin';
+      const res = await createTournament({
+        title: tournTitle.trim(),
+        description: tournDesc.trim(),
+        exerciseId: tournExerciseId,
+        format: tournFormat,
+        maxCommunities: tournMaxComms,
+        athletesPerMatch: tournAthletesPerMatch,
+        prizePool: tournPrize.trim(),
+        adminId: resolvedUserId,
+        adminUsername: adminName,
+      });
+
+      if (res.success) {
+        Alert.alert('Tournament Created', `"${tournTitle}" is now live for community leaders to register!`);
+        setShowCreateTournamentModal(false);
+        setTournTitle('');
+        setTournDesc('');
+        loadData();
+      } else {
+        Alert.alert('Creation Failed', res.error || 'Unable to create tournament.');
+      }
+    } catch (e: any) {
+      Alert.alert('Error', e?.message || 'Something went wrong.');
+    } finally {
+      setIsSubmittingTournament(false);
+    }
+  };
+
+  // Leader: Handle Nominate & Register Community
+  const handleLeaderRegisterCommunity = async () => {
+    if (!selectedTournament) return;
+    if (!userStatus.hasCommunity || !userStatus.community) {
+      Alert.alert('No Community', 'You must lead a community to register for tournaments.');
+      return;
+    }
+    if (userStatus.membership?.role !== 'leader') {
+      Alert.alert('Leader Action Only', 'Only the community leader can register and select athletes.');
+      return;
+    }
+    if (selectedAthleteIds.length === 0) {
+      Alert.alert('Select Athletes', 'Please select at least one athlete from your community to represent you.');
+      return;
+    }
+
+    setIsSubmittingTournament(true);
+    try {
+      const chosenAthletes = activeMembers
+        .filter((m) => selectedAthleteIds.includes(m.user_id))
+        .map((m) => ({
+          user_id: m.user_id,
+          username: m.profile?.username || 'athlete',
+          full_name: m.profile?.full_name,
+          avatar_url: m.profile?.avatar_url,
+          avatar_config: m.profile?.avatar_config,
+        }));
+
+      const leaderName = userProfile?.username || currentUser?.user_metadata?.username || 'Leader';
+      const res = await registerCommunityForTournament({
+        tournamentId: selectedTournament.id,
+        community: userStatus.community,
+        leaderId: resolvedUserId,
+        leaderUsername: leaderName,
+        selectedAthletes: chosenAthletes,
+      });
+
+      if (res.success) {
+        Alert.alert('Community Registered', `${userStatus.community.name} is now locked in the tournament bracket!`);
+        setShowNominateModal(false);
+        setSelectedAthleteIds([]);
+        loadData();
+      } else {
+        Alert.alert('Registration Failed', res.error || 'Could not register community.');
+      }
+    } catch (e: any) {
+      Alert.alert('Error', e?.message || 'Something went wrong.');
+    } finally {
+      setIsSubmittingTournament(false);
+    }
+  };
+
+  // Admin: Start Tournament & Seed Brackets
+  const handleAdminStartTournament = async () => {
+    if (!selectedTournament) return;
+    if (!isAdmin) {
+      Alert.alert('Admin Only', 'Only admins can start the tournament.');
+      return;
+    }
+
+    Alert.alert(
+      'Start Community Tournament',
+      `Are you ready to lock registrations and generate the elimination bracket for "${selectedTournament.title}"?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Generate Brackets & Begin',
+          style: 'default',
+          onPress: async () => {
+            setIsLoadingTournamentData(true);
+            const res = await startTournamentAndGenerateBracket(selectedTournament.id);
+            if (res.success) {
+              Alert.alert('Tournament Started', 'The elimination battles have begun!');
+              loadData();
+            } else {
+              Alert.alert('Failed to Start', res.error || 'Could not start tournament.');
+            }
+            setIsLoadingTournamentData(false);
+          },
+        },
+      ]
+    );
+  };
+
+  // Launch Battle or Simulate Match
+  const handlePlayTournamentMatch = async (match: TournamentMatch) => {
+    if (match.status === 'completed' || match.status === 'bye') return;
+
+    // Check if user is an athlete or leader in this match
+    const isParticipant =
+      match.community1_athlete_id === resolvedUserId ||
+      match.community2_athlete_id === resolvedUserId ||
+      match.community1_id === userStatus.community?.id ||
+      match.community2_id === userStatus.community?.id ||
+      isAdmin;
+
+    if (!isParticipant) {
+      Alert.alert('Spectating Match', 'You are viewing this match between rival communities.');
+    }
+
+    Alert.alert(
+      `Community Match: ${match.round_name}`,
+      `${match.community1_name || 'Community 1'} VS ${match.community2_name || 'Community 2'}\nExercise: ${selectedTournament?.exercise_name || 'Fitness'}`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Launch Live Battle',
+          onPress: () => {
+            const oppName = match.community1_id === userStatus.community?.id
+              ? (match.community2_athlete_name || match.community2_name || 'Rival Community')
+              : (match.community1_athlete_name || match.community1_name || 'Rival Community');
+            if (onOpenMatchCamera) {
+              onOpenMatchCamera(oppName, 'faceoff', match.exercise_id);
+            } else {
+              Alert.alert('Battle Ready', 'Match camera ready for live rep counting!');
+            }
+          },
+        },
+        {
+          text: 'Simulate Quick Fight',
+          onPress: async () => {
+            // Generate realistic random rep scores between 15 and 45
+            const score1 = Math.floor(Math.random() * 25) + 20;
+            const score2 = Math.floor(Math.random() * 25) + 18;
+            const res = await recordTournamentMatchBattle({
+              matchId: match.id,
+              tournamentId: match.tournament_id,
+              comm1Score: score1,
+              comm2Score: score2,
+            });
+
+            if (res.success) {
+              if (res.isGrandFinalWon) {
+                Alert.alert(
+                  'TOURNAMENT CHAMPION CROWNED',
+                  `${res.winnerCommunityName} has won the Grand Championship Final!`
+                );
+              } else {
+                const winnerName = score1 >= score2 ? match.community1_name : match.community2_name;
+                Alert.alert('Match Completed', `${winnerName} won (${Math.max(score1, score2)} vs ${Math.min(score1, score2)} reps) and advanced to the next round!`);
+              }
+              loadData();
+            } else {
+              Alert.alert('Error', res.error || 'Failed to record battle.');
+            }
+          },
+        },
+      ]
+    );
   };
 
   // Open a specific community detail view
@@ -556,47 +855,6 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
         </TouchableOpacity>
       </View>
 
-      {/* Tabs / Subnav */}
-      <View style={styles.tabsContainer}>
-        {viewingCommunity && (
-          <TouchableOpacity
-            style={[styles.tabBtn, activeTab === 'hub' && styles.tabBtnActive]}
-            onPress={() => setActiveTab('hub')}
-          >
-            <Text style={[styles.tabBtnText, activeTab === 'hub' && styles.tabBtnTextActive]}>
-              {isViewingMyCommunity ? 'My Community' : 'Community Details'}
-            </Text>
-          </TouchableOpacity>
-        )}
-
-        <TouchableOpacity
-          style={[styles.tabBtn, activeTab === 'explore' && styles.tabBtnActive]}
-          onPress={() => setActiveTab('explore')}
-        >
-          <Text style={[styles.tabBtnText, activeTab === 'explore' && styles.tabBtnTextActive]}>
-            Explore All
-          </Text>
-        </TouchableOpacity>
-
-        {isLeaderOfViewing && (
-          <TouchableOpacity
-            style={[styles.tabBtn, activeTab === 'proposals' && styles.tabBtnActive]}
-            onPress={() => setActiveTab('proposals')}
-          >
-            <View style={styles.tabBadgeRow}>
-              <Text style={[styles.tabBtnText, activeTab === 'proposals' && styles.tabBtnTextActive]}>
-                Join Requests
-              </Text>
-              {pendingProposals.length > 0 && (
-                <View style={styles.tabCounterBadge}>
-                  <Text style={styles.tabCounterText}>{pendingProposals.length}</Text>
-                </View>
-              )}
-            </View>
-          </TouchableOpacity>
-        )}
-      </View>
-
       {isLoading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#E25822" />
@@ -630,34 +888,64 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
             </View>
           )}
 
-          {/* VIEW: COMMUNITY DETAIL / HUB */}
-          {activeTab === 'hub' && viewingCommunity && (
+          {/* 1. DEDICATED COMMUNITY DETAIL VIEW (WHEN OPENED) */}
+          {viewingCommunity ? (
             <View style={styles.myCommunitySection}>
-              {/* Community Hero Card */}
-              <View style={styles.communityHeroCard}>
-                <View style={styles.heroLogoRow}>
-                  {viewingCommunity.logo_url ? (
-                    <Image source={{ uri: viewingCommunity.logo_url }} style={styles.heroLogo} />
+              {/* Back to Explore Communities Navigation Button */}
+              <TouchableOpacity
+                style={[styles.backToTournsBtn, { marginBottom: 16 }]}
+                onPress={() => setViewingCommunity(null)}
+                activeOpacity={0.7}
+              >
+                <ArrowLeft size={16} color="#E25822" />
+                <Text style={styles.backToTournsBtnText}>Back to All Communities</Text>
+              </TouchableOpacity>
+
+              {/* Community Hero Banner (Vibrant ExerciseDetail Style) */}
+              <View style={styles.detailBannerCard}>
+                <View style={styles.bannerTopRow}>
+                  <View style={styles.ratingBadge}>
+                    {getCategoryIcon(viewingCommunity.category)}
+                    <Text style={[styles.ratingLabel, { marginLeft: 6 }]}>{viewingCommunity.category}</Text>
+                    <View style={styles.ratingNumBox}>
+                      <Text style={styles.ratingNumText}>{activeMembers.length} {activeMembers.length === 1 ? 'MEMBER' : 'MEMBERS'}</Text>
+                    </View>
+                  </View>
+
+                  {isLeaderOfViewing ? (
+                    <View style={styles.scoreRulesPill}>
+                      <Text style={styles.scoreRulesText}>LEADER</Text>
+                    </View>
+                  ) : isViewingMyCommunity ? (
+                    <View style={styles.scoreRulesPill}>
+                      <Text style={styles.scoreRulesText}>JOINED</Text>
+                    </View>
                   ) : (
-                    <View style={styles.heroLogoPlaceholder}>
+                    <View style={styles.scoreRulesPill}>
+                      <Text style={styles.scoreRulesText}>1 SQUAD PER ATHLETE</Text>
+                    </View>
+                  )}
+                </View>
+
+                {/* Banner Main Info */}
+                <View style={styles.bannerStatsRow}>
+                  {viewingCommunity.logo_url ? (
+                    <Image source={{ uri: viewingCommunity.logo_url }} style={styles.heroBannerLogo} />
+                  ) : (
+                    <View style={styles.heroBannerLogoPlaceholder}>
                       {getCategoryIcon(viewingCommunity.category)}
                     </View>
                   )}
-                  <View style={styles.heroMainInfo}>
-                    <View style={styles.heroCategoryPill}>
-                      {getCategoryIcon(viewingCommunity.category)}
-                      <Text style={styles.heroCategoryText}>{viewingCommunity.category}</Text>
+
+                  <View style={styles.userRankInfo}>
+                    <View style={styles.rankTitleRow}>
+                      <Text style={styles.rankTitle} numberOfLines={1}>{viewingCommunity.name}</Text>
                     </View>
-                    <Text style={styles.heroCommunityName}>{viewingCommunity.name}</Text>
-                    <Text style={styles.heroMemberCount}>
-                      {activeMembers.length} {activeMembers.length === 1 ? 'Athlete' : 'Athletes'} Joined
+                    <Text style={styles.playedWonStats} numberOfLines={2}>
+                      {viewingCommunity.description || `Official ${viewingCommunity.category} community squad on OJAS Fitness.`}
                     </Text>
                   </View>
                 </View>
-
-                {viewingCommunity.description ? (
-                  <Text style={styles.heroDescription}>{viewingCommunity.description}</Text>
-                ) : null}
 
                 {/* Actions Toolbar */}
                 <View style={styles.heroActionsRow}>
@@ -667,8 +955,8 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
                       onPress={handleOpenEditModal}
                       activeOpacity={0.8}
                     >
-                      <Edit3 size={16} color="#E25822" />
-                      <Text style={styles.heroActionBtnEditText}>Edit Details</Text>
+                      <Edit3 size={15} color="#FFFFFF" />
+                      <Text style={styles.heroActionBtnEditText}>Edit</Text>
                     </TouchableOpacity>
                   )}
 
@@ -678,8 +966,8 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
                       onPress={() => setShowInviteModal(true)}
                       activeOpacity={0.8}
                     >
-                      <UserPlus size={16} color="#FFFFFF" />
-                      <Text style={styles.heroActionBtnPrimaryText}>Invite</Text>
+                      <UserPlus size={15} color="#FFFFFF" />
+                      <Text style={styles.heroActionBtnPrimaryText}>Invite Athletes</Text>
                     </TouchableOpacity>
                   )}
 
@@ -689,7 +977,7 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
                       onPress={handleLeaveCommunity}
                       activeOpacity={0.8}
                     >
-                      <LogOut size={16} color="#EF4444" />
+                      <LogOut size={15} color="#EF4444" />
                       <Text style={styles.heroActionBtnSecondaryText}>Leave</Text>
                     </TouchableOpacity>
                   ) : (
@@ -699,7 +987,7 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
                         onPress={() => handleJoinRequest(viewingCommunity)}
                         activeOpacity={0.8}
                       >
-                        <UserPlus size={16} color="#FFFFFF" />
+                        <UserPlus size={15} color="#FFFFFF" />
                         <Text style={styles.heroActionBtnPrimaryText}>Request to Join</Text>
                       </TouchableOpacity>
                     )
@@ -712,7 +1000,6 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
                 <Text style={styles.sectionHeaderTitle}>COMMUNITY MEMBERS ({activeMembers.length})</Text>
                 {isLeaderOfViewing && (
                   <View style={styles.roleBadgeLeader}>
-                    <Crown size={12} color="#FBBF24" />
                     <Text style={styles.roleBadgeLeaderText}>You are Leader</Text>
                   </View>
                 )}
@@ -754,12 +1041,10 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
                         <View style={styles.memberActionBox}>
                           {isMemLeader ? (
                             <View style={styles.rolePillLeader}>
-                              <Crown size={12} color="#FBBF24" />
                               <Text style={styles.rolePillLeaderText}>Leader</Text>
                             </View>
                           ) : isMemAdmin ? (
                             <View style={styles.rolePillAdmin}>
-                              <Shield size={12} color="#60A5FA" />
                               <Text style={styles.rolePillAdminText}>Admin</Text>
                             </View>
                           ) : (
@@ -784,206 +1069,617 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
                   })}
                 </View>
               )}
-            </View>
-          )}
 
-          {/* VIEW: JOIN REQUESTS (LEADER) */}
-          {activeTab === 'proposals' && isLeaderOfViewing && (
-            <View style={styles.proposalsSection}>
-              <Text style={styles.sectionHeaderTitle}>PENDING JOIN PROPOSALS ({pendingProposals.length})</Text>
-              <Text style={styles.sectionHeaderSub}>
-                Review athletes requesting to join your community. Each athlete can only belong to one community.
-              </Text>
+              {/* Join Requests (Shown when Leader opens their own community) */}
+              {isLeaderOfViewing && pendingProposals.length > 0 && (
+                <View style={[styles.proposalsSection, { marginTop: 24 }]}>
+                  <Text style={styles.sectionHeaderTitle}>PENDING JOIN PROPOSALS ({pendingProposals.length})</Text>
+                  <Text style={styles.sectionHeaderSub}>
+                    Review athletes requesting to join your community. Each athlete can only belong to one community.
+                  </Text>
 
-              {pendingProposals.length === 0 ? (
-                <View style={styles.emptyCard}>
-                  <CheckCircle2 size={40} color="#34D399" />
-                  <Text style={styles.emptyTitle}>All Caught Up</Text>
-                  <Text style={styles.emptySubtitle}>No pending join proposals at the moment.</Text>
-                </View>
-              ) : (
-                <View style={styles.membersListCard}>
-                  {pendingProposals.map((req, idx) => {
-                    const reqUser = req.profile;
-                    const displayName = reqUser?.full_name || reqUser?.username || 'Athlete';
-                    return (
-                      <View
-                        key={req.id}
-                        style={[styles.proposalRow, idx === pendingProposals.length - 1 && { borderBottomWidth: 0 }]}
-                      >
-                        <Avatar
-                          config={reqUser?.avatar_config}
-                          avatarUrl={reqUser?.avatar_url}
-                          size={44}
-                        />
-                        <View style={styles.memberInfo}>
-                          <Text style={styles.memberName}>{displayName}</Text>
-                          <Text style={styles.memberUsername}>@{reqUser?.username || 'user'}</Text>
-                          {reqUser?.bio ? <Text style={styles.memberBio} numberOfLines={1}>{reqUser.bio}</Text> : null}
+                  <View style={styles.membersListCard}>
+                    {pendingProposals.map((req, idx) => {
+                      const reqUser = req.profile;
+                      const displayName = reqUser?.full_name || reqUser?.username || 'Athlete';
+                      return (
+                        <View
+                          key={req.id}
+                          style={[styles.proposalRow, idx === pendingProposals.length - 1 && { borderBottomWidth: 0 }]}
+                        >
+                          <Avatar
+                            config={reqUser?.avatar_config}
+                            avatarUrl={reqUser?.avatar_url}
+                            size={44}
+                          />
+                          <View style={styles.memberInfo}>
+                            <Text style={styles.memberName}>{displayName}</Text>
+                            <Text style={styles.memberUsername}>@{reqUser?.username || 'user'}</Text>
+                            {reqUser?.bio ? <Text style={styles.memberBio} numberOfLines={1}>{reqUser.bio}</Text> : null}
+                          </View>
+                          <View style={styles.proposalActions}>
+                            <TouchableOpacity
+                              style={styles.acceptActionBtn}
+                              onPress={() => handleReviewProposal(req.user_id, displayName, 'accept')}
+                              activeOpacity={0.7}
+                            >
+                              <Check size={18} color="#FFFFFF" />
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={styles.rejectActionBtn}
+                              onPress={() => handleReviewProposal(req.user_id, displayName, 'reject')}
+                              activeOpacity={0.7}
+                            >
+                              <X size={18} color="#EF4444" />
+                            </TouchableOpacity>
+                          </View>
                         </View>
-                        <View style={styles.proposalActions}>
-                          <TouchableOpacity
-                            style={styles.acceptActionBtn}
-                            onPress={() => handleReviewProposal(req.user_id, displayName, 'accept')}
-                            activeOpacity={0.7}
-                          >
-                            <Check size={18} color="#FFFFFF" />
-                          </TouchableOpacity>
-                          <TouchableOpacity
-                            style={styles.rejectActionBtn}
-                            onPress={() => handleReviewProposal(req.user_id, displayName, 'reject')}
-                            activeOpacity={0.7}
-                          >
-                            <X size={18} color="#EF4444" />
-                          </TouchableOpacity>
-                        </View>
-                      </View>
-                    );
-                  })}
+                      );
+                    })}
+                  </View>
                 </View>
               )}
             </View>
-          )}
-
-          {/* VIEW: EXPLORE ALL COMMUNITIES */}
-          {activeTab === 'explore' && (
-            <View style={styles.exploreSection}>
-              {/* Search Bar */}
-              <View style={styles.searchBarWrapper}>
-                <Search size={18} color="#8E95A0" style={styles.searchIcon} />
-                <TextInput
-                  style={styles.searchInput}
-                  placeholder="Search school, college, gym, club..."
-                  placeholderTextColor="#8E95A0"
-                  value={searchQuery}
-                  onChangeText={setSearchQuery}
-                  returnKeyType="search"
-                />
-                {searchQuery.length > 0 && (
-                  <TouchableOpacity onPress={() => setSearchQuery('')}>
-                    <X size={16} color="#8E95A0" />
-                  </TouchableOpacity>
-                )}
-              </View>
-
-              {/* Categories Horizontal Scroll */}
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={styles.categoryScroll}
-                contentContainerStyle={styles.categoryScrollContent}
-              >
-                {CATEGORIES.map((cat) => {
-                  const isSelected = selectedCategory === cat;
-                  return (
-                    <TouchableOpacity
-                      key={cat}
-                      style={[styles.categoryPill, isSelected && styles.categoryPillActive]}
-                      onPress={() => setSelectedCategory(cat)}
-                    >
-                      <Text style={[styles.categoryPillText, isSelected && styles.categoryPillTextActive]}>
-                        {cat}
-                      </Text>
+          ) : (
+            /* 2. DEFAULT VIEW: EXPLORE COMMUNITIES FIRST, THEN TOURNAMENTS BELOW */
+            <>
+              {/* SECTION 1: EXPLORE ALL COMMUNITIES */}
+              <View style={styles.exploreSection}>
+                <Text style={[styles.sectionHeaderTitle, { marginBottom: 12 }]}>EXPLORE COMMUNITIES</Text>
+                {/* Search Bar */}
+                <View style={styles.searchBarWrapper}>
+                  <Search size={18} color="#8E95A0" style={styles.searchIcon} />
+                  <TextInput
+                    style={styles.searchInput}
+                    placeholder="Search school, college, gym, club..."
+                    placeholderTextColor="#8E95A0"
+                    value={searchQuery}
+                    onChangeText={setSearchQuery}
+                    returnKeyType="search"
+                  />
+                  {searchQuery.length > 0 && (
+                    <TouchableOpacity onPress={() => setSearchQuery('')}>
+                      <X size={16} color="#8E95A0" />
                     </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
-
-              {/* Notice Banner */}
-              <View style={styles.ruleBanner}>
-                <Info size={16} color="#E25822" />
-                <Text style={styles.ruleBannerText}>
-                  Rule: Each athlete can join <Text style={{ fontWeight: '800', color: '#FFF' }}>only one community</Text> at a time.
-                </Text>
-              </View>
-
-              {/* Communities Cards List */}
-              {exploreCommunities.length === 0 ? (
-                <View style={styles.emptyCard}>
-                  <Building2 size={40} color="#8E95A0" />
-                  <Text style={styles.emptyTitle}>No Communities Found</Text>
-                  <Text style={styles.emptySubtitle}>Be the first to create one for your school or gym.</Text>
-                  <TouchableOpacity
-                    style={styles.emptyCreateBtn}
-                    onPress={() => setShowCreateModal(true)}
-                  >
-                    <Plus size={16} color="#FFFFFF" />
-                    <Text style={styles.emptyCreateBtnText}>Create Community</Text>
-                  </TouchableOpacity>
+                  )}
                 </View>
-              ) : (
-                <View style={styles.communityGrid}>
-                  {exploreCommunities.map((comm) => {
-                    const isMyCurrent = userStatus.community?.id === comm.id;
-                    const isPending = userStatus.pendingRequest?.community?.id === comm.id;
 
+                {/* Categories Horizontal Scroll */}
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={styles.categoryScroll}
+                  contentContainerStyle={styles.categoryScrollContent}
+                >
+                  {CATEGORIES.map((cat) => {
+                    const isSelected = selectedCategory === cat;
                     return (
                       <TouchableOpacity
-                        key={comm.id}
-                        style={styles.communityCard}
-                        onPress={() => handleOpenCommunity(comm)}
-                        activeOpacity={0.85}
+                        key={cat}
+                        style={[styles.categoryPill, isSelected && styles.categoryPillActive]}
+                        onPress={() => setSelectedCategory(cat)}
                       >
-                        <View style={styles.cardHeader}>
-                          {comm.logo_url ? (
-                            <Image source={{ uri: comm.logo_url }} style={styles.cardLogo} />
-                          ) : (
-                            <View style={styles.cardLogoPlaceholder}>
-                              {getCategoryIcon(comm.category)}
-                            </View>
-                          )}
-                          <View style={styles.cardHeaderInfo}>
-                            <View style={styles.cardCategoryRow}>
-                              <Text style={styles.cardCategoryText}>{comm.category}</Text>
-                            </View>
-                            <Text style={styles.cardTitle} numberOfLines={1}>{comm.name}</Text>
-                            <Text style={styles.cardMemberCount}>{comm.member_count} {comm.member_count === 1 ? 'Member' : 'Members'}</Text>
-                          </View>
-                        </View>
-
-                        {comm.description ? (
-                          <Text style={styles.cardDesc} numberOfLines={2}>
-                            {comm.description}
-                          </Text>
-                        ) : null}
-
-                        {/* Card Footer Actions */}
-                        <View style={styles.cardFooter}>
-                          {isMyCurrent ? (
-                            <TouchableOpacity
-                              style={styles.openBtn}
-                              onPress={() => handleOpenCommunity(comm)}
-                            >
-                              <Text style={styles.openBtnText}>Open</Text>
-                              <ChevronRight size={14} color="#FFFFFF" />
-                            </TouchableOpacity>
-                          ) : isPending ? (
-                            <TouchableOpacity
-                              style={styles.pendingActionBtn}
-                              onPress={() => handleCancelJoinRequest(comm.id)}
-                            >
-                              <Clock size={14} color="#F59E0B" />
-                              <Text style={styles.pendingActionBtnText}>Pending (Withdraw)</Text>
-                            </TouchableOpacity>
-                          ) : (
-                            <TouchableOpacity
-                              style={styles.joinBtn}
-                              onPress={() => handleJoinRequest(comm)}
-                              activeOpacity={0.8}
-                            >
-                              <Text style={styles.joinBtnText}>Request to Join</Text>
-                              <ChevronRight size={14} color="#FFFFFF" />
-                            </TouchableOpacity>
-                          )}
-                        </View>
+                        <Text style={[styles.categoryPillText, isSelected && styles.categoryPillTextActive]}>
+                          {cat}
+                        </Text>
                       </TouchableOpacity>
                     );
                   })}
-                </View>
+                </ScrollView>
+
+                {/* Communities Cards List */}
+                {exploreCommunities.length === 0 ? (
+                  <View style={styles.emptyCard}>
+                    <Building2 size={40} color="#8E95A0" />
+                    <Text style={styles.emptyTitle}>No Communities Found</Text>
+                    <Text style={styles.emptySubtitle}>Be the first to create one for your school or gym.</Text>
+                    <TouchableOpacity
+                      style={styles.emptyCreateBtn}
+                      onPress={() => setShowCreateModal(true)}
+                    >
+                      <Plus size={16} color="#FFFFFF" />
+                      <Text style={styles.emptyCreateBtnText}>Create Community</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <View style={styles.communityGrid}>
+                    {exploreCommunities.map((comm) => {
+                      const isMyCurrent = userStatus.community?.id === comm.id;
+                      const isPending = userStatus.pendingRequest?.community?.id === comm.id;
+
+                      return (
+                        <TouchableOpacity
+                          key={comm.id}
+                          style={styles.communityCard}
+                          onPress={() => handleOpenCommunity(comm)}
+                          activeOpacity={0.85}
+                        >
+                          {/* Card Content styled like Exercise queueItemCard */}
+                          <View style={styles.cardHeader}>
+                            {comm.logo_url ? (
+                              <Image source={{ uri: comm.logo_url }} style={styles.cardLogo} />
+                            ) : (
+                              <View style={styles.cardLogoPlaceholder}>
+                                {getCategoryIcon(comm.category)}
+                              </View>
+                            )}
+                            <View style={styles.cardHeaderInfo}>
+                              <View style={styles.cardTitleRow}>
+                                <Text style={styles.cardTitle} numberOfLines={1}>{comm.name}</Text>
+                                <View style={styles.queueBadgePill}>
+                                  <Text style={styles.queueBadgePillText}>{comm.category.toUpperCase()}</Text>
+                                </View>
+                              </View>
+                              <Text style={styles.cardDescText} numberOfLines={1}>
+                                {comm.description || `${comm.member_count} ${comm.member_count === 1 ? 'member' : 'members'} enrolled`}
+                              </Text>
+                              <Text style={styles.cardMemberSubText}>
+                                {comm.member_count} {comm.member_count === 1 ? 'Athlete' : 'Athletes'}
+                              </Text>
+                            </View>
+
+                            <TouchableOpacity
+                              style={[
+                                styles.cardActionBtn,
+                                isMyCurrent && styles.cardActionBtnCurrent,
+                                isPending && styles.cardActionBtnPending,
+                              ]}
+                              onPress={() => {
+                                if (isPending) {
+                                  handleCancelJoinRequest(comm.id);
+                                } else {
+                                  handleOpenCommunity(comm);
+                                }
+                              }}
+                              activeOpacity={0.8}
+                            >
+                              <Text style={[styles.cardActionBtnText, isPending && styles.cardActionBtnTextPending]}>
+                                {isPending ? 'PENDING' : isMyCurrent ? 'VIEW' : 'OPEN'}
+                              </Text>
+                              {!isPending && <ChevronRight size={13} color="#FFFFFF" />}
+                            </TouchableOpacity>
+                          </View>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                )}
+              </View>
+
+              {/* SECTION 2: INTER-COMMUNITY TOURNAMENTS (VISIBLE TO COMMUNITY LEADERS & ADMINS) */}
+              {(isAdmin || (userStatus.hasCommunity && userStatus.membership?.role === 'leader')) && (
+                <View style={styles.battlesSection}>
+                  {/* Tournament Section Header */}
+                  <View style={styles.tournamentSectionTitleRow}>
+                    <View style={styles.tournamentTitleLeft}>
+                      <Text style={styles.sectionHeaderTitle}>COMMUNITY TOURNAMENTS</Text>
+                      <View style={styles.tournLeaderOnlyBadge}>
+                        <Text style={styles.tournLeaderOnlyBadgeText}>
+                          {isAdmin ? 'Admin' : 'Leader Only'}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {isAdmin && (
+                      <TouchableOpacity
+                        style={styles.adminHostBtn}
+                        onPress={() => setShowCreateTournamentModal(true)}
+                        activeOpacity={0.8}
+                      >
+                        <Plus size={14} color="#FFFFFF" />
+                        <Text style={styles.adminHostBtnText}>Host</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+
+                  {/* TOURNAMENT DETAIL / BRACKET VIEW */}
+                  {selectedTournament ? (
+                    <View style={styles.selectedTournContainer}>
+                      {/* Back to Tournaments List */}
+                      <TouchableOpacity
+                        style={styles.backToTournsBtn}
+                        onPress={() => setSelectedTournament(null)}
+                        activeOpacity={0.7}
+                      >
+                        <ArrowLeft size={16} color="#E25822" />
+                        <Text style={styles.backToTournsBtnText}>Back to all tournaments</Text>
+                      </TouchableOpacity>
+
+                          {/* Tournament Info Card */}
+                          <View style={styles.tournCardDetail}>
+                            <View style={styles.tournDetailTop}>
+                              <View style={styles.exerciseBadge}>
+                                <Text style={styles.exerciseBadgeText}>
+                                  {selectedTournament.exercise_name.toUpperCase()} BATTLE
+                                </Text>
+                              </View>
+                              <View
+                                style={[
+                                  styles.statusBadge,
+                                  selectedTournament.status === 'in_progress' && styles.statusBadgeActive,
+                                  selectedTournament.status === 'completed' && styles.statusBadgeDone,
+                                ]}
+                              >
+                                <Text style={styles.statusBadgeText}>
+                                  {selectedTournament.status === 'registration_open'
+                                    ? 'REGISTRATION OPEN'
+                                    : selectedTournament.status === 'in_progress'
+                                    ? 'IN PROGRESS'
+                                    : selectedTournament.status === 'completed'
+                                    ? 'COMPLETED'
+                                    : selectedTournament.status.toUpperCase()}
+                                </Text>
+                              </View>
+                            </View>
+
+                            <Text style={styles.tournDetailTitle}>{selectedTournament.title}</Text>
+                            {selectedTournament.description ? (
+                              <Text style={styles.tournDetailDesc}>{selectedTournament.description}</Text>
+                            ) : null}
+
+                            {/* Meta stats row */}
+                            <View style={styles.tournMetaStatsRow}>
+                              <View style={styles.tournMetaStat}>
+                                <Users size={14} color="#8E95A0" />
+                                <Text style={styles.tournMetaStatText}>
+                                  {selectedTournament.registered_count || tournamentEntries.length} / {selectedTournament.max_communities} Communities
+                                </Text>
+                              </View>
+                              <View style={styles.tournMetaStat}>
+                                <Award size={14} color="#FBBF24" />
+                                <Text style={styles.tournMetaStatText}>
+                                  {selectedTournament.prize_pool || 'Glory & XP'}
+                                </Text>
+                              </View>
+                              <View style={styles.tournMetaStat}>
+                                <Trophy size={14} color="#E25822" />
+                                <Text style={styles.tournMetaStatText}>
+                                  Single Elimination ({selectedTournament.total_rounds} Rounds)
+                                </Text>
+                              </View>
+                            </View>
+
+                            {/* Winner announcement if completed */}
+                            {selectedTournament.status === 'completed' && selectedTournament.winner_community_name && (
+                              <View style={styles.championBanner}>
+                                <Trophy size={28} color="#FBBF24" />
+                                <View style={styles.championBannerInfo}>
+                                  <Text style={styles.championBannerSubtitle}>TOURNAMENT CHAMPION</Text>
+                                  <Text style={styles.championBannerTitle}>{selectedTournament.winner_community_name}</Text>
+                                </View>
+                              </View>
+                            )}
+
+                            {/* Action Bar for Leader / Admin */}
+                            <View style={styles.tournActionBar}>
+                              {/* Leader Register Button */}
+                              {selectedTournament.status === 'registration_open' &&
+                                userStatus.hasCommunity &&
+                                userStatus.membership?.role === 'leader' && (
+                                  <TouchableOpacity
+                                    style={[
+                                      styles.leaderNominateBtn,
+                                      selectedTournament.has_registered && styles.leaderNominatedBtn,
+                                    ]}
+                                    onPress={() => {
+                                      if (selectedTournament.has_registered) {
+                                        Alert.alert('Registered', 'Your community is already registered for this tournament!');
+                                      } else {
+                                        setSelectedAthleteIds(
+                                          activeMembers.slice(0, selectedTournament.athletes_per_match || 1).map((m) => m.user_id)
+                                        );
+                                        setShowNominateModal(true);
+                                      }
+                                    }}
+                                    activeOpacity={0.8}
+                                  >
+                                    <Shield size={16} color="#FFFFFF" />
+                                    <Text style={styles.leaderNominateBtnText}>
+                                      {selectedTournament.has_registered
+                                        ? 'Community Registered'
+                                        : 'Enter Community & Select Athletes'}
+                                    </Text>
+                                  </TouchableOpacity>
+                                )}
+
+                              {/* Admin Start Tournament Button */}
+                              {isAdmin && selectedTournament.status === 'registration_open' && (
+                                <TouchableOpacity
+                                  style={styles.adminStartBtn}
+                                  onPress={handleAdminStartTournament}
+                                  activeOpacity={0.8}
+                                >
+                                  <Play size={16} color="#FFFFFF" />
+                                  <Text style={styles.adminStartBtnText}>Start Tournament & Seed Bracket</Text>
+                                </TouchableOpacity>
+                              )}
+                            </View>
+                          </View>
+
+                          {/* REGISTERED COMMUNITIES & NOMINATED ATHLETES LIST */}
+                          <View style={styles.bracketSectionHeader}>
+                            <Text style={styles.bracketSectionTitle}>
+                              REGISTERED COMMUNITIES ({tournamentEntries.length} / {selectedTournament.max_communities})
+                            </Text>
+                          </View>
+
+                          {tournamentEntries.length === 0 ? (
+                            <View style={styles.emptyEntriesBox}>
+                              <Text style={styles.emptyEntriesText}>No communities have registered yet.</Text>
+                              <Text style={styles.emptyEntriesSub}>
+                                Community leaders can enter their squads using the button above.
+                              </Text>
+                            </View>
+                          ) : (
+                            <View style={styles.entriesGrid}>
+                              {tournamentEntries.map((entry) => (
+                                <View key={entry.id} style={styles.entryCard}>
+                                  <View style={styles.entryCardHeader}>
+                                    {entry.community_logo ? (
+                                      <Image source={{ uri: entry.community_logo }} style={styles.entryLogo} />
+                                    ) : (
+                                      <View style={styles.entryLogoPlaceholder}>
+                                        <Building2 size={16} color="#E25822" />
+                                      </View>
+                                    )}
+                                    <View style={styles.entryInfo}>
+                                      <Text style={styles.entryName} numberOfLines={1}>{entry.community_name}</Text>
+                                      <Text style={styles.entryLeader}>Leader: @{entry.leader_username || 'leader'}</Text>
+                                    </View>
+                                    <View style={styles.seedBadge}>
+                                      <Text style={styles.seedBadgeText}>Seed #{entry.seed}</Text>
+                                    </View>
+                                  </View>
+
+                                  {entry.selected_athletes && entry.selected_athletes.length > 0 && (
+                                    <View style={styles.entryAthletesRow}>
+                                      <Text style={styles.entryAthletesLabel}>Athletes:</Text>
+                                      {entry.selected_athletes.map((ath) => (
+                                        <View key={ath.user_id} style={styles.entryAthletePill}>
+                                          <Avatar
+                                            config={ath.avatar_config}
+                                            avatarUrl={ath.avatar_url}
+                                            size={18}
+                                          />
+                                          <Text style={styles.entryAthleteName}>{ath.username}</Text>
+                                        </View>
+                                      ))}
+                                    </View>
+                                  )}
+                                </View>
+                              ))}
+                            </View>
+                          )}
+
+                          {/* ELIMINATION BRACKET / MATCH SCHEDULE */}
+                          <View style={[styles.bracketSectionHeader, { marginTop: 24 }]}>
+                            <Text style={styles.bracketSectionTitle}>ELIMINATION MATCHES & BRACKET</Text>
+                            {selectedTournament.status === 'in_progress' && (
+                              <View style={styles.livePill}>
+                                <Text style={styles.livePillText}>ROUND {selectedTournament.current_round} ACTIVE</Text>
+                              </View>
+                            )}
+                          </View>
+
+                          {isLoadingTournamentData ? (
+                            <View style={styles.innerLoading}>
+                              <ActivityIndicator size="small" color="#E25822" />
+                              <Text style={styles.loadingText}>Loading matches...</Text>
+                            </View>
+                          ) : tournamentMatches.length === 0 ? (
+                            <View style={styles.emptyEntriesBox}>
+                              <Clock size={32} color="#8E95A0" style={{ alignSelf: 'center', marginBottom: 8 }} />
+                              <Text style={styles.emptyEntriesText}>Bracket Not Generated Yet</Text>
+                              <Text style={styles.emptyEntriesSub}>
+                                Matches and elimination pairings will appear here once the admin starts the tournament.
+                              </Text>
+                            </View>
+                          ) : (
+                            <View style={styles.matchesList}>
+                              {tournamentMatches.map((match) => {
+                                const isMatchDone = match.status === 'completed';
+                                const isBye = match.status === 'bye';
+                                const isComm1Winner = isMatchDone && match.winner_community_id === match.community1_id;
+                                const isComm2Winner = isMatchDone && match.winner_community_id === match.community2_id;
+
+                                return (
+                                  <View key={match.id} style={styles.matchCard}>
+                                    {/* Match Header */}
+                                    <View style={styles.matchCardTop}>
+                                      <Text style={styles.matchRoundName}>{match.round_name}</Text>
+                                      <View
+                                        style={[
+                                          styles.matchStatusPill,
+                                          isMatchDone && styles.matchStatusPillDone,
+                                          match.status === 'in_progress' && styles.matchStatusPillLive,
+                                        ]}
+                                      >
+                                        <Text style={styles.matchStatusPillText}>
+                                          {isMatchDone ? 'COMPLETED' : isBye ? 'AUTO-ADVANCE' : 'READY TO BATTLE'}
+                                        </Text>
+                                      </View>
+                                    </View>
+
+                                    {/* Match Fight Card (Side by Side / VS) */}
+                                    <View style={styles.fightCardRow}>
+                                      {/* Community 1 */}
+                                      <View style={[styles.fighterBox, isComm1Winner && styles.fighterBoxWinner]}>
+                                        <View style={styles.fighterLogoWrap}>
+                                          {match.community1_logo ? (
+                                            <Image source={{ uri: match.community1_logo }} style={styles.fighterLogo} />
+                                          ) : (
+                                            <View style={styles.fighterLogoPlaceholder}>
+                                              <Building2 size={16} color="#E25822" />
+                                            </View>
+                                          )}
+                                        </View>
+                                        <Text style={styles.fighterCommunityName} numberOfLines={1}>
+                                          {match.community1_name || 'TBD'}
+                                        </Text>
+                                        <Text style={styles.fighterAthleteName} numberOfLines={1}>
+                                          @{match.community1_athlete_name || 'Athlete'}
+                                        </Text>
+                                        {isMatchDone && (
+                                          <Text style={styles.fighterScoreText}>{match.community1_score || 0} Reps</Text>
+                                        )}
+                                      </View>
+
+                                      {/* VS Center Pillar */}
+                                      <View style={styles.vsPillar}>
+                                        <View style={styles.vsCircle}>
+                                          <Text style={styles.vsText}>VS</Text>
+                                        </View>
+                                        <Text style={styles.vsExerciseText}>
+                                          {selectedTournament.exercise_name}
+                                        </Text>
+                                      </View>
+
+                                      {/* Community 2 */}
+                                      <View style={[styles.fighterBox, isComm2Winner && styles.fighterBoxWinner]}>
+                                        <View style={styles.fighterLogoWrap}>
+                                          {match.community2_logo ? (
+                                            <Image source={{ uri: match.community2_logo }} style={styles.fighterLogo} />
+                                          ) : (
+                                            <View style={styles.fighterLogoPlaceholder}>
+                                              <Building2 size={16} color="#E25822" />
+                                            </View>
+                                          )}
+                                        </View>
+                                        <Text style={styles.fighterCommunityName} numberOfLines={1}>
+                                          {match.community2_name || 'TBD'}
+                                        </Text>
+                                        <Text style={styles.fighterAthleteName} numberOfLines={1}>
+                                          {match.community2_athlete_name ? `@${match.community2_athlete_name}` : 'Athlete'}
+                                        </Text>
+                                        {isMatchDone && (
+                                          <Text style={styles.fighterScoreText}>{match.community2_score || 0} Reps</Text>
+                                        )}
+                                      </View>
+                                    </View>
+
+                                    {/* Match Action Button */}
+                                    {!isMatchDone && !isBye && (
+                                      <TouchableOpacity
+                                        style={styles.playMatchBtn}
+                                        onPress={() => handlePlayTournamentMatch(match)}
+                                        activeOpacity={0.8}
+                                      >
+                                        <Swords size={16} color="#FFFFFF" />
+                                        <Text style={styles.playMatchBtnText}>
+                                          Fight Match (Live Reps or Quick Fight)
+                                        </Text>
+                                      </TouchableOpacity>
+                                    )}
+                                  </View>
+                                );
+                              })}
+                            </View>
+                          )}
+                        </View>
+                      ) : (
+                        /* TOURNAMENTS LIST VIEW */
+                        <View style={styles.tournamentsList}>
+                          {tournaments.length === 0 ? (
+                            <View style={styles.exerciseScreenEmptyBox}>
+                              <Trophy size={32} color="#8E95A0" style={{ marginBottom: 8 }} />
+                              <Text style={styles.exerciseScreenEmptyTitle}>No Tournaments Available</Text>
+                              <Text style={styles.exerciseScreenEmptySubtitle}>
+                                {isAdmin
+                                  ? 'Host an inter-community tournament using the host button above.'
+                                  : 'Active tournaments will appear here when scheduled by platform admins.'}
+                              </Text>
+                              {isAdmin && (
+                                <TouchableOpacity
+                                  style={styles.adminHostEmptyBtn}
+                                  onPress={() => setShowCreateTournamentModal(true)}
+                                  activeOpacity={0.8}
+                                >
+                                  <Plus size={15} color="#FFFFFF" />
+                                  <Text style={styles.adminHostEmptyBtnText}>Host Tournament</Text>
+                                </TouchableOpacity>
+                              )}
+                            </View>
+                          ) : (
+                            <View style={styles.tournGrid}>
+                              {tournaments.map((tourn, index) => {
+                                const isDone = tourn.status === 'completed';
+                                const isLive = tourn.status === 'in_progress';
+                                const defaultPalettes = ['#C8B6FF', '#FFD6E0', '#E25822', '#354394'];
+                                const cardBg = defaultPalettes[index % defaultPalettes.length];
+                                const isDarkCard = cardBg === '#354394' || cardBg === '#E25822';
+                                const textColor = isDarkCard ? '#FFFFFF' : '#11141A';
+                                const subTextColor = isDarkCard ? '#E2E8F0' : '#4B5563';
+
+                                return (
+                                  <TouchableOpacity
+                                    key={tourn.id}
+                                    style={[styles.workoutPlanCard, { backgroundColor: cardBg }]}
+                                    onPress={() => handleOpenTournament(tourn)}
+                                    activeOpacity={0.9}
+                                  >
+                                    {/* Top Row: Exercise Title & Status Badge */}
+                                    <View style={styles.cardTopRow}>
+                                      <View style={{ flex: 1, marginRight: 10 }}>
+                                        <Text style={[styles.cardWorkoutTitle, { color: textColor }]} numberOfLines={1}>
+                                          {tourn.title}
+                                        </Text>
+                                        <Text style={[styles.tournExerciseSubText, { color: subTextColor }]}>
+                                          {tourn.exercise_name.toUpperCase()} BATTLE
+                                        </Text>
+                                      </View>
+                                      <View style={styles.durationBadge}>
+                                        <Text style={styles.durationBadgeNumber}>
+                                          {isLive ? 'LIVE' : isDone ? 'DONE' : 'OPEN'}
+                                        </Text>
+                                        <Text style={styles.durationBadgeUnit}>
+                                          {tourn.registered_count || 0}/{tourn.max_communities} SQUADS
+                                        </Text>
+                                      </View>
+                                    </View>
+
+                                    {/* Center Body: Category / Prize Tags */}
+                                    <View style={styles.cardBodyRow}>
+                                      <View style={styles.cardTagsWrapper}>
+                                        <View style={[styles.muscleTagPill, isDarkCard && { backgroundColor: 'rgba(255, 255, 255, 0.15)' }]}>
+                                          <View style={[styles.darkDot, isDarkCard && { backgroundColor: '#FFFFFF' }]} />
+                                          <Text style={[styles.muscleTagPillText, { color: textColor }]} numberOfLines={1}>
+                                            Single Elimination • {tourn.total_rounds || 3} Rounds
+                                          </Text>
+                                        </View>
+
+                                        <View style={[styles.activePlayersPill, isDarkCard && { backgroundColor: 'rgba(255, 255, 255, 0.2)' }]}>
+                                          <Award size={12} color={textColor} style={{ marginRight: 4 }} />
+                                          <Text style={[styles.activePlayersText, { color: textColor }]} numberOfLines={1}>
+                                            {tourn.prize_pool || 'Glory & Tier XP'}
+                                          </Text>
+                                        </View>
+                                      </View>
+                                    </View>
+
+                                    {/* Bottom Row: CTA & Play Circle */}
+                                    <View style={[styles.cardBottomRow, isDarkCard && { borderTopColor: 'rgba(255, 255, 255, 0.12)' }]}>
+                                      <View style={styles.aiTagPill}>
+                                        <Text style={[styles.aiTagText, { color: subTextColor }]} numberOfLines={1}>
+                                          {isDone ? 'View Results & Champion' : 'Enter Community & View Brackets'}
+                                        </Text>
+                                      </View>
+
+                                      <View style={[styles.playArrowCircle, isDarkCard && { backgroundColor: '#FFFFFF' }]}>
+                                        <Play size={12} color={isDarkCard ? '#11141A' : '#FFFFFF'} fill={isDarkCard ? '#11141A' : '#FFFFFF'} />
+                                      </View>
+                                    </View>
+                                  </TouchableOpacity>
+                                );
+                              })}
+                            </View>
+                          )}
+                        </View>
+                      )}
+                    </View>
+                  )}
+                </>
               )}
-            </View>
-          )}
-        </ScrollView>
+            </ScrollView>
       )}
 
       {/* CREATE COMMUNITY MODAL */}
@@ -1212,6 +1908,238 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
           </View>
         </View>
       </Modal>
+
+      {/* HOST TOURNAMENT MODAL (ADMIN ONLY) */}
+      <Modal
+        visible={showCreateTournamentModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowCreateTournamentModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Trophy size={20} color="#FBBF24" />
+                <Text style={styles.modalTitle}>Host Tournament (Admin)</Text>
+              </View>
+              <TouchableOpacity onPress={() => setShowCreateTournamentModal(false)}>
+                <X size={22} color="#8E95A0" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {/* Tournament Title */}
+              <Text style={styles.inputLabel}>Tournament Title *</Text>
+              <TextInput
+                style={styles.textInput}
+                placeholder="e.g. National Inter-School Push-up Championship"
+                placeholderTextColor="#6B7280"
+                value={tournTitle}
+                onChangeText={setTournTitle}
+              />
+
+              {/* Tournament Exercise Selection */}
+              <Text style={styles.inputLabel}>Choose Exercise *</Text>
+              <View style={styles.exercisePillGrid}>
+                {TOURNAMENT_EXERCISES.map((ex) => (
+                  <TouchableOpacity
+                    key={ex.id}
+                    style={[
+                      styles.exerciseSelectPill,
+                      tournExerciseId === ex.id && styles.exerciseSelectPillActive,
+                    ]}
+                    onPress={() => setTournExerciseId(ex.id)}
+                  >
+                    <Text
+                      style={[
+                        styles.exercisePillText,
+                        tournExerciseId === ex.id && styles.exercisePillTextActive,
+                      ]}
+                    >
+                      {ex.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* Description */}
+              <Text style={styles.inputLabel}>Description & Rules (Optional)</Text>
+              <TextInput
+                style={[styles.textInput, styles.textArea]}
+                placeholder="Details about rounds, schedule, qualifying scores..."
+                placeholderTextColor="#6B7280"
+                multiline
+                numberOfLines={3}
+                value={tournDesc}
+                onChangeText={setTournDesc}
+              />
+
+              {/* Tournament Format */}
+              <Text style={styles.inputLabel}>Tournament Format *</Text>
+              <View style={styles.categoryPickerRow}>
+                {[
+                  { id: 'single_elimination', label: 'Single Elimination' },
+                  { id: 'best_of_three', label: 'Best of 3' },
+                  { id: 'round_robin', label: 'Round Robin' },
+                ].map((fmt) => (
+                  <TouchableOpacity
+                    key={fmt.id}
+                    style={[
+                      styles.catOptionPill,
+                      tournFormat === fmt.id && styles.catOptionPillActive,
+                    ]}
+                    onPress={() => setTournFormat(fmt.id as TournamentFormat)}
+                  >
+                    <Text
+                      style={[
+                        styles.catOptionText,
+                        tournFormat === fmt.id && styles.catOptionTextActive,
+                      ]}
+                    >
+                      {fmt.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* Max Communities */}
+              <Text style={styles.inputLabel}>Maximum Communities</Text>
+              <View style={styles.categoryPickerRow}>
+                {[4, 8, 16, 32].map((num) => (
+                  <TouchableOpacity
+                    key={num}
+                    style={[
+                      styles.catOptionPill,
+                      tournMaxComms === num && styles.catOptionPillActive,
+                    ]}
+                    onPress={() => setTournMaxComms(num)}
+                  >
+                    <Text
+                      style={[
+                        styles.catOptionText,
+                        tournMaxComms === num && styles.catOptionTextActive,
+                      ]}
+                    >
+                      {num} Communities
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* Prize Pool */}
+              <Text style={styles.inputLabel}>Prize / Glory Award</Text>
+              <TextInput
+                style={styles.textInput}
+                placeholder="e.g. Gold Trophy + 5,000 Tier XP"
+                placeholderTextColor="#6B7280"
+                value={tournPrize}
+                onChangeText={setTournPrize}
+              />
+
+              <View style={styles.modalTip}>
+                <Sparkles size={14} color="#E25822" />
+                <Text style={styles.modalTipText}>
+                  As Admin, you can seed brackets and officiate matches after community registration closes.
+                </Text>
+              </View>
+            </ScrollView>
+
+            <TouchableOpacity
+              style={[styles.submitCreateBtn, isSubmittingTournament && { opacity: 0.6 }]}
+              onPress={handleAdminCreateTournament}
+              disabled={isSubmittingTournament}
+              activeOpacity={0.8}
+            >
+              {isSubmittingTournament ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Text style={styles.submitCreateBtnText}>Create Tournament</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* NOMINATE ATHLETES MODAL (LEADER ONLY) */}
+      <Modal
+        visible={showNominateModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowNominateModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Shield size={20} color="#E25822" />
+                <Text style={styles.modalTitle}>Nominate Athletes</Text>
+              </View>
+              <TouchableOpacity onPress={() => setShowNominateModal(false)}>
+                <X size={22} color="#8E95A0" />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.nominateDesc}>
+              Select the athletes from <Text style={{ color: '#FFF', fontWeight: '800' }}>{userStatus.community?.name}</Text> who will represent your community in {selectedTournament?.exercise_name}:
+            </Text>
+
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 300, marginVertical: 12 }}>
+              {activeMembers.map((member) => {
+                const isSelected = selectedAthleteIds.includes(member.user_id);
+                const athUser = member.profile;
+                return (
+                  <TouchableOpacity
+                    key={member.id}
+                    style={[styles.athleteSelectRow, isSelected && styles.athleteSelectRowSelected]}
+                    onPress={() => {
+                      if (isSelected) {
+                        setSelectedAthleteIds(selectedAthleteIds.filter((id) => id !== member.user_id));
+                      } else {
+                        setSelectedAthleteIds([...selectedAthleteIds, member.user_id]);
+                      }
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <Avatar
+                      config={athUser?.avatar_config}
+                      avatarUrl={athUser?.avatar_url}
+                      size={40}
+                    />
+                    <View style={styles.athleteSelectInfo}>
+                      <Text style={styles.athleteSelectName}>
+                        {athUser?.full_name || athUser?.username || 'Athlete'}
+                      </Text>
+                      <Text style={styles.athleteSelectUsername}>@{athUser?.username || 'user'}</Text>
+                    </View>
+                    <View style={[styles.checkboxCircle, isSelected && styles.checkboxCircleSelected]}>
+                      {isSelected && <Check size={14} color="#FFFFFF" />}
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
+            <TouchableOpacity
+              style={[
+                styles.submitCreateBtn,
+                (isSubmittingTournament || selectedAthleteIds.length === 0) && { opacity: 0.6 },
+              ]}
+              onPress={handleLeaderRegisterCommunity}
+              disabled={isSubmittingTournament || selectedAthleteIds.length === 0}
+              activeOpacity={0.8}
+            >
+              {isSubmittingTournament ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Text style={styles.submitCreateBtnText}>
+                  Lock In Squad & Register ({selectedAthleteIds.length} Selected)
+                </Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -1372,89 +2300,83 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   myCommunitySection: {},
-  communityHeroCard: {
-    backgroundColor: '#1E2430',
-    borderRadius: 24,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+  detailBannerCard: {
+    backgroundColor: '#354394',
+    borderRadius: 22,
+    padding: 16,
     marginBottom: 20,
   },
-  heroLogoRow: {
+  bannerTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
   },
-  heroLogo: {
-    width: 68,
-    height: 68,
-    borderRadius: 20,
-    backgroundColor: '#2A3242',
+  ratingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(26, 28, 35, 0.45)',
+    borderRadius: 12,
+    paddingVertical: 5,
+    paddingHorizontal: 9,
   },
-  heroLogoPlaceholder: {
-    width: 68,
-    height: 68,
-    borderRadius: 20,
-    backgroundColor: '#2A3242',
+  ratingLabel: { color: '#E2E8F0', fontSize: 12, fontWeight: '700' },
+  ratingNumBox: {
+    backgroundColor: 'rgba(26, 28, 35, 0.7)',
+    borderRadius: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    marginLeft: 6,
+  },
+  ratingNumText: { color: '#E8D5C4', fontSize: 10, fontWeight: '900' },
+  scoreRulesPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(26, 28, 35, 0.55)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 10,
+  },
+  scoreRulesText: { color: '#E8D5C4', fontSize: 10, fontWeight: '800' },
+  bannerStatsRow: { flexDirection: 'row', alignItems: 'center', marginTop: 14 },
+  heroBannerLogo: {
+    width: 60,
+    height: 60,
+    borderRadius: 18,
+    backgroundColor: 'rgba(26, 28, 35, 0.5)',
+  },
+  heroBannerLogoPlaceholder: {
+    width: 60,
+    height: 60,
+    borderRadius: 18,
+    backgroundColor: 'rgba(26, 28, 35, 0.5)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  heroMainInfo: {
-    flex: 1,
-    marginLeft: 16,
-  },
-  heroCategoryPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: 'rgba(226, 88, 34, 0.15)',
-    alignSelf: 'flex-start',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 10,
-    marginBottom: 6,
-  },
-  heroCategoryText: {
-    color: '#E25822',
-    fontSize: 11,
-    fontWeight: '800',
-  },
-  heroCommunityName: {
-    color: '#FFFFFF',
-    fontSize: 19,
-    fontWeight: '900',
-  },
-  heroMemberCount: {
-    color: '#8E95A0',
-    fontSize: 12,
-    fontWeight: '600',
-    marginTop: 3,
-  },
-  heroDescription: {
-    color: '#CBD5E1',
-    fontSize: 13,
-    lineHeight: 18,
-    marginTop: 14,
-  },
+  userRankInfo: { marginLeft: 14, flex: 1 },
+  rankTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  rankTitle: { color: '#FFFFFF', fontSize: 19, fontWeight: '900' },
+  playedWonStats: { color: '#E2E8F0', fontSize: 12, marginTop: 4, lineHeight: 17 },
   heroActionsRow: {
     flexDirection: 'row',
-    marginTop: 18,
+    marginTop: 16,
     gap: 8,
   },
   heroActionBtnEdit: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(226, 88, 34, 0.15)',
+    backgroundColor: 'rgba(26, 28, 35, 0.6)',
     borderRadius: 14,
     paddingHorizontal: 14,
-    paddingVertical: 11,
+    paddingVertical: 10,
     gap: 6,
     borderWidth: 1,
-    borderColor: 'rgba(226, 88, 34, 0.3)',
+    borderColor: 'rgba(255, 255, 255, 0.15)',
   },
   heroActionBtnEditText: {
-    color: '#E25822',
-    fontSize: 13,
+    color: '#FFFFFF',
+    fontSize: 12,
     fontWeight: '800',
   },
   heroActionBtnPrimary: {
@@ -1464,29 +2386,30 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: '#E25822',
     borderRadius: 14,
-    paddingVertical: 11,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
     gap: 6,
   },
   heroActionBtnPrimaryText: {
     color: '#FFFFFF',
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '800',
   },
   heroActionBtnSecondary: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+    backgroundColor: 'rgba(239, 68, 68, 0.18)',
     borderWidth: 1,
-    borderColor: 'rgba(239, 68, 68, 0.25)',
+    borderColor: 'rgba(239, 68, 68, 0.35)',
     borderRadius: 14,
     paddingHorizontal: 16,
-    paddingVertical: 11,
+    paddingVertical: 10,
     gap: 6,
   },
   heroActionBtnSecondaryText: {
     color: '#EF4444',
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '800',
   },
   sectionHeaderRow: {
@@ -1522,11 +2445,9 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   membersListCard: {
-    backgroundColor: '#1E2430',
+    backgroundColor: '#262A32',
     borderRadius: 20,
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
   },
   memberRow: {
     flexDirection: 'row',
@@ -1648,12 +2569,10 @@ const styles = StyleSheet.create({
   searchBarWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1E2430',
+    backgroundColor: '#262A32',
     borderRadius: 16,
     paddingHorizontal: 14,
     height: 48,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
   },
   searchIcon: {
     marginRight: 10,
@@ -1665,17 +2584,17 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   categoryScroll: {
-    marginTop: 12,
-    maxHeight: 40,
+    marginVertical: 16,
   },
   categoryScrollContent: {
     gap: 8,
+    paddingRight: 16,
   },
   categoryPill: {
-    backgroundColor: '#1E2430',
-    paddingHorizontal: 14,
+    backgroundColor: '#262A32',
+    paddingHorizontal: 16,
     paddingVertical: 8,
-    borderRadius: 12,
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.06)',
   },
@@ -1696,128 +2615,115 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: 'rgba(226, 88, 34, 0.08)',
-    borderRadius: 12,
-    padding: 10,
+    backgroundColor: 'rgba(226, 88, 34, 0.1)',
+    borderRadius: 14,
+    padding: 12,
     marginTop: 14,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: 'rgba(226, 88, 34, 0.15)',
+    borderColor: 'rgba(226, 88, 34, 0.2)',
   },
   ruleBannerText: {
     color: '#CBD5E1',
     fontSize: 11,
     flex: 1,
+    lineHeight: 16,
   },
   communityGrid: {
-    gap: 14,
+    gap: 12,
   },
   communityCard: {
-    backgroundColor: '#1E2430',
+    backgroundColor: '#262A32',
     borderRadius: 20,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
+    padding: 14,
   },
   cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   cardLogo: {
-    width: 52,
-    height: 52,
+    width: 48,
+    height: 48,
     borderRadius: 16,
-    backgroundColor: '#2A3242',
+    backgroundColor: '#323742',
   },
   cardLogoPlaceholder: {
-    width: 52,
-    height: 52,
+    width: 48,
+    height: 48,
     borderRadius: 16,
-    backgroundColor: '#2A3242',
+    backgroundColor: '#323742',
     alignItems: 'center',
     justifyContent: 'center',
   },
   cardHeaderInfo: {
     flex: 1,
-    marginLeft: 14,
+    marginLeft: 12,
+    marginRight: 10,
   },
-  cardCategoryRow: {
+  cardTitleRow: {
     flexDirection: 'row',
-  },
-  cardCategoryText: {
-    color: '#E25822',
-    fontSize: 10,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    alignItems: 'center',
+    gap: 6,
+    flexWrap: 'wrap',
   },
   cardTitle: {
     color: '#FFFFFF',
-    fontSize: 16,
+    fontSize: 15,
+    fontWeight: '900',
+    maxWidth: '70%',
+  },
+  queueBadgePill: {
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  queueBadgePillText: {
+    color: '#E8D5C4',
+    fontSize: 9,
     fontWeight: '800',
-    marginTop: 2,
+    letterSpacing: 0.4,
   },
-  cardMemberCount: {
-    color: '#8E95A0',
-    fontSize: 11,
-    fontWeight: '600',
-    marginTop: 2,
-  },
-  cardDesc: {
+  cardDescText: {
     color: '#9CA3AF',
-    fontSize: 12,
-    lineHeight: 17,
-    marginTop: 10,
-  },
-  cardFooter: {
-    marginTop: 14,
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-  },
-  openBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#E25822',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 12,
-    gap: 4,
-  },
-  openBtnText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '900',
-  },
-  joinBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#E25822',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 12,
-    gap: 4,
-  },
-  joinBtnText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '900',
-  },
-  pendingActionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    backgroundColor: 'rgba(245, 158, 11, 0.12)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 10,
-  },
-  pendingActionBtnText: {
-    color: '#FBBF24',
     fontSize: 11,
-    fontWeight: '800',
+    marginTop: 2,
+    lineHeight: 15,
+  },
+  cardMemberSubText: {
+    color: '#8E95A0',
+    fontSize: 10,
+    fontWeight: '700',
+    marginTop: 3,
+  },
+  cardActionBtn: {
+    backgroundColor: '#E25822',
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  cardActionBtnCurrent: {
+    backgroundColor: '#354394',
+  },
+  cardActionBtnPending: {
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    borderWidth: 1,
+    borderColor: '#F59E0B',
+  },
+  cardActionBtnText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 0.4,
+  },
+  cardActionBtnTextPending: {
+    color: '#FBBF24',
   },
   emptyCard: {
-    backgroundColor: '#1E2430',
+    backgroundColor: '#262A32',
     borderRadius: 20,
     padding: 30,
     alignItems: 'center',
@@ -2032,5 +2938,699 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '900',
+  },
+  // Tournament & Battles Styles
+  battlesSection: {
+    marginTop: 28,
+  },
+  tournamentSectionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  tournamentTitleLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  tournLeaderOnlyBadge: {
+    backgroundColor: 'rgba(251, 191, 36, 0.15)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  tournLeaderOnlyBadgeText: {
+    color: '#FBBF24',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  exerciseScreenEmptyBox: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 32,
+    paddingHorizontal: 20,
+    backgroundColor: '#262A32',
+    borderRadius: 24,
+  },
+  exerciseScreenEmptyTitle: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '800',
+    marginTop: 4,
+  },
+  exerciseScreenEmptySubtitle: {
+    color: '#8E95A0',
+    fontSize: 12,
+    textAlign: 'center',
+    marginTop: 4,
+    lineHeight: 18,
+    maxWidth: 280,
+  },
+  adminHostEmptyBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E25822',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 14,
+    gap: 6,
+    marginTop: 16,
+  },
+  adminHostEmptyBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  adminHostBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E25822',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    gap: 4,
+  },
+  adminHostBtnText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  tournRuleBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(226, 88, 34, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(226, 88, 34, 0.2)',
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 16,
+  },
+  tournRuleText: {
+    color: '#CBD5E1',
+    fontSize: 11,
+    lineHeight: 16,
+    flex: 1,
+    fontWeight: '600',
+  },
+  selectedTournContainer: {},
+  backToTournsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 12,
+  },
+  backToTournsBtnText: {
+    color: '#E25822',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  tournCardDetail: {
+    backgroundColor: '#262A32',
+    borderRadius: 22,
+    padding: 18,
+    marginBottom: 18,
+  },
+  tournDetailTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  exerciseBadge: {
+    backgroundColor: 'rgba(226, 88, 34, 0.15)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  exerciseBadgeText: {
+    color: '#E25822',
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
+  statusBadge: {
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  statusBadgeActive: {
+    backgroundColor: 'rgba(239, 68, 68, 0.2)',
+  },
+  statusBadgeDone: {
+    backgroundColor: 'rgba(16, 185, 129, 0.2)',
+  },
+  statusBadgeText: {
+    color: '#FBBF24',
+    fontSize: 10,
+    fontWeight: '900',
+  },
+  tournDetailTitle: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '900',
+    marginTop: 2,
+  },
+  tournDetailDesc: {
+    color: '#9CA3AF',
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 6,
+  },
+  tournMetaStatsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginTop: 14,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  tournMetaStat: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  tournMetaStatText: {
+    color: '#8E95A0',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  championBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(251, 191, 36, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(251, 191, 36, 0.3)',
+    borderRadius: 14,
+    padding: 14,
+    marginTop: 14,
+    gap: 12,
+  },
+  championBannerInfo: {
+    flex: 1,
+  },
+  championBannerSubtitle: {
+    color: '#FBBF24',
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 0.6,
+  },
+  championBannerTitle: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '900',
+    marginTop: 2,
+  },
+  tournActionBar: {
+    marginTop: 16,
+    gap: 10,
+  },
+  leaderNominateBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#E25822',
+    borderRadius: 16,
+    paddingVertical: 12,
+    gap: 8,
+  },
+  leaderNominatedBtn: {
+    backgroundColor: 'rgba(16, 185, 129, 0.2)',
+    borderWidth: 1,
+    borderColor: '#10B981',
+  },
+  leaderNominateBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  adminStartBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#10B981',
+    borderRadius: 16,
+    paddingVertical: 12,
+    gap: 8,
+  },
+  adminStartBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  bracketSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  bracketSectionTitle: {
+    color: '#8E95A0',
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 0.8,
+  },
+  livePill: {
+    backgroundColor: 'rgba(239, 68, 68, 0.2)',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  livePillText: {
+    color: '#EF4444',
+    fontSize: 9,
+    fontWeight: '900',
+  },
+  emptyEntriesBox: {
+    backgroundColor: '#262A32',
+    borderRadius: 20,
+    padding: 24,
+    alignItems: 'center',
+  },
+  emptyEntriesText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  emptyEntriesSub: {
+    color: '#8E95A0',
+    fontSize: 11,
+    textAlign: 'center',
+    marginTop: 4,
+  },
+  entriesGrid: {
+    gap: 10,
+  },
+  entryCard: {
+    backgroundColor: '#262A32',
+    borderRadius: 18,
+    padding: 12,
+  },
+  entryCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  entryLogo: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: '#323742',
+  },
+  entryLogoPlaceholder: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: '#323742',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  entryInfo: {
+    flex: 1,
+    marginLeft: 10,
+  },
+  entryName: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  entryLeader: {
+    color: '#8E95A0',
+    fontSize: 10,
+    marginTop: 1,
+  },
+  seedBadge: {
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  seedBadgeText: {
+    color: '#8E95A0',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  entryAthletesRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  entryAthletesLabel: {
+    color: '#8E95A0',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  entryAthletePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#161B22',
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 8,
+    gap: 4,
+  },
+  entryAthleteName: {
+    color: '#CBD5E1',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  matchesList: {
+    gap: 12,
+  },
+  matchCard: {
+    backgroundColor: '#262A32',
+    borderRadius: 20,
+    padding: 14,
+  },
+  matchCardTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  matchRoundName: {
+    color: '#E25822',
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
+  matchStatusPill: {
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  matchStatusPillLive: {
+    backgroundColor: 'rgba(239, 68, 68, 0.2)',
+  },
+  matchStatusPillDone: {
+    backgroundColor: 'rgba(16, 185, 129, 0.2)',
+  },
+  matchStatusPillText: {
+    color: '#FFFFFF',
+    fontSize: 9,
+    fontWeight: '900',
+  },
+  fightCardRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  fighterBox: {
+    flex: 1,
+    backgroundColor: '#1E2430',
+    borderRadius: 16,
+    padding: 10,
+    alignItems: 'center',
+  },
+  fighterBoxWinner: {
+    backgroundColor: 'rgba(251, 191, 36, 0.08)',
+    borderWidth: 1,
+    borderColor: '#FBBF24',
+  },
+  fighterLogoWrap: {
+    position: 'relative',
+    marginBottom: 6,
+  },
+  fighterLogo: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: '#2A3242',
+  },
+  fighterLogoPlaceholder: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: '#2A3242',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  winnerCrownBadge: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    backgroundColor: '#161B22',
+    borderRadius: 10,
+    padding: 2,
+  },
+  fighterCommunityName: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  fighterAthleteName: {
+    color: '#8E95A0',
+    fontSize: 10,
+    marginTop: 2,
+    textAlign: 'center',
+  },
+  fighterScoreText: {
+    color: '#10B981',
+    fontSize: 12,
+    fontWeight: '900',
+    marginTop: 4,
+  },
+  vsPillar: {
+    alignItems: 'center',
+    paddingHorizontal: 4,
+  },
+  vsCircle: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: '#E25822',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 2,
+  },
+  vsText: {
+    color: '#FFFFFF',
+    fontSize: 9,
+    fontWeight: '900',
+  },
+  vsExerciseText: {
+    color: '#8E95A0',
+    fontSize: 9,
+    fontWeight: '700',
+  },
+  playMatchBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#E25822',
+    borderRadius: 14,
+    paddingVertical: 10,
+    gap: 6,
+    marginTop: 12,
+  },
+  playMatchBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  tournamentsList: {},
+  tournGrid: {
+    gap: 14,
+  },
+  workoutPlanCard: {
+    borderRadius: 24,
+    padding: 16,
+    marginBottom: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  cardTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 10,
+  },
+  cardWorkoutTitle: {
+    fontSize: 17,
+    fontWeight: '900',
+  },
+  tournExerciseSubText: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.6,
+    marginTop: 2,
+  },
+  durationBadge: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  durationBadgeNumber: {
+    color: '#11141A',
+    fontSize: 12,
+    fontWeight: '900',
+    lineHeight: 14,
+  },
+  durationBadgeUnit: {
+    color: '#4B5563',
+    fontSize: 8,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+  },
+  cardBodyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  cardTagsWrapper: {
+    flex: 1,
+    gap: 6,
+  },
+  muscleTagPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(17, 20, 26, 0.08)',
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    alignSelf: 'flex-start',
+  },
+  darkDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: '#11141A',
+    marginRight: 5,
+  },
+  muscleTagPillText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  activePlayersPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    alignSelf: 'flex-start',
+  },
+  activePlayersText: {
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  cardBottomRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(17, 20, 26, 0.08)',
+  },
+  aiTagPill: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  aiTagText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  playArrowCircle: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: '#11141A',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  exercisePillGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  exerciseSelectPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1E2430',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    gap: 6,
+  },
+  exerciseSelectPillActive: {
+    backgroundColor: '#E25822',
+    borderColor: '#E25822',
+  },
+  exercisePillIcon: {
+    fontSize: 14,
+  },
+  exercisePillText: {
+    color: '#8E95A0',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  exercisePillTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '900',
+  },
+  nominateDesc: {
+    color: '#8E95A0',
+    fontSize: 12,
+    lineHeight: 18,
+    marginBottom: 8,
+  },
+  athleteSelectRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1E2430',
+    borderRadius: 16,
+    padding: 10,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+  },
+  athleteSelectRowSelected: {
+    borderColor: '#E25822',
+    backgroundColor: 'rgba(226, 88, 34, 0.08)',
+  },
+  athleteSelectInfo: {
+    flex: 1,
+    marginLeft: 10,
+  },
+  athleteSelectName: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  athleteSelectUsername: {
+    color: '#8E95A0',
+    fontSize: 11,
+  },
+  checkboxCircle: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 1.5,
+    borderColor: '#8E95A0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkboxCircleSelected: {
+    backgroundColor: '#E25822',
+    borderColor: '#E25822',
   },
 });

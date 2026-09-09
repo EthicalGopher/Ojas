@@ -229,7 +229,7 @@ export default function AppShell() {
                   `Player_${Math.floor(1000 + Math.random() * 9000)}`;
 
                 if (nextMode === 'ffa') {
-                  setWaitingTitle('FREE FOR ALL LOBBY');
+                  setWaitingTitle('BATTLE GROUND LOBBY');
                   setWaitingMessage('Gathering athletes (Max 10). Match starts when timer expires or lobby fills...');
                   setWaitingBadge('WAITING: 30s');
                   setWaitingSubInfo('👥 1 Athlete Joined');
@@ -243,7 +243,7 @@ export default function AppShell() {
 
                   const cleanup = addMatchMessageListener((msg: any) => {
                     if (msg.type === 'ffa_lobby_update') {
-                      setWaitingTitle('FREE FOR ALL LOBBY');
+                      setWaitingTitle('BATTLE GROUND LOBBY');
                       setWaitingMessage(`Match starts in ${msg.countdown}s (or when 10 athletes join)...`);
                       setWaitingBadge(`STARTING IN ${msg.countdown}s`);
                       setWaitingSubInfo(`👥 ${msg.player_count} ${msg.player_count === 1 ? 'Athlete' : 'Athletes'} in Lobby (Max 10)`);
@@ -252,7 +252,7 @@ export default function AppShell() {
                     } else if (msg.type === 'ffa_matched') {
                       setMatchWaiting(false);
                       setIsFFALobby(false);
-                      setOpponentUsername('Free For All');
+                      setOpponentUsername('Battle Ground');
                       setMatchMode('ffa');
                       setMatchExerciseId(exId);
                       setIsMatchCamera(true);

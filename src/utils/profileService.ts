@@ -2,6 +2,13 @@ import { supabase } from './supabase';
 import { AvatarConfig, AvatarStyle } from '../components/Avatar';
 import { generateRandomUsername } from './usernameGenerator';
 
+export interface DailyCalorieLog {
+  date: string; // YYYY-MM-DD
+  calories: number;
+  reps: number;
+  matches: number;
+}
+
 export interface UserProfile {
   id: string;
   username: string;
@@ -11,6 +18,10 @@ export interface UserProfile {
   avatar_url?: string | null;
   bio?: string;
   fitness_goal?: string;
+  admin?: boolean;
+  is_admin?: boolean;
+  daily_calories?: Record<string, DailyCalorieLog>; // e.g. { "2026-09-09": { date: "2026-09-09", calories: 45, reps: 120, matches: 4 } }
+  total_calories?: number;
   created_at?: string;
   updated_at?: string;
 }
@@ -81,6 +92,10 @@ export async function getOrCreateUserProfile(user: any): Promise<UserProfile> {
 
       return {
         ...data,
+        admin: data.admin === true || data.is_admin === true || userMeta.admin === true || userMeta.is_admin === true,
+        is_admin: data.admin === true || data.is_admin === true || userMeta.admin === true || userMeta.is_admin === true,
+        daily_calories: data.daily_calories || userMeta.daily_calories || {},
+        total_calories: data.total_calories !== undefined ? data.total_calories : (userMeta.total_calories || 0),
         avatar_config: data.avatar_config && Object.keys(data.avatar_config).length > 0 ? data.avatar_config : defaultAvatar,
         avatar_url: data.avatar_url || oauthAvatarUrl || null,
       };
@@ -96,6 +111,10 @@ export async function getOrCreateUserProfile(user: any): Promise<UserProfile> {
       avatar_url: oauthAvatarUrl,
       bio: 'Ready to crush daily fitness milestones with Ojas! 🔥',
       fitness_goal: 'Strength & Stamina',
+      admin: userMeta.admin === true || userMeta.is_admin === true,
+      is_admin: userMeta.admin === true || userMeta.is_admin === true,
+      daily_calories: userMeta.daily_calories || {},
+      total_calories: userMeta.total_calories || 0,
     };
 
     // Try inserting into Supabase profiles table
@@ -248,5 +267,64 @@ export async function updateUserProfile(
   } catch (err: any) {
     console.error('Error updating profile:', err);
     return { success: false, error: err.message || 'Failed to update profile' };
+  }
+}
+
+/**
+ * Record burned calories by date in public.profiles table (daily_calories & total_calories).
+ */
+export async function recordCaloriesToProfile(
+  userId: string,
+  calories: number,
+  reps: number = 0,
+  dateStr?: string
+): Promise<{ success: boolean; dailyStats?: Record<string, DailyCalorieLog>; error?: string }> {
+  if (!userId || userId === 'guest') return { success: false, error: 'Guest or invalid user' };
+
+  try {
+    const today = dateStr || new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    
+    // Fetch current profile daily_calories
+    const { data: profileData } = await supabase
+      .from('profiles')
+      .select('daily_calories, total_calories')
+      .eq('id', userId)
+      .maybeSingle();
+
+    const currentDailyMap: Record<string, DailyCalorieLog> =
+      (profileData?.daily_calories && typeof profileData.daily_calories === 'object')
+        ? { ...profileData.daily_calories }
+        : {};
+
+    const existingToday = currentDailyMap[today] || {
+      date: today,
+      calories: 0,
+      reps: 0,
+      matches: 0,
+    };
+
+    const updatedToday: DailyCalorieLog = {
+      date: today,
+      calories: Math.round(((existingToday.calories || 0) + calories) * 10) / 10,
+      reps: (existingToday.reps || 0) + reps,
+      matches: (existingToday.matches || 0) + 1,
+    };
+
+    currentDailyMap[today] = updatedToday;
+    const newTotalCalories = Math.round(((profileData?.total_calories || 0) + calories) * 10) / 10;
+
+    const updateRes = await updateUserProfile(userId, {
+      daily_calories: currentDailyMap,
+      total_calories: newTotalCalories,
+    });
+
+    if (!updateRes.success) {
+      return { success: false, error: updateRes.error };
+    }
+
+    return { success: true, dailyStats: currentDailyMap };
+  } catch (e: any) {
+    console.warn('[ProfileService] Failed to record calories to profile:', e);
+    return { success: false, error: e?.message || 'Error recording calories' };
   }
 }

@@ -18,7 +18,11 @@ import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import { Camera } from 'expo-camera';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import {
+  Clock,
   Dumbbell,
+  Eye,
+  EyeOff,
+  Flame,
   LogOut,
   RefreshCw,
   RotateCcw,
@@ -26,6 +30,7 @@ import {
   Sparkles,
   SwitchCamera,
   Swords,
+  Trophy,
   UserPlus,
   X,
   Zap,
@@ -38,6 +43,7 @@ import {
 } from '../../../utils/matchmaking';
 import { getPoseHtmlBundle } from '../../camera/components/CameraScreen';
 import { recordExerciseMatchResult } from '../../../utils/rankingService';
+import { recordCaloriesToProfile } from '../../../utils/profileService';
 import { useUserStore } from '../../../store/userStore';
 import { useMatchmakingStore } from '../../../store/matchmakingStore';
 import { sendFriendRequest } from '../../../utils/friendService';
@@ -129,6 +135,7 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
   const [visibility, setVisibility] = useState<number>(0); // 0 to 1 smooth visibility
   const [timeLeft, setTimeLeft] = useState(120); // 2 mins duel match timer
   const [matchEnded, setMatchEnded] = useState(false);
+  const [isSkeletonVisible, setIsSkeletonVisible] = useState(true);
 
   // Animated values for setup phase choreography
   const setupPositionAnim = useRef(new Animated.Value(0)).current; // 0 = center (large), 1 = top (small)
@@ -154,7 +161,7 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
 
   // Fetch opponent's avatar from Supabase profiles
   useEffect(() => {
-    if (!opponentUsername || opponentUsername === 'opponent' || opponentUsername === 'Free For All') {
+    if (!opponentUsername || opponentUsername === 'opponent' || opponentUsername === 'Free For All' || opponentUsername === 'Battle Ground') {
       return;
     }
 
@@ -193,32 +200,119 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
   const windowHeight = dimensions.height;
   const isLandscape = windowWidth > windowHeight;
 
-  const { user, profile, refreshProfile } = useUserStore();
+  const { user, profile, refreshProfile, setLastMatchSummary } = useUserStore();
+
+  const notifSlideAnim = useRef(new Animated.Value(-120)).current;
+  const notifOpacityAnim = useRef(new Animated.Value(0)).current;
+
+  // Calorie calculation helper based on exercise and reps
+  const calculateCalories = useCallback((exId?: string, reps: number = 0) => {
+    switch (exId) {
+      case '7': // Push-ups
+        return Math.round(reps * 0.45 * 10) / 10;
+      case '2': // Sit-ups
+      case '5': // Crunches
+        return Math.round(reps * 0.30 * 10) / 10;
+      case '4': // Lunges
+        return Math.round(reps * 0.38 * 10) / 10;
+      case '3': // Triangle Pose
+      case '6': // Cobra Pose
+        return Math.round(reps * 0.40 * 10) / 10;
+      case '1': // Squats
+      default:
+        return Math.round(reps * 0.35 * 10) / 10;
+    }
+  }, []);
+
+  const getExerciseDisplayName = useCallback((exId?: string) => {
+    switch (exId) {
+      case '1': return 'Squats';
+      case '2': return 'Sit-ups';
+      case '3': return 'Triangle Pose';
+      case '4': return 'Lunges';
+      case '5': return 'Crunches';
+      case '6': return 'Cobra Pose';
+      case '7': return 'Push-ups';
+      default: return 'Workout';
+    }
+  }, []);
 
   useEffect(() => {
     matchPhaseRef.current = matchPhase;
   }, [matchPhase]);
 
-  // Record result when match finishes
+  // Record result and trigger in-app notification when match finishes
   useEffect(() => {
     if (matchEnded && !recordedResultRef.current && user?.id) {
       recordedResultRef.current = true;
+      const caloriesBurned = calculateCalories(exerciseId, selfScore);
+      const exerciseName = getExerciseDisplayName(exerciseId);
+
       if (mode === 'ffa') {
         // In FFA: Top 3 or highest score is win/podium
         const myRank = ffaLeaderboard.findIndex((p) => p.username === selfUsername || p.username === user.id) + 1;
         const result = myRank === 1 ? 'win' : myRank > 0 && myRank <= 3 ? 'draw' : 'defeat';
+        const pointsEarned = result === 'win' ? 10 : result === 'draw' ? 5 : -5;
+
+        setLastMatchSummary({
+          exerciseId: exerciseId || '1',
+          exerciseName,
+          reps: selfScore,
+          calories: caloriesBurned,
+          durationSeconds: 120 - Math.max(0, timeLeft),
+          result,
+          pointsEarned,
+          mode: 'ffa',
+          opponentUsername: 'Battle Ground',
+        });
+
         recordExerciseMatchResult(user.id, exerciseId, result, selfScore).then(() => {
-          refreshProfile();
+          recordCaloriesToProfile(user.id, caloriesBurned, selfScore).then(() => {
+            refreshProfile();
+          });
         });
       } else {
         const result =
           selfScore > opponentScore ? 'win' : selfScore === opponentScore ? 'draw' : 'defeat';
+        const pointsEarned = result === 'win' ? 10 : result === 'draw' ? 0 : -10;
+
+        setLastMatchSummary({
+          exerciseId: exerciseId || '1',
+          exerciseName,
+          reps: selfScore,
+          calories: caloriesBurned,
+          durationSeconds: 120 - Math.max(0, timeLeft),
+          result,
+          pointsEarned,
+          mode,
+          opponentUsername,
+        });
+
         recordExerciseMatchResult(user.id, exerciseId, result, selfScore).then(() => {
-          refreshProfile();
+          recordCaloriesToProfile(user.id, caloriesBurned, selfScore).then(() => {
+            refreshProfile();
+          });
         });
       }
     }
-  }, [matchEnded, selfScore, opponentScore, user?.id, exerciseId, refreshProfile, mode, ffaLeaderboard, selfUsername]);
+  }, [
+    matchEnded,
+    selfScore,
+    opponentScore,
+    user?.id,
+    exerciseId,
+    refreshProfile,
+    mode,
+    ffaLeaderboard,
+    selfUsername,
+    calculateCalories,
+    getExerciseDisplayName,
+    setLastMatchSummary,
+    opponentUsername,
+    timeLeft,
+    notifSlideAnim,
+    notifOpacityAnim,
+  ]);
 
   // Request Camera Permissions & Setup WebSocket message listeners
   useEffect(() => {
@@ -512,6 +606,12 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
   );
 
   // Widget Actions Handlers
+  const handleToggleSkeleton = () => {
+    const nextState = !isSkeletonVisible;
+    setIsSkeletonVisible(nextState);
+    webViewRef.current?.injectJavaScript(`window.setSkeletonVisible && window.setSkeletonVisible(${nextState}); true;`);
+  };
+
   const handleFlipCamera = () => {
     webViewRef.current?.injectJavaScript('window.toggleFacingMode && window.toggleFacingMode(); true;');
   };
@@ -951,6 +1051,40 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
               )}
             </View>
 
+            {/* Post-Match Workout Stats Bar (Calories, Reps, Time, Rating) */}
+            <View style={styles.matchWorkoutStatsGrid}>
+              <View style={styles.matchWorkoutStatItem}>
+                <View style={styles.matchStatIconCircle}>
+                  <Flame size={15} color="#FF6B35" />
+                </View>
+                <Text style={styles.matchWorkoutStatVal}>{calculateCalories(exerciseId, selfScore)}</Text>
+                <Text style={styles.matchWorkoutStatLbl}>KCAL BURNED</Text>
+              </View>
+
+              <View style={styles.matchWorkoutStatDivider} />
+
+              <View style={styles.matchWorkoutStatItem}>
+                <View style={styles.matchStatIconCircle}>
+                  <Dumbbell size={15} color="#38BDF8" />
+                </View>
+                <Text style={styles.matchWorkoutStatVal}>{selfScore}</Text>
+                <Text style={styles.matchWorkoutStatLbl}>TOTAL REPS</Text>
+              </View>
+
+              <View style={styles.matchWorkoutStatDivider} />
+
+              <View style={styles.matchWorkoutStatItem}>
+                <View style={styles.matchStatIconCircle}>
+                  <Clock size={15} color="#FBBF24" />
+                </View>
+                <Text style={styles.matchWorkoutStatVal}>
+                  {Math.floor((120 - Math.max(0, timeLeft)) / 60)}:
+                  {((120 - Math.max(0, timeLeft)) % 60).toString().padStart(2, '0')}
+                </Text>
+                <Text style={styles.matchWorkoutStatLbl}>TIME PLAYED</Text>
+              </View>
+            </View>
+
             {/* Auto Rematch Toggle & 5s Countdown */}
             <View style={styles.autoRematchContainer}>
               <TouchableOpacity
@@ -1020,6 +1154,8 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
         onLeave={handleClose}
         onFlipCamera={handleFlipCamera}
         onToggleOrientation={handleToggleOrientation}
+        onToggleSkeleton={handleToggleSkeleton}
+        isSkeletonVisible={isSkeletonVisible}
         onTryAgain={handleRestartMatch}
         onToggleAutoRematch={toggleAutoRematch}
         autoRematch={autoRematch}
@@ -1043,6 +1179,8 @@ interface DraggableWidgetProps {
   onLeave: () => void;
   onFlipCamera: () => void;
   onToggleOrientation: () => void;
+  onToggleSkeleton?: () => void;
+  isSkeletonVisible?: boolean;
   onTryAgain: () => void;
   onToggleAutoRematch: () => void;
   autoRematch: boolean;
@@ -1054,6 +1192,8 @@ const DraggableActionsWidget: React.FC<DraggableWidgetProps> = ({
   onLeave,
   onFlipCamera,
   onToggleOrientation,
+  onToggleSkeleton,
+  isSkeletonVisible = true,
   onTryAgain,
   onToggleAutoRematch,
   autoRematch,
@@ -1131,7 +1271,22 @@ const DraggableActionsWidget: React.FC<DraggableWidgetProps> = ({
               <LogOut size={16} color="#FFFFFF" />
             </TouchableOpacity>
 
-            {/* 2. Flip Camera */}
+            {/* 2. Skeleton Toggle (Show / Hide Skeleton Overlay) */}
+            {onToggleSkeleton && (
+              <TouchableOpacity
+                style={[styles.widgetActionBtn, !isSkeletonVisible && styles.mutedActionBtn]}
+                activeOpacity={0.75}
+                onPress={onToggleSkeleton}
+              >
+                {isSkeletonVisible ? (
+                  <Eye size={16} color="#38BDF8" />
+                ) : (
+                  <EyeOff size={16} color="#94A3B8" />
+                )}
+              </TouchableOpacity>
+            )}
+
+            {/* 3. Flip Camera */}
             <TouchableOpacity
               style={styles.widgetActionBtn}
               activeOpacity={0.75}
@@ -1370,7 +1525,7 @@ const ScoreBoard: React.FC<{
         <View style={styles.ffaLeaderboardCard}>
           <View style={styles.ffaLeaderboardHeaderRow}>
             <Text style={styles.ffaLeaderboardHeading}>LEADERBOARD</Text>
-            <Text style={styles.ffaLeaderboardSub}>FREE FOR ALL</Text>
+            <Text style={styles.ffaLeaderboardSub}>BATTLE GROUND</Text>
           </View>
 
           <ScrollView style={styles.ffaLeaderboardScroll} showsVerticalScrollIndicator={false}>
@@ -1925,6 +2080,11 @@ const styles = StyleSheet.create({
   leaveActionBtn: {
     backgroundColor: '#EF4444',
   },
+  mutedActionBtn: {
+    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.3)',
+  },
   addictiveActionBtn: {
     backgroundColor: '#F1F5F9',
     position: 'relative',
@@ -2294,5 +2454,123 @@ const styles = StyleSheet.create({
     color: '#11141A',
     fontSize: 13,
     fontWeight: '900',
+  },
+  inAppNotifBanner: {
+    position: 'absolute',
+    top: 0,
+    left: 16,
+    right: 16,
+    zIndex: 99999,
+    alignItems: 'center',
+  },
+  inAppNotifCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1E232B',
+    borderRadius: 18,
+    borderWidth: 1.5,
+    borderColor: '#FF6B35',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    width: '100%',
+    maxWidth: 420,
+    shadowColor: '#FF6B35',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 14,
+    elevation: 12,
+    gap: 12,
+  },
+  inAppNotifIconBox: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 107, 53, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 107, 53, 0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  inAppNotifContent: {
+    flex: 1,
+  },
+  inAppNotifHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 2,
+  },
+  inAppNotifTitle: {
+    color: '#FF6B35',
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 0.8,
+  },
+  inAppNotifBadge: {
+    backgroundColor: 'rgba(255, 107, 53, 0.2)',
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderWidth: 1,
+    borderColor: '#FF6B35',
+  },
+  inAppNotifBadgeText: {
+    color: '#FF6B35',
+    fontSize: 10,
+    fontWeight: '900',
+  },
+  inAppNotifDesc: {
+    color: '#E2E8F0',
+    fontSize: 12,
+    fontWeight: '500',
+    lineHeight: 16,
+  },
+  inAppNotifBold: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+  },
+  matchWorkoutStatsGrid: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    borderRadius: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    width: '100%',
+    marginVertical: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  matchWorkoutStatItem: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  matchStatIconCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  matchWorkoutStatVal: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '900',
+  },
+  matchWorkoutStatLbl: {
+    color: '#8E95A0',
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+    marginTop: 2,
+  },
+  matchWorkoutStatDivider: {
+    width: 1,
+    height: 32,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
   },
 });

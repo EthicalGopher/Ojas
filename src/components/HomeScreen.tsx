@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useCallback, useRef, useState } from 'react';
 import {
+  Animated,
   Modal,
   ScrollView,
   StatusBar,
@@ -8,6 +9,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { Flame, X, Dumbbell, Trophy } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { ModelComplexity } from '../utils/deviceSpecs';
 import { getDeviceInfo, getRecommendedModel } from '../utils/deviceSpecs';
@@ -178,7 +180,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
     if (isFFA) {
       onEnterQueue(
-        'FREE FOR ALL LOBBY',
+        'BATTLE GROUND LOBBY',
         'Gathering athletes (Max 10). Match starts when timer expires or lobby fills...',
         'WAITING: 30s',
         '👥 1 Athlete Joined',
@@ -191,7 +193,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       const cleanup = addMatchMessageListener((msg) => {
         if (msg.type === 'ffa_lobby_update') {
           onUpdateQueueStatus?.(
-            'FREE FOR ALL LOBBY',
+            'BATTLE GROUND LOBBY',
             `Match starts in ${msg.countdown}s (or when 10 athletes join)...`,
             `STARTING IN ${msg.countdown}s`,
             `👥 ${msg.player_count} ${msg.player_count === 1 ? 'Athlete' : 'Athletes'} in Lobby (Max 10)`,
@@ -199,7 +201,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             msg.player_count
           );
         } else if (msg.type === 'ffa_matched') {
-          onOpenMatchCamera('Free For All', 'ffa', exercise.id);
+          onOpenMatchCamera('Battle Ground', 'ffa', exercise.id);
           cleanup();
         }
       });
@@ -304,6 +306,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         <CommunityScreen
           currentUser={currentUser}
           onBack={() => onTabChange('home')}
+          onOpenMatchCamera={onOpenMatchCamera}
         />
       );
     }
@@ -386,7 +389,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                   onPress={() => onSelectModel(model)}
                 >
                   <View style={styles.optionHeaderRow}>
-                    <Text style={styles.optionTitle}>{model === 'light' ? '⚡ Light Model (Lite)' : model === 'medium' ? '🎯 Medium Model (Full)' : '🔥 High Model (Heavy)'}</Text>
+                    <Text style={styles.optionTitle}>{model === 'light' ? 'Light Model (Lite)' : model === 'medium' ? 'Medium Model (Full)' : 'High Model (Heavy)'}</Text>
                     {recommendedModel === model && <View style={styles.recommendBadge}><Text style={styles.recommendBadgeText}>Recommended</Text></View>}
                   </View>
                   <Text style={styles.optionDescription}>
