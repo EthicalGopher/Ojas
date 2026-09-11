@@ -27,7 +27,7 @@ export const HEALTH_CONDITIONS: HealthConditionMeta[] = [
     question: 'Do your knees turn inward or touch each other when standing upright?',
     shortDesc: 'Inward knee tracking & weak abductors',
     benefitTag: 'Knee & Hip Alignment',
-    recommendedExerciseNames: ['Triangle Pose', 'Lunges', 'Squats'],
+    recommendedExerciseNames: ['Triangle Pose', 'Lunges', 'Squats', "Child's Pose"],
     cautionExerciseNames: [],
     explanation:
       'Hip abductor and vastus medialis strengthening realigns knee tracking and stabilizes pelvic angle.',
@@ -42,7 +42,7 @@ export const HEALTH_CONDITIONS: HealthConditionMeta[] = [
     question: 'Do your knees curve outward with a gap when your ankles touch?',
     shortDesc: 'Outward knee curve & lateral load',
     benefitTag: 'Adductor & Joint Alignment',
-    recommendedExerciseNames: ['Lunges', 'Cobra Pose', 'Squats', 'Crunches'],
+    recommendedExerciseNames: ['Lunges', 'Cobra Pose', 'Squats', 'Crunches', "Child's Pose"],
     cautionExerciseNames: [],
     explanation:
       'Strengthens hip adductors and core stabilizers to reduce lateral knee compression.',
@@ -57,7 +57,7 @@ export const HEALTH_CONDITIONS: HealthConditionMeta[] = [
     question: 'Do you have flat or collapsed foot arches when standing?',
     shortDesc: 'Arch pronation & ankle imbalance',
     benefitTag: 'Arch & Ankle Stability',
-    recommendedExerciseNames: ['Cobra Pose', 'Push-ups', 'Lunges'],
+    recommendedExerciseNames: ['Cobra Pose', 'Push-ups', 'Lunges', "Child's Pose"],
     cautionExerciseNames: [],
     explanation:
       'Builds kinetic chain stability, activating foot arches and ankle stabilizers.',
@@ -72,7 +72,7 @@ export const HEALTH_CONDITIONS: HealthConditionMeta[] = [
     question: 'Do you experience lower back stiffness, tightness, or pain?',
     shortDesc: 'Lumbar tension & tight hip flexors',
     benefitTag: 'Spine Decompression',
-    recommendedExerciseNames: ['Cobra Pose', 'Triangle Pose', 'Crunches', 'Push-ups'],
+    recommendedExerciseNames: ['Cobra Pose', 'Triangle Pose', 'Crunches', 'Push-ups', "Child's Pose"],
     cautionExerciseNames: ['Sit-ups'],
     explanation:
       'Decompresses lumbar vertebrae, opens hip flexors, and reinforces deep core support.',
@@ -87,7 +87,7 @@ export const HEALTH_CONDITIONS: HealthConditionMeta[] = [
     question: 'Do your shoulders roll forward or slouch when standing?',
     shortDesc: 'Forward shoulder tilt & tight chest',
     benefitTag: 'Scapular Retraction',
-    recommendedExerciseNames: ['Cobra Pose', 'Triangle Pose', 'Push-ups'],
+    recommendedExerciseNames: ['Cobra Pose', 'Triangle Pose', 'Push-ups', "Child's Pose"],
     cautionExerciseNames: [],
     explanation:
       'Opens anterior chest muscles, strengthens rhomboids and upper back stabilizers.',

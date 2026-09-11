@@ -62,6 +62,9 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
   } else if (norm.includes('pushup') || norm.includes('push-up') || norm.includes('push up') || norm === '7') {
     exerciseMode = 'pushup';
     exerciseTitle = 'Push-ups';
+  } else if (norm.includes('child') || norm.includes('balasana') || norm === '8') {
+    exerciseMode = 'child_pose';
+    exerciseTitle = "Child's Pose";
   }
 
   return `
@@ -791,6 +794,90 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
       }
     }
 
+    // 8. Child's Pose Engine (Balasana)
+    function updateChildPoseEngine(pose) {
+      errorLandmarks.clear();
+      const leftVis = ((pose[11].visibility || 1) + (pose[13].visibility || 1) + (pose[15].visibility || 1) + (pose[23].visibility || 1)) / 4.0;
+      const rightVis = ((pose[12].visibility || 1) + (pose[14].visibility || 1) + (pose[16].visibility || 1) + (pose[24].visibility || 1)) / 4.0;
+      const activeSide = leftVis >= rightVis ? 'left' : 'right';
+
+      const leftElbowAng = angle(pose[11], pose[13], pose[15]);
+      const rightElbowAng = angle(pose[12], pose[14], pose[16]);
+      const leftKneeAng = angle(pose[23], pose[25], pose[27]);
+      const rightKneeAng = angle(pose[24], pose[26], pose[28]);
+      const leftHipAng = angle(pose[11], pose[23], pose[25]);
+      const rightHipAng = angle(pose[12], pose[24], pose[26]);
+
+      const activeElbow = activeSide === 'left' ? leftElbowAng : rightElbowAng;
+      const activeKnee = activeSide === 'left' ? leftKneeAng : rightKneeAng;
+      const activeHip = activeSide === 'left' ? leftHipAng : rightHipAng;
+
+      const midShoulderY = (pose[11].y + pose[12].y) / 2.0;
+      const midHipY = (pose[23].y + pose[24].y) / 2.0;
+
+      const issues = [];
+      // 1. Knees should be folded deeply (< 85 deg)
+      if (activeKnee > 85) {
+        issues.push('Sit hips back onto heels (' + Math.round(activeKnee) + '°)');
+        errorLandmarks.add(23); errorLandmarks.add(24); errorLandmarks.add(25); errorLandmarks.add(26);
+      }
+      // 2. Hips folded forward (< 90 deg)
+      if (activeHip > 90) {
+        issues.push('Fold torso forward over thighs');
+        errorLandmarks.add(23); errorLandmarks.add(24); errorLandmarks.add(11); errorLandmarks.add(12);
+      }
+      // 3. Arms extended forward along floor
+      if (activeElbow < 140) {
+        issues.push('Extend arms straight forward on the mat');
+        errorLandmarks.add(13); errorLandmarks.add(14); errorLandmarks.add(15); errorLandmarks.add(16);
+      }
+
+      const isChildPoseSetup = activeKnee <= 110 && activeHip <= 115;
+
+      if (currentSmoothVisibility < 0.40) {
+        renderState('LOW_VISIBILITY');
+        correctHoldFrames = 0;
+        return;
+      }
+
+      if (!isChildPoseSetup) {
+        renderState('SETUP');
+        setHint('Kneel, sit back on heels & fold forward (Side view recommended)', '#A7F3D0');
+        errorLandmarks.add(23); errorLandmarks.add(24); errorLandmarks.add(25); errorLandmarks.add(26);
+        correctHoldFrames = 0;
+        return;
+      }
+
+      if (issues.length === 0) {
+        renderState('PERFECT');
+        correctHoldFrames += 1;
+        const totalHoldSecs = (correctHoldFrames / 25).toFixed(1);
+        setHint("Perfect Child's Pose! Hold: " + totalHoldSecs + 's', '#34D399');
+        if (window.ReactNativeWebView && (correctHoldFrames % 5 === 0 || correctHoldFrames === 1)) {
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'POSE_HOLD_TIME',
+            holdSeconds: parseFloat(totalHoldSecs),
+            poseName: "Child's Pose"
+          }));
+        }
+        if (correctHoldFrames % 75 === 0) {
+          repCount += 1;
+          if (window.ReactNativeWebView) {
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: 'SQUAT_REP',
+              repCount: repCount,
+              holdSeconds: Math.floor(correctHoldFrames / 25),
+              poseName: "Child's Pose"
+            }));
+          }
+        }
+      } else {
+        renderState('ADJUST');
+        correctHoldFrames = Math.max(0, correctHoldFrames - 2);
+        setHint(issues[0], '#FBBF24');
+      }
+    }
+
     // ---------- Pose Model + Camera with Offline LocalAssetServer & Fallback Ladder ----------
     async function initApp() {
       try {
@@ -922,6 +1009,8 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
                 updateCobraPoseEngine(landmarks);
               } else if (EXERCISE_MODE === 'pushup') {
                 updatePushupEngine(landmarks);
+              } else if (EXERCISE_MODE === 'child_pose') {
+                updateChildPoseEngine(landmarks);
               } else {
                 updateSquatEngine(landmarks);
               }
@@ -1158,8 +1247,11 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
     exerciseName.toLowerCase().includes('triangle') ||
     exerciseName.toLowerCase().includes('cobra') ||
     exerciseName.toLowerCase().includes('bhujanga') ||
+    exerciseName.toLowerCase().includes('child') ||
+    exerciseName.toLowerCase().includes('balasana') ||
     exerciseId === '3' ||
-    exerciseId === '6';
+    exerciseId === '6' ||
+    exerciseId === '8';
 
   const countLabel = isHoldPose ? 'POINTS' : isStepCount ? 'STEPS' : 'REPS';
 

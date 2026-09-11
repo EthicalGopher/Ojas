@@ -786,10 +786,11 @@ export const ExerciseDetailScreen: React.FC<ExerciseDetailScreenProps> = ({
                     break;
                   case '3':
                   case '6':
-                    calPerRep = '0.40';
-                    metValue = '5.0 METs';
-                    repFormula = 'Isometric full-body muscle holds burn ~0.40 kcal per hold milestone.';
-                    technique = 'Maintain aligned joint posture without dropping for hold duration.';
+                  case '8':
+                    calPerRep = '0.35';
+                    metValue = '4.0 METs';
+                    repFormula = 'Restorative spine decompression & deep hip holds burn ~0.35 kcal per hold milestone.';
+                    technique = 'Knees folded on mat with torso folded forward and arms reaching straight.';
                     break;
                   case '1':
                   default:

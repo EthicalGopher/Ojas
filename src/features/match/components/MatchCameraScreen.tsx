@@ -217,6 +217,7 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
         return Math.round(reps * 0.38 * 10) / 10;
       case '3': // Triangle Pose
       case '6': // Cobra Pose
+      case '8': // Child's Pose
         return Math.round(reps * 0.40 * 10) / 10;
       case '1': // Squats
       default:
@@ -233,6 +234,7 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
       case '5': return 'Crunches';
       case '6': return 'Cobra Pose';
       case '7': return 'Push-ups';
+      case '8': return "Child's Pose";
       default: return 'Workout';
     }
   }, []);

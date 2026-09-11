@@ -133,6 +133,23 @@ export const DEFAULT_EXERCISES: ExerciseItem[] = [
     type: 'Common exercises',
     cure_to: ['flat_feet', 'lower_back_pain', 'rounded_shoulders'],
   },
+  {
+    id: '8',
+    name: "Child's Pose",
+    category: 'flexibility',
+    icon: '🧘',
+    description: 'AI Real-time Balasana Pose Tracker for Spine Decompression, Hip Flexion & Shoulder Stretch',
+    bgGradient: '#A7F3D0',
+    isFavorite: true,
+    duration_mins: 15,
+    muscle_groups: 'Spine Decompressors / Glutes / Ankles / Shoulders',
+    reps_target: 10,
+    difficulty: 'Beginner',
+    bg_theme: '#A7F3D0',
+    image_url: 'https://locsjrjekkyjbeapgreu.supabase.co/storage/v1/object/public/Images/Excercise/child_pose.png',
+    type: 'Yoga',
+    cure_to: ['lower_back_pain', 'rounded_shoulders', 'bow_legs', 'flat_feet', 'knock_knees'],
+  },
 ];
 
 export async function fetchExercisesFromSupabase(): Promise<ExerciseItem[]> {
