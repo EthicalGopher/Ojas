@@ -15,6 +15,7 @@ import {
   BookOpen,
   Bot,
   Camera,
+  Check,
   CheckCircle2,
   ChevronRight,
   HelpCircle,
@@ -41,6 +42,7 @@ import { ExerciseIcon } from '../components/ExerciseIcon';
 import { useUserStore } from '../store/userStore';
 import { fetchFriends, FriendshipItem } from '../utils/friendService';
 import { DEFAULT_EXERCISES, ExerciseItem } from '../utils/exerciseService';
+import { updateUserProfile, UserProfile } from '../utils/profileService';
 import { HealthAssessmentModal } from '../components/HealthAssessmentModal';
 import {
   getRecommendedExercises,
@@ -79,11 +81,44 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
   onNavigateToTab,
   featuredExercise,
 }) => {
-  const { user, profile, isGuest } = useUserStore();
+  const { user, profile, setProfile, isGuest } = useUserStore();
   const [friends, setFriends] = useState<FriendshipItem[]>([]);
   const [loadingFriends, setLoadingFriends] = useState<boolean>(false);
   const [selectedTutorial, setSelectedTutorial] = useState<TutorialModalData | null>(null);
   const [showHealthModal, setShowHealthModal] = useState<boolean>(false);
+
+  const handleToggleCondition = async (key: string, value: boolean) => {
+    const currentMap: Record<string, boolean> = {
+      knock_knees: profile?.has_knock_knees ?? (profile?.health_conditions?.knock_knees ?? false),
+      bow_legs: profile?.has_bow_legs ?? (profile?.health_conditions?.bow_legs ?? false),
+      flat_feet: profile?.has_flat_feet ?? (profile?.health_conditions?.flat_feet ?? false),
+      lower_back_pain: profile?.has_lower_back_pain ?? (profile?.health_conditions?.lower_back_pain ?? false),
+      rounded_shoulders: profile?.has_rounded_shoulders ?? (profile?.health_conditions?.rounded_shoulders ?? false),
+    };
+
+    currentMap[key] = value;
+
+    const updates: Partial<UserProfile> = {
+      has_knock_knees: currentMap['knock_knees'],
+      has_bow_legs: currentMap['bow_legs'],
+      has_flat_feet: currentMap['flat_feet'],
+      has_lower_back_pain: currentMap['lower_back_pain'],
+      has_rounded_shoulders: currentMap['rounded_shoulders'],
+      health_conditions_completed: true,
+      health_conditions: currentMap,
+    };
+
+    const newProfile = { ...(profile || {}), ...updates } as UserProfile;
+    setProfile(newProfile);
+
+    if (user?.id && !isGuest) {
+      try {
+        await updateUserProfile(user.id, updates);
+      } catch (err) {
+        console.warn('Failed to sync condition to Supabase:', err);
+      }
+    }
+  };
 
   const { recommendedList, activeConditions, hasAnyCondition } = useMemo(() => {
     return getRecommendedExercises(exercises, profile);
@@ -318,53 +353,80 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
         </View>
       </View>
 
-      {/* AI POSTURE & HEALTH ASSESSMENT CARD */}
+      {/* DIRECT POSTURE & JOINT ASSESSMENT */}
       <View style={styles.healthBannerCard}>
         <View style={styles.healthBannerTop}>
           <View style={styles.healthBannerIconWrap}>
-            <Stethoscope size={20} color="#E25822" />
+            <Stethoscope size={18} color="#E25822" />
           </View>
           <View style={{ flex: 1 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-              <Text style={styles.healthBannerTitle}>
-                {hasAnyCondition ? 'Posture & Therapy AI Active' : 'Personalize For Your Body'}
-              </Text>
-              {hasAnyCondition && (
-                <View style={styles.activeTherapyDotPill}>
-                  <View style={styles.greenPulseDot} />
-                  <Text style={styles.activeTherapyDotText}>CUSTOM</Text>
-                </View>
-              )}
-            </View>
+            <Text style={styles.healthBannerTitle}>POSTURE & JOINT ASSESSMENT</Text>
             <Text style={styles.healthBannerSubtitle}>
-              {hasAnyCondition
-                ? `${activeConditions.length} condition${activeConditions.length > 1 ? 's' : ''} targeted: ${activeConditions.map((c) => c.title).join(', ')}`
-                : 'Suffering from Knock Knees, Flat Feet, or Back Pain? Get AI tailored exercises.'}
+              Select your conditions to calibrate AI exercise recommendations.
             </Text>
           </View>
         </View>
 
-        {hasAnyCondition && (
-          <View style={styles.activeConditionsRow}>
-            {activeConditions.map((cond) => (
-              <View key={cond.key} style={[styles.activeConditionTagPill, { borderColor: `${cond.badgeColor}50` }]}>
-                <Text style={styles.activeConditionTagEmoji}>{cond.icon}</Text>
-                <Text style={[styles.activeConditionTagTitle, { color: cond.badgeColor }]}>{cond.title}</Text>
-              </View>
-            ))}
-          </View>
-        )}
+        <View style={styles.directQuestionsList}>
+          {HEALTH_CONDITIONS.map((cond) => {
+            const isSelected =
+              (profile as any)?.[cond.field] === true ||
+              profile?.health_conditions?.[cond.key] === true;
 
-        <TouchableOpacity
-          style={styles.healthCheckActionBtn}
-          activeOpacity={0.85}
-          onPress={() => setShowHealthModal(true)}
-        >
-          <Sparkles size={14} color="#FFFFFF" style={{ marginRight: 6 }} />
-          <Text style={styles.healthCheckActionText}>
-            {hasAnyCondition ? 'Edit Health & Posture Profile' : 'Take 30s Health Check'}
-          </Text>
-        </TouchableOpacity>
+            return (
+              <View key={cond.key} style={styles.directQuestionItem}>
+                <View style={{ flex: 1, marginRight: 10 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    <Text style={styles.directQuestionTitle}>{cond.title}</Text>
+                    <View style={styles.directMedicalBadge}>
+                      <Text style={styles.directMedicalBadgeText}>{cond.medicalTerm}</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.directQuestionText}>{cond.question}</Text>
+                </View>
+
+                {/* Direct Yes / No Buttons */}
+                <View style={styles.directToggleRow}>
+                  <TouchableOpacity
+                    activeOpacity={0.8}
+                    style={[
+                      styles.directBtn,
+                      isSelected ? styles.directYesBtnActive : styles.directBtnInactive,
+                    ]}
+                    onPress={() => handleToggleCondition(cond.key, true)}
+                  >
+                    <Check
+                      size={13}
+                      color={isSelected ? '#FFFFFF' : '#64748B'}
+                      strokeWidth={isSelected ? 3 : 2}
+                    />
+                    <Text style={[styles.directBtnText, isSelected && styles.directBtnTextActive]}>
+                      Yes
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    activeOpacity={0.8}
+                    style={[
+                      styles.directBtn,
+                      !isSelected ? styles.directNoBtnActive : styles.directBtnInactive,
+                    ]}
+                    onPress={() => handleToggleCondition(cond.key, false)}
+                  >
+                    <X
+                      size={13}
+                      color={!isSelected ? '#CBD5E1' : '#475569'}
+                      strokeWidth={!isSelected ? 2.5 : 2}
+                    />
+                    <Text style={[styles.directBtnText, !isSelected && styles.directNoTextActive]}>
+                      No
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            );
+          })}
+        </View>
       </View>
 
       {/* TAILORED FOR YOUR POSTURE / HEALTH RECOMMENDATIONS CAROUSEL */}
@@ -372,12 +434,12 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
         <>
           <View style={styles.sectionHeaderRow}>
             <View style={styles.headerLeftRow}>
-              <Sparkles size={16} color="#EC4899" style={{ marginRight: 6 }} />
-              <Text style={styles.sectionHeaderTitle}>TAILORED FOR YOUR BODY</Text>
+              <Sparkles size={16} color="#E25822" style={{ marginRight: 6 }} />
+              <Text style={styles.sectionHeaderTitle}>RECOMMENDED FOR YOUR BODY</Text>
             </View>
-            <TouchableOpacity onPress={() => setShowHealthModal(true)}>
-              <Text style={[styles.sectionSubHint, { color: '#E25822', fontWeight: '700' }]}>Edit Conditions</Text>
-            </TouchableOpacity>
+            <Text style={styles.sectionSubHint}>
+              {activeConditions.map((c) => c.title).join(' • ')}
+            </Text>
           </View>
 
           <FlatList
@@ -387,7 +449,7 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.recommendedFlatListContent}
             renderItem={({ item, index }) => {
-              const accentColor = item.conditionTags[0]?.color || '#EC4899';
+              const accentColor = '#E25822';
 
               return (
                 <View style={[styles.recExerciseCard, { borderColor: `${accentColor}40` }]}>
@@ -395,7 +457,7 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
                   <View style={styles.recExerciseTopRow}>
                     <View style={[styles.recConditionTagBadge, { backgroundColor: `${accentColor}25` }]}>
                       <Text style={[styles.recConditionTagText, { color: accentColor }]}>
-                        {item.conditionTags[0]?.title || 'THERAPY'}
+                        {item.conditionTags[0]?.title || 'RECOMMENDED'}
                       </Text>
                     </View>
                     <View style={styles.recDifficultyBadge}>
@@ -418,10 +480,10 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
                     </View>
                   </View>
 
-                  {/* Reason Pill */}
+                  {/* Reason Box */}
                   <View style={styles.recReasonPill}>
                     <Text style={styles.recReasonPillText} numberOfLines={2}>
-                      💡 {item.primaryReason}
+                      {item.primaryReason}
                     </Text>
                   </View>
 
@@ -433,7 +495,7 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
                       onPress={() => onOpenCamera(item.id, item.name, false)}
                     >
                       <Play size={11} color="#FFFFFF" fill="#FFFFFF" style={{ marginRight: 4 }} />
-                      <Text style={styles.recSoloBtnText}>Solo Workout</Text>
+                      <Text style={styles.recSoloBtnText}>Solo</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
@@ -1502,24 +1564,25 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '900',
   },
-  /* Health & Posture Assessment Banner */
+  /* Direct Posture & Joint Assessment Card */
   healthBannerCard: {
     backgroundColor: '#161B22',
     borderRadius: 20,
     padding: 16,
     marginBottom: 20,
     borderWidth: 1.5,
-    borderColor: 'rgba(226, 88, 34, 0.25)',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
   },
   healthBannerTop: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+    marginBottom: 14,
   },
   healthBannerIconWrap: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 38,
+    height: 38,
+    borderRadius: 12,
     backgroundColor: 'rgba(226, 88, 34, 0.15)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1527,75 +1590,90 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(226, 88, 34, 0.3)',
   },
   healthBannerTitle: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#F8FAFC',
-    letterSpacing: 0.1,
-  },
-  activeTherapyDotPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(16, 185, 129, 0.15)',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-    gap: 4,
-  },
-  greenPulseDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#10B981',
-  },
-  activeTherapyDotText: {
-    fontSize: 9.5,
-    fontWeight: '800',
-    color: '#10B981',
-    letterSpacing: 0.4,
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
   },
   healthBannerSubtitle: {
-    fontSize: 12,
+    fontSize: 11.5,
+    color: '#94A3B8',
+    marginTop: 2,
+    lineHeight: 16,
+  },
+  directQuestionsList: {
+    gap: 10,
+  },
+  directQuestionItem: {
+    backgroundColor: '#1E293B',
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  directQuestionTitle: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: '#F8FAFC',
+  },
+  directMedicalBadge: {
+    backgroundColor: 'rgba(226, 88, 34, 0.15)',
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: 4,
+  },
+  directMedicalBadgeText: {
+    fontSize: 9.5,
+    fontWeight: '700',
+    color: '#E25822',
+    textTransform: 'uppercase',
+  },
+  directQuestionText: {
+    fontSize: 11.5,
     color: '#94A3B8',
     marginTop: 3,
     lineHeight: 16,
   },
-  activeConditionsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginTop: 12,
+  directToggleRow: {
+    flexDirection: 'column',
+    gap: 5,
+    minWidth: 70,
   },
-  activeConditionTagPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(30, 41, 59, 0.8)',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
-    borderWidth: 1,
-    gap: 4,
-  },
-  activeConditionTagEmoji: {
-    fontSize: 12,
-  },
-  activeConditionTagTitle: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  healthCheckActionBtn: {
+  directBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#E25822',
-    paddingVertical: 10,
-    borderRadius: 12,
-    marginTop: 12,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    gap: 4,
   },
-  healthCheckActionText: {
-    fontSize: 12.5,
-    fontWeight: '800',
+  directBtnInactive: {
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+  },
+  directYesBtnActive: {
+    backgroundColor: '#E25822',
+  },
+  directNoBtnActive: {
+    backgroundColor: '#334155',
+  },
+  directBtnText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  directBtnTextActive: {
     color: '#FFFFFF',
-    letterSpacing: 0.2,
+    fontWeight: '800',
+  },
+  directNoTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '800',
   },
   /* Tailored Recommended Carousel */
   recommendedFlatListContent: {

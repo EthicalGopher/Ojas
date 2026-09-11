@@ -645,12 +645,11 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                       ]}
                     >
                       <View style={styles.healthConditionHeader}>
-                        <Text style={styles.healthConditionEmoji}>{cond.icon}</Text>
                         <View style={{ flex: 1 }}>
                           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                             <Text style={styles.healthConditionTitle}>{cond.title}</Text>
-                            <View style={[styles.medicalBadgeSmall, { backgroundColor: `${cond.badgeColor}25` }]}>
-                              <Text style={[styles.medicalBadgeSmallText, { color: cond.badgeColor }]}>
+                            <View style={[styles.medicalBadgeSmall, { backgroundColor: 'rgba(226, 88, 34, 0.15)' }]}>
+                              <Text style={[styles.medicalBadgeSmallText, { color: '#E25822' }]}>
                                 {cond.medicalTerm}
                               </Text>
                             </View>
@@ -668,7 +667,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                           disabled={!isEditing}
                           style={[
                             styles.healthToggleBtn,
-                            isSelected && [styles.healthYesActive, { backgroundColor: cond.badgeColor }],
+                            isSelected && [styles.healthYesActive, { backgroundColor: '#E25822' }],
                             !isEditing && !isSelected && styles.healthBtnDisabled,
                           ]}
                           onPress={() => {
@@ -689,7 +688,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                               isSelected && styles.healthToggleTextActive,
                             ]}
                           >
-                            Yes (Suffering)
+                            Yes
                           </Text>
                         </TouchableOpacity>
 
@@ -710,7 +709,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                         >
                           <X
                             size={14}
-                            color={!isSelected ? '#94A3B8' : '#475569'}
+                            color={!isSelected ? '#CBD5E1' : '#475569'}
                             strokeWidth={!isSelected ? 2.5 : 2}
                           />
                           <Text
@@ -719,7 +718,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                               !isSelected && styles.healthNoTextActive,
                             ]}
                           >
-                            No (None)
+                            No
                           </Text>
                         </TouchableOpacity>
                       </View>

@@ -128,14 +128,6 @@ export const HealthAssessmentModal: React.FC<HealthAssessmentModalProps> = ({
             </TouchableOpacity>
           </View>
 
-          {/* Info Banner */}
-          <View style={styles.infoBanner}>
-            <Sparkles size={16} color="#E25822" style={{ marginTop: 2, marginRight: 8 }} />
-            <Text style={styles.infoBannerText}>
-              Select whether you experience any of the conditions below (Tick ✓ for Yes, Cross ✗ for No). Our AI will prioritize therapeutic and corrective exercises.
-            </Text>
-          </View>
-
           {/* Questions List */}
           <ScrollView style={styles.scrollList} showsVerticalScrollIndicator={false}>
             {HEALTH_CONDITIONS.map((cond) => {
@@ -146,17 +138,16 @@ export const HealthAssessmentModal: React.FC<HealthAssessmentModalProps> = ({
                   key={cond.key}
                   style={[
                     styles.conditionCard,
-                    isSelected && { borderColor: cond.badgeColor, backgroundColor: 'rgba(30, 41, 59, 0.85)' },
+                    isSelected && { borderColor: '#E25822', backgroundColor: 'rgba(30, 41, 59, 0.85)' },
                   ]}
                 >
                   <View style={styles.conditionTopRow}>
                     <View style={styles.conditionTitleWrapper}>
-                      <Text style={styles.conditionEmoji}>{cond.icon}</Text>
                       <View style={{ flex: 1 }}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                           <Text style={styles.conditionTitle}>{cond.title}</Text>
-                          <View style={[styles.medicalBadge, { backgroundColor: `${cond.badgeColor}25` }]}>
-                            <Text style={[styles.medicalBadgeText, { color: cond.badgeColor }]}>
+                          <View style={[styles.medicalBadge, { backgroundColor: 'rgba(226, 88, 34, 0.15)' }]}>
+                            <Text style={[styles.medicalBadgeText, { color: '#E25822' }]}>
                               {cond.medicalTerm}
                             </Text>
                           </View>
@@ -174,12 +165,12 @@ export const HealthAssessmentModal: React.FC<HealthAssessmentModalProps> = ({
                       activeOpacity={0.8}
                       style={[
                         styles.toggleBtn,
-                        isSelected && [styles.yesBtnActive, { backgroundColor: cond.badgeColor }],
+                        isSelected && [styles.yesBtnActive, { backgroundColor: '#E25822' }],
                       ]}
                       onPress={() => handleToggleCondition(cond.key, true)}
                     >
                       <Check
-                        size={16}
+                        size={15}
                         color={isSelected ? '#FFFFFF' : '#64748B'}
                         strokeWidth={isSelected ? 3 : 2}
                       />
@@ -189,7 +180,7 @@ export const HealthAssessmentModal: React.FC<HealthAssessmentModalProps> = ({
                           isSelected && styles.toggleBtnTextActive,
                         ]}
                       >
-                        Yes (Experiencing)
+                        Yes
                       </Text>
                     </TouchableOpacity>
 
@@ -202,8 +193,8 @@ export const HealthAssessmentModal: React.FC<HealthAssessmentModalProps> = ({
                       onPress={() => handleToggleCondition(cond.key, false)}
                     >
                       <X
-                        size={16}
-                        color={!isSelected ? '#94A3B8' : '#475569'}
+                        size={15}
+                        color={!isSelected ? '#CBD5E1' : '#475569'}
                         strokeWidth={!isSelected ? 2.5 : 2}
                       />
                       <Text
@@ -212,7 +203,7 @@ export const HealthAssessmentModal: React.FC<HealthAssessmentModalProps> = ({
                           !isSelected && styles.noBtnTextActive,
                         ]}
                       >
-                        No (None)
+                        No
                       </Text>
                     </TouchableOpacity>
                   </View>
@@ -324,22 +315,6 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     backgroundColor: 'rgba(255, 255, 255, 0.06)',
   },
-  infoBanner: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    backgroundColor: 'rgba(226, 88, 34, 0.08)',
-    borderRadius: 12,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(226, 88, 34, 0.2)',
-    marginBottom: 14,
-  },
-  infoBannerText: {
-    fontSize: 12,
-    color: '#CBD5E1',
-    lineHeight: 17,
-    flex: 1,
-  },
   scrollList: {
     maxHeight: 440,
     marginBottom: 12,
@@ -360,11 +335,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
   },
-  conditionEmoji: {
-    fontSize: 24,
-  },
   conditionTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
     color: '#F8FAFC',
   },
