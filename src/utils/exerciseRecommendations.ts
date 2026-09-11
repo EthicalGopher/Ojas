@@ -102,7 +102,51 @@ export interface RecommendedExercise extends ExerciseItem {
 }
 
 /**
+ * Helper to get recommended exercises for a specific condition key based on cure_to column
+ */
+export function getRecommendedExercisesForCondition(
+  conditionKey: string,
+  allExercises: ExerciseItem[]
+): ExerciseItem[] {
+  if (!allExercises || allExercises.length === 0) return [];
+
+  const keyLower = conditionKey.toLowerCase();
+  const normalizedKey = keyLower.replace(/_/g, ' ');
+
+  // Primary: Match exercises where cure_to array contains the condition key or title
+  const matches = allExercises.filter((ex) => {
+    if (Array.isArray(ex.cure_to) && ex.cure_to.length > 0) {
+      return ex.cure_to.some((ct) => {
+        const ctLower = (ct || '').toLowerCase();
+        return (
+          ctLower === keyLower ||
+          ctLower.replace(/_/g, ' ') === normalizedKey ||
+          ctLower.includes(keyLower) ||
+          keyLower.includes(ctLower)
+        );
+      });
+    }
+    return false;
+  });
+
+  if (matches.length > 0) {
+    return matches;
+  }
+
+  // Fallback: Check static condition recommended names if cure_to is not populated
+  const condMeta = HEALTH_CONDITIONS.find((c) => c.key === conditionKey);
+  if (!condMeta) return [];
+
+  return allExercises.filter((ex) =>
+    condMeta.recommendedExerciseNames.some(
+      (name) => name.toLowerCase() === ex.name.toLowerCase()
+    )
+  );
+}
+
+/**
  * Computes personalized exercise recommendations based on user's active health/posture conditions.
+ * Uses the exercises table `cure_to` array as the primary source of truth.
  */
 export function getRecommendedExercises(
   allExercises: ExerciseItem[],
@@ -128,44 +172,58 @@ export function getRecommendedExercises(
 
   const hasAnyCondition = activeConditions.length > 0;
 
-  // Build recommendation scoring for each exercise
+  // Build recommendation scoring for each exercise based on cure_to
   const scoredList: RecommendedExercise[] = allExercises.map((ex) => {
     let score = 0;
     const conditionTags: { title: string; color: string; tag: string }[] = [];
     const reasonParts: string[] = [];
 
     activeConditions.forEach((cond) => {
-      const isCureToMatch = ex.cure_to?.some(
-        (ct) =>
-          ct.toLowerCase() === cond.key.toLowerCase() ||
-          ct.toLowerCase() === cond.title.toLowerCase() ||
-          ct.toLowerCase() === cond.medicalTerm.toLowerCase()
+      const keyLower = cond.key.toLowerCase();
+      const normalizedKey = keyLower.replace(/_/g, ' ');
+
+      // 1. Check cure_to array from exercises table
+      const matchesCureTo =
+        Array.isArray(ex.cure_to) &&
+        ex.cure_to.some((ct) => {
+          const ctLower = (ct || '').toLowerCase();
+          return (
+            ctLower === keyLower ||
+            ctLower.replace(/_/g, ' ') === normalizedKey ||
+            ctLower === cond.title.toLowerCase() ||
+            ctLower === cond.medicalTerm.toLowerCase() ||
+            ctLower.includes(keyLower) ||
+            keyLower.includes(ctLower)
+          );
+        });
+
+      // 2. Fallback check by name if cure_to wasn't set
+      const isStaticFallback = cond.recommendedExerciseNames.some(
+        (name) => name.toLowerCase() === ex.name.toLowerCase()
       );
-      const isRecommended =
-        isCureToMatch ||
-        cond.recommendedExerciseNames.some(
-          (name) => name.toLowerCase() === ex.name.toLowerCase()
-        );
+
+      const isRecommended = matchesCureTo || isStaticFallback;
       const isCautioned = cond.cautionExerciseNames?.some(
         (name) => name.toLowerCase() === ex.name.toLowerCase()
       );
 
       if (isRecommended) {
-        score += 10;
+        // Boost score higher if directly in cure_to array
+        score += matchesCureTo ? 20 : 10;
         conditionTags.push({
           title: cond.title,
           color: cond.badgeColor,
           tag: cond.benefitTag,
         });
-        reasonParts.push(`Recommended for ${cond.title}: ${cond.shortDesc}`);
+        reasonParts.push(`Cures ${cond.title}: ${cond.benefitTag}`);
       }
 
       if (isCautioned) {
-        score -= 5;
+        score -= 8;
       }
     });
 
-    // Default baseline scoring if user has no conditions
+    // Baseline scoring if user has no conditions
     if (!hasAnyCondition) {
       if (ex.category === 'strength') score += 5;
       if (ex.category === 'flexibility') score += 5;

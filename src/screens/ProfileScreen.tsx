@@ -44,7 +44,12 @@ import {
   uploadUserProfilePhoto,
   generateDefaultAvatar,
 } from '../utils/profileService';
-import { HEALTH_CONDITIONS, HealthConditionMeta } from '../utils/exerciseRecommendations';
+import {
+  HEALTH_CONDITIONS,
+  HealthConditionMeta,
+  getRecommendedExercisesForCondition,
+} from '../utils/exerciseRecommendations';
+import { DEFAULT_EXERCISES } from '../utils/exerciseService';
 import {
   fetchFriends,
   fetchIncomingRequests,
@@ -723,18 +728,29 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                         </TouchableOpacity>
                       </View>
 
-                      {isSelected && (
-                        <View style={styles.healthRecBox}>
-                          <Text style={styles.healthRecTitle}>Recommended AI Routine:</Text>
-                          <View style={styles.healthRecBadges}>
-                            {cond.recommendedExerciseNames.map((rec) => (
-                              <View key={rec} style={styles.healthRecBadge}>
-                                <Text style={styles.healthRecBadgeText}>{rec}</Text>
-                              </View>
-                            ))}
+                      {isSelected && (() => {
+                        const matchedExercises = getRecommendedExercisesForCondition(
+                          cond.key,
+                          DEFAULT_EXERCISES
+                        );
+                        const exerciseNames =
+                          matchedExercises.length > 0
+                            ? matchedExercises.map((e) => e.name)
+                            : cond.recommendedExerciseNames;
+
+                        return (
+                          <View style={styles.healthRecBox}>
+                            <Text style={styles.healthRecTitle}>Recommended AI Routine:</Text>
+                            <View style={styles.healthRecBadges}>
+                              {exerciseNames.map((rec) => (
+                                <View key={rec} style={styles.healthRecBadge}>
+                                  <Text style={styles.healthRecBadgeText}>{rec}</Text>
+                                </View>
+                              ))}
+                            </View>
                           </View>
-                        </View>
-                      )}
+                        );
+                      })()}
                     </View>
                   );
                 })}
