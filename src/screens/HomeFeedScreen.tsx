@@ -27,6 +27,7 @@ import {
   ShieldAlert,
   Smartphone,
   Sparkles,
+  Stethoscope,
   Swords,
   Trophy,
   UserPlus,
@@ -40,6 +41,12 @@ import { ExerciseIcon } from '../components/ExerciseIcon';
 import { useUserStore } from '../store/userStore';
 import { fetchFriends, FriendshipItem } from '../utils/friendService';
 import { DEFAULT_EXERCISES, ExerciseItem } from '../utils/exerciseService';
+import { HealthAssessmentModal } from '../components/HealthAssessmentModal';
+import {
+  getRecommendedExercises,
+  RecommendedExercise,
+  HEALTH_CONDITIONS,
+} from '../utils/exerciseRecommendations';
 
 export type { ExerciseItem };
 
@@ -76,6 +83,11 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
   const [friends, setFriends] = useState<FriendshipItem[]>([]);
   const [loadingFriends, setLoadingFriends] = useState<boolean>(false);
   const [selectedTutorial, setSelectedTutorial] = useState<TutorialModalData | null>(null);
+  const [showHealthModal, setShowHealthModal] = useState<boolean>(false);
+
+  const { recommendedList, activeConditions, hasAnyCondition } = useMemo(() => {
+    return getRecommendedExercises(exercises, profile);
+  }, [exercises, profile]);
 
   const activeExercise: ExerciseItem = featuredExercise || {
     id: '1',
@@ -305,6 +317,140 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
           </View>
         </View>
       </View>
+
+      {/* AI POSTURE & HEALTH ASSESSMENT CARD */}
+      <View style={styles.healthBannerCard}>
+        <View style={styles.healthBannerTop}>
+          <View style={styles.healthBannerIconWrap}>
+            <Stethoscope size={20} color="#E25822" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+              <Text style={styles.healthBannerTitle}>
+                {hasAnyCondition ? 'Posture & Therapy AI Active' : 'Personalize For Your Body'}
+              </Text>
+              {hasAnyCondition && (
+                <View style={styles.activeTherapyDotPill}>
+                  <View style={styles.greenPulseDot} />
+                  <Text style={styles.activeTherapyDotText}>CUSTOM</Text>
+                </View>
+              )}
+            </View>
+            <Text style={styles.healthBannerSubtitle}>
+              {hasAnyCondition
+                ? `${activeConditions.length} condition${activeConditions.length > 1 ? 's' : ''} targeted: ${activeConditions.map((c) => c.title).join(', ')}`
+                : 'Suffering from Knock Knees, Flat Feet, or Back Pain? Get AI tailored exercises.'}
+            </Text>
+          </View>
+        </View>
+
+        {hasAnyCondition && (
+          <View style={styles.activeConditionsRow}>
+            {activeConditions.map((cond) => (
+              <View key={cond.key} style={[styles.activeConditionTagPill, { borderColor: `${cond.badgeColor}50` }]}>
+                <Text style={styles.activeConditionTagEmoji}>{cond.icon}</Text>
+                <Text style={[styles.activeConditionTagTitle, { color: cond.badgeColor }]}>{cond.title}</Text>
+              </View>
+            ))}
+          </View>
+        )}
+
+        <TouchableOpacity
+          style={styles.healthCheckActionBtn}
+          activeOpacity={0.85}
+          onPress={() => setShowHealthModal(true)}
+        >
+          <Sparkles size={14} color="#FFFFFF" style={{ marginRight: 6 }} />
+          <Text style={styles.healthCheckActionText}>
+            {hasAnyCondition ? 'Edit Health & Posture Profile' : 'Take 30s Health Check'}
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* TAILORED FOR YOUR POSTURE / HEALTH RECOMMENDATIONS CAROUSEL */}
+      {hasAnyCondition && (
+        <>
+          <View style={styles.sectionHeaderRow}>
+            <View style={styles.headerLeftRow}>
+              <Sparkles size={16} color="#EC4899" style={{ marginRight: 6 }} />
+              <Text style={styles.sectionHeaderTitle}>TAILORED FOR YOUR BODY</Text>
+            </View>
+            <TouchableOpacity onPress={() => setShowHealthModal(true)}>
+              <Text style={[styles.sectionSubHint, { color: '#E25822', fontWeight: '700' }]}>Edit Conditions</Text>
+            </TouchableOpacity>
+          </View>
+
+          <FlatList
+            data={recommendedList.filter((r) => r.isCustomTailored)}
+            keyExtractor={(item) => `rec_${item.id}`}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.recommendedFlatListContent}
+            renderItem={({ item, index }) => {
+              const accentColor = item.conditionTags[0]?.color || '#EC4899';
+
+              return (
+                <View style={[styles.recExerciseCard, { borderColor: `${accentColor}40` }]}>
+                  {/* Top Badge: Condition Tag */}
+                  <View style={styles.recExerciseTopRow}>
+                    <View style={[styles.recConditionTagBadge, { backgroundColor: `${accentColor}25` }]}>
+                      <Text style={[styles.recConditionTagText, { color: accentColor }]}>
+                        {item.conditionTags[0]?.title || 'THERAPY'}
+                      </Text>
+                    </View>
+                    <View style={styles.recDifficultyBadge}>
+                      <Text style={styles.recDifficultyText}>{item.difficulty || 'All Levels'}</Text>
+                    </View>
+                  </View>
+
+                  {/* Visual & Exercise Name */}
+                  <View style={styles.recExerciseCenterRow}>
+                    <View style={styles.recExerciseIconWrap}>
+                      <ExerciseIcon imageUrl={item.image_url} icon={item.icon} size={44} fontSize={24} />
+                    </View>
+                    <View style={{ flex: 1, marginLeft: 10 }}>
+                      <Text style={styles.recExerciseTitle} numberOfLines={1}>
+                        {item.name}
+                      </Text>
+                      <Text style={styles.recExerciseBenefit} numberOfLines={2}>
+                        {item.conditionTags[0]?.tag || item.primaryReason}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Reason Pill */}
+                  <View style={styles.recReasonPill}>
+                    <Text style={styles.recReasonPillText} numberOfLines={2}>
+                      💡 {item.primaryReason}
+                    </Text>
+                  </View>
+
+                  {/* Actions: Start Solo or AI Tutor */}
+                  <View style={styles.recActionsRow}>
+                    <TouchableOpacity
+                      style={styles.recSoloBtn}
+                      activeOpacity={0.8}
+                      onPress={() => onOpenCamera(item.id, item.name, false)}
+                    >
+                      <Play size={11} color="#FFFFFF" fill="#FFFFFF" style={{ marginRight: 4 }} />
+                      <Text style={styles.recSoloBtnText}>Solo Workout</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.recTutorBtn}
+                      activeOpacity={0.8}
+                      onPress={() => onOpenCamera(item.id, item.name, true)}
+                    >
+                      <Bot size={11} color="#E25822" style={{ marginRight: 4 }} />
+                      <Text style={styles.recTutorBtnText}>AI Tutor</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              );
+            }}
+          />
+        </>
+      )}
 
       {/* 2. HERO HIGHLIGHT CHALLENGE CARD (Neon Lime Card) */}
       <TouchableOpacity
@@ -642,6 +788,12 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
           </View>
         </View>
       </Modal>
+
+      {/* HEALTH & POSTURE ASSESSMENT MODAL */}
+      <HealthAssessmentModal
+        visible={showHealthModal}
+        onClose={() => setShowHealthModal(false)}
+      />
     </ScrollView>
   );
 };
@@ -1349,5 +1501,211 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '900',
+  },
+  /* Health & Posture Assessment Banner */
+  healthBannerCard: {
+    backgroundColor: '#161B22',
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 20,
+    borderWidth: 1.5,
+    borderColor: 'rgba(226, 88, 34, 0.25)',
+  },
+  healthBannerTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  healthBannerIconWrap: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: 'rgba(226, 88, 34, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(226, 88, 34, 0.3)',
+  },
+  healthBannerTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#F8FAFC',
+    letterSpacing: 0.1,
+  },
+  activeTherapyDotPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    gap: 4,
+  },
+  greenPulseDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#10B981',
+  },
+  activeTherapyDotText: {
+    fontSize: 9.5,
+    fontWeight: '800',
+    color: '#10B981',
+    letterSpacing: 0.4,
+  },
+  healthBannerSubtitle: {
+    fontSize: 12,
+    color: '#94A3B8',
+    marginTop: 3,
+    lineHeight: 16,
+  },
+  activeConditionsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 12,
+  },
+  activeConditionTagPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(30, 41, 59, 0.8)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 4,
+  },
+  activeConditionTagEmoji: {
+    fontSize: 12,
+  },
+  activeConditionTagTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  healthCheckActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#E25822',
+    paddingVertical: 10,
+    borderRadius: 12,
+    marginTop: 12,
+  },
+  healthCheckActionText: {
+    fontSize: 12.5,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 0.2,
+  },
+  /* Tailored Recommended Carousel */
+  recommendedFlatListContent: {
+    paddingRight: 20,
+    gap: 12,
+    paddingBottom: 4,
+  },
+  recExerciseCard: {
+    width: 240,
+    backgroundColor: '#161B22',
+    borderRadius: 18,
+    padding: 14,
+    borderWidth: 1.5,
+    justifyContent: 'space-between',
+  },
+  recExerciseTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  recConditionTagBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  recConditionTagText: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
+  },
+  recDifficultyBadge: {
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 5,
+  },
+  recDifficultyText: {
+    fontSize: 10,
+    color: '#94A3B8',
+    fontWeight: '600',
+  },
+  recExerciseCenterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  recExerciseIconWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  recExerciseTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  recExerciseBenefit: {
+    fontSize: 11.5,
+    color: '#E25822',
+    fontWeight: '600',
+    marginTop: 1,
+  },
+  recReasonPill: {
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    borderRadius: 8,
+    padding: 8,
+    marginBottom: 10,
+  },
+  recReasonPillText: {
+    fontSize: 11,
+    color: '#CBD5E1',
+    lineHeight: 15,
+  },
+  recActionsRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  recSoloBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#E25822',
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  recSoloBtnText: {
+    fontSize: 11.5,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  recTutorBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(226, 88, 34, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(226, 88, 34, 0.35)',
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  recTutorBtnText: {
+    fontSize: 11.5,
+    fontWeight: '800',
+    color: '#E25822',
   },
 });

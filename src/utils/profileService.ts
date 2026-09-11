@@ -22,6 +22,13 @@ export interface UserProfile {
   is_admin?: boolean;
   daily_calories?: Record<string, DailyCalorieLog>; // e.g. { "2026-09-09": { date: "2026-09-09", calories: 45, reps: 120, matches: 4 } }
   total_calories?: number;
+  has_knock_knees?: boolean;
+  has_bow_legs?: boolean;
+  has_flat_feet?: boolean;
+  has_lower_back_pain?: boolean;
+  has_rounded_shoulders?: boolean;
+  health_conditions_completed?: boolean;
+  health_conditions?: Record<string, boolean>;
   created_at?: string;
   updated_at?: string;
 }
@@ -96,6 +103,13 @@ export async function getOrCreateUserProfile(user: any): Promise<UserProfile> {
         is_admin: data.admin === true || data.is_admin === true || userMeta.admin === true || userMeta.is_admin === true,
         daily_calories: data.daily_calories || userMeta.daily_calories || {},
         total_calories: data.total_calories !== undefined ? data.total_calories : (userMeta.total_calories || 0),
+        has_knock_knees: data.has_knock_knees ?? userMeta.has_knock_knees ?? false,
+        has_bow_legs: data.has_bow_legs ?? userMeta.has_bow_legs ?? false,
+        has_flat_feet: data.has_flat_feet ?? userMeta.has_flat_feet ?? false,
+        has_lower_back_pain: data.has_lower_back_pain ?? userMeta.has_lower_back_pain ?? false,
+        has_rounded_shoulders: data.has_rounded_shoulders ?? userMeta.has_rounded_shoulders ?? false,
+        health_conditions_completed: data.health_conditions_completed ?? userMeta.health_conditions_completed ?? false,
+        health_conditions: data.health_conditions || userMeta.health_conditions || {},
         avatar_config: data.avatar_config && Object.keys(data.avatar_config).length > 0 ? data.avatar_config : defaultAvatar,
         avatar_url: data.avatar_url || oauthAvatarUrl || null,
       };
@@ -115,6 +129,13 @@ export async function getOrCreateUserProfile(user: any): Promise<UserProfile> {
       is_admin: userMeta.admin === true || userMeta.is_admin === true,
       daily_calories: userMeta.daily_calories || {},
       total_calories: userMeta.total_calories || 0,
+      has_knock_knees: userMeta.has_knock_knees ?? false,
+      has_bow_legs: userMeta.has_bow_legs ?? false,
+      has_flat_feet: userMeta.has_flat_feet ?? false,
+      has_lower_back_pain: userMeta.has_lower_back_pain ?? false,
+      has_rounded_shoulders: userMeta.has_rounded_shoulders ?? false,
+      health_conditions_completed: userMeta.health_conditions_completed ?? false,
+      health_conditions: userMeta.health_conditions || {},
     };
 
     // Try inserting into Supabase profiles table

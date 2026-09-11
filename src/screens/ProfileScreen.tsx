@@ -44,6 +44,7 @@ import {
   uploadUserProfilePhoto,
   generateDefaultAvatar,
 } from '../utils/profileService';
+import { HEALTH_CONDITIONS, HealthConditionMeta } from '../utils/exerciseRecommendations';
 import {
   fetchFriends,
   fetchIncomingRequests,
@@ -86,6 +87,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const [fitnessGoal, setFitnessGoal] = useState<string>('Strength & Stamina');
   const [avatarConfig, setAvatarConfig] = useState<any>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [healthConditions, setHealthConditions] = useState<Record<string, boolean>>({});
   const [isGeneratingUsername, setIsGeneratingUsername] = useState<boolean>(false);
 
   // Friends State
@@ -108,6 +110,15 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
       setFitnessGoal(data.fitness_goal || 'Strength & Stamina');
       setAvatarConfig(data.avatar_config || generateDefaultAvatar(data.username || 'user'));
       setAvatarUrl(data.avatar_url || null);
+
+      const conditionsMap: Record<string, boolean> = {};
+      HEALTH_CONDITIONS.forEach((cond) => {
+        conditionsMap[cond.key] = Boolean(
+          (data as any)[cond.field] === true ||
+          (data.health_conditions && data.health_conditions[cond.key] === true)
+        );
+      });
+      setHealthConditions(conditionsMap);
     } catch (err) {
       console.error('Error loading profile:', err);
     }
@@ -249,6 +260,13 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
         fitness_goal: fitnessGoal,
         avatar_config: avatarConfig,
         avatar_url: avatarUrl,
+        has_knock_knees: healthConditions['knock_knees'] || false,
+        has_bow_legs: healthConditions['bow_legs'] || false,
+        has_flat_feet: healthConditions['flat_feet'] || false,
+        has_lower_back_pain: healthConditions['lower_back_pain'] || false,
+        has_rounded_shoulders: healthConditions['rounded_shoulders'] || false,
+        health_conditions_completed: true,
+        health_conditions: healthConditions,
       });
 
       if (result.success) {
@@ -593,6 +611,134 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                   placeholder="e.g. Strength, Calisthenics, Hypertrophy"
                   placeholderTextColor="#64748B"
                 />
+              </View>
+            </View>
+
+            {/* Health & Posture Conditions Section */}
+            <View style={styles.sectionCard}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                <Text style={styles.sectionHeader}>HEALTH & POSTURE CONDITIONS</Text>
+                {!isEditing && (
+                  <TouchableOpacity
+                    style={styles.quickEditHealthBtn}
+                    activeOpacity={0.7}
+                    onPress={() => setIsEditing(true)}
+                  >
+                    <Edit3 size={12} color="#E25822" style={{ marginRight: 4 }} />
+                    <Text style={styles.quickEditHealthText}>Edit</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+              <Text style={styles.healthSectionDesc}>
+                Tell the AI if you experience any of these conditions to tailor exercise routines and posture correction.
+              </Text>
+
+              <View style={{ marginTop: 10, gap: 10 }}>
+                {HEALTH_CONDITIONS.map((cond) => {
+                  const isSelected = healthConditions[cond.key] === true;
+                  return (
+                    <View
+                      key={cond.key}
+                      style={[
+                        styles.healthConditionItem,
+                        isSelected && { borderColor: cond.badgeColor, backgroundColor: 'rgba(30, 41, 59, 0.7)' },
+                      ]}
+                    >
+                      <View style={styles.healthConditionHeader}>
+                        <Text style={styles.healthConditionEmoji}>{cond.icon}</Text>
+                        <View style={{ flex: 1 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                            <Text style={styles.healthConditionTitle}>{cond.title}</Text>
+                            <View style={[styles.medicalBadgeSmall, { backgroundColor: `${cond.badgeColor}25` }]}>
+                              <Text style={[styles.medicalBadgeSmallText, { color: cond.badgeColor }]}>
+                                {cond.medicalTerm}
+                              </Text>
+                            </View>
+                          </View>
+                          <Text style={styles.healthConditionSubtitle}>{cond.shortDesc}</Text>
+                        </View>
+                      </View>
+
+                      <Text style={styles.healthConditionQuestion}>{cond.question}</Text>
+
+                      {/* Tick / Cross Selector Buttons */}
+                      <View style={styles.healthToggleRow}>
+                        <TouchableOpacity
+                          activeOpacity={0.8}
+                          disabled={!isEditing}
+                          style={[
+                            styles.healthToggleBtn,
+                            isSelected && [styles.healthYesActive, { backgroundColor: cond.badgeColor }],
+                            !isEditing && !isSelected && styles.healthBtnDisabled,
+                          ]}
+                          onPress={() => {
+                            setHealthConditions((prev) => ({
+                              ...prev,
+                              [cond.key]: true,
+                            }));
+                          }}
+                        >
+                          <Check
+                            size={14}
+                            color={isSelected ? '#FFFFFF' : '#64748B'}
+                            strokeWidth={isSelected ? 3 : 2}
+                          />
+                          <Text
+                            style={[
+                              styles.healthToggleText,
+                              isSelected && styles.healthToggleTextActive,
+                            ]}
+                          >
+                            Yes (Suffering)
+                          </Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          activeOpacity={0.8}
+                          disabled={!isEditing}
+                          style={[
+                            styles.healthToggleBtn,
+                            !isSelected && styles.healthNoActive,
+                            !isEditing && isSelected && styles.healthBtnDisabled,
+                          ]}
+                          onPress={() => {
+                            setHealthConditions((prev) => ({
+                              ...prev,
+                              [cond.key]: false,
+                            }));
+                          }}
+                        >
+                          <X
+                            size={14}
+                            color={!isSelected ? '#94A3B8' : '#475569'}
+                            strokeWidth={!isSelected ? 2.5 : 2}
+                          />
+                          <Text
+                            style={[
+                              styles.healthToggleText,
+                              !isSelected && styles.healthNoTextActive,
+                            ]}
+                          >
+                            No (None)
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+
+                      {isSelected && (
+                        <View style={styles.healthRecBox}>
+                          <Text style={styles.healthRecTitle}>Recommended AI Routine:</Text>
+                          <View style={styles.healthRecBadges}>
+                            {cond.recommendedExerciseNames.map((rec) => (
+                              <View key={rec} style={styles.healthRecBadge}>
+                                <Text style={styles.healthRecBadgeText}>{rec}</Text>
+                              </View>
+                            ))}
+                          </View>
+                        </View>
+                      )}
+                    </View>
+                  );
+                })}
               </View>
             </View>
 
@@ -1282,5 +1428,135 @@ const styles = StyleSheet.create({
     fontSize: 12,
     flex: 1,
     lineHeight: 18,
+  },
+  quickEditHealthBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(226, 88, 34, 0.15)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  quickEditHealthText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#E25822',
+  },
+  healthSectionDesc: {
+    fontSize: 12,
+    color: '#94A3B8',
+    lineHeight: 17,
+    marginBottom: 4,
+  },
+  healthConditionItem: {
+    backgroundColor: '#1E293B',
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+  },
+  healthConditionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  healthConditionEmoji: {
+    fontSize: 22,
+  },
+  healthConditionTitle: {
+    fontSize: 14.5,
+    fontWeight: '700',
+    color: '#F8FAFC',
+  },
+  medicalBadgeSmall: {
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: 4,
+  },
+  medicalBadgeSmallText: {
+    fontSize: 9.5,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
+  },
+  healthConditionSubtitle: {
+    fontSize: 11.5,
+    color: '#94A3B8',
+    marginTop: 1,
+  },
+  healthConditionQuestion: {
+    fontSize: 12.5,
+    color: '#E2E8F0',
+    marginVertical: 6,
+    lineHeight: 17,
+  },
+  healthToggleRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 4,
+  },
+  healthToggleBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    gap: 5,
+  },
+  healthYesActive: {
+    borderColor: 'transparent',
+  },
+  healthNoActive: {
+    backgroundColor: 'rgba(15, 23, 42, 0.8)',
+    borderColor: 'rgba(148, 163, 184, 0.3)',
+  },
+  healthBtnDisabled: {
+    opacity: 0.5,
+  },
+  healthToggleText: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  healthToggleTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  healthNoTextActive: {
+    color: '#CBD5E1',
+  },
+  healthRecBox: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  healthRecTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#E25822',
+    marginBottom: 4,
+    textTransform: 'uppercase',
+  },
+  healthRecBadges: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 5,
+  },
+  healthRecBadge: {
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 5,
+  },
+  healthRecBadgeText: {
+    fontSize: 10.5,
+    fontWeight: '600',
+    color: '#F8FAFC',
   },
 });
