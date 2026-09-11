@@ -69,6 +69,7 @@ export interface ExerciseItem {
   bgGradient?: string;
   image_url?: string;
   type?: string;
+  cure_to?: string[];
 }
 
 interface ExerciseDetailScreenProps {

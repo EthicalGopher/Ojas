@@ -15,6 +15,7 @@ export interface ExerciseItem {
   bg_theme?: string;
   image_url?: string;
   type?: string;
+  cure_to?: string[];
 }
 
 export const DEFAULT_EXERCISES: ExerciseItem[] = [
@@ -32,6 +33,7 @@ export const DEFAULT_EXERCISES: ExerciseItem[] = [
     difficulty: 'Intermediate',
     bg_theme: '#C8B6FF',
     type: 'Common exercises',
+    cure_to: ['knock_knees', 'bow_legs', 'flat_feet'],
   },
   {
     id: '3',
@@ -47,6 +49,7 @@ export const DEFAULT_EXERCISES: ExerciseItem[] = [
     difficulty: 'Beginner',
     bg_theme: '#A7F3D0',
     type: 'Yoga',
+    cure_to: ['bow_legs', 'lower_back_pain', 'rounded_shoulders'],
   },
   {
     id: '4',
@@ -62,6 +65,7 @@ export const DEFAULT_EXERCISES: ExerciseItem[] = [
     difficulty: 'Intermediate',
     bg_theme: '#FFD6E0',
     type: 'Common exercises',
+    cure_to: ['knock_knees', 'bow_legs', 'flat_feet'],
   },
   {
     id: '5',
@@ -77,6 +81,7 @@ export const DEFAULT_EXERCISES: ExerciseItem[] = [
     difficulty: 'Beginner',
     bg_theme: '#E8D5C4',
     type: 'Common exercises',
+    cure_to: ['bow_legs', 'lower_back_pain'],
   },
   {
     id: '2',
@@ -92,6 +97,7 @@ export const DEFAULT_EXERCISES: ExerciseItem[] = [
     difficulty: 'Intermediate',
     bg_theme: '#C8B6FF',
     type: 'Common exercises',
+    cure_to: ['lower_back_pain'],
   },
   {
     id: '6',
@@ -108,6 +114,7 @@ export const DEFAULT_EXERCISES: ExerciseItem[] = [
     bg_theme: '#A7F3D0',
     image_url: 'https://locsjrjekkyjbeapgreu.supabase.co/storage/v1/object/public/Images/Excercise/a-female-doing-yoga.svg',
     type: 'Yoga',
+    cure_to: ['bow_legs', 'flat_feet', 'lower_back_pain', 'rounded_shoulders'],
   },
   {
     id: '7',
@@ -124,6 +131,7 @@ export const DEFAULT_EXERCISES: ExerciseItem[] = [
     bg_theme: '#FFD6E0',
     image_url: 'https://locsjrjekkyjbeapgreu.supabase.co/storage/v1/object/public/Images/Excercise/a-guy-doing-pushups.svg',
     type: 'Common exercises',
+    cure_to: ['flat_feet', 'lower_back_pain', 'rounded_shoulders'],
   },
 ];
 
@@ -163,6 +171,7 @@ export async function fetchExercisesFromSupabase(): Promise<ExerciseItem[]> {
         bg_theme: row.bg_theme || row.bg_gradient || '#C8B6FF',
         image_url: row.image_url || undefined,
         type: row.type || (row.category === 'flexibility' ? 'Yoga' : 'Common exercises'),
+        cure_to: Array.isArray(row.cure_to) ? row.cure_to : [],
       }));
     }
 

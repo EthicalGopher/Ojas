@@ -135,9 +135,17 @@ export function getRecommendedExercises(
     const reasonParts: string[] = [];
 
     activeConditions.forEach((cond) => {
-      const isRecommended = cond.recommendedExerciseNames.some(
-        (name) => name.toLowerCase() === ex.name.toLowerCase()
+      const isCureToMatch = ex.cure_to?.some(
+        (ct) =>
+          ct.toLowerCase() === cond.key.toLowerCase() ||
+          ct.toLowerCase() === cond.title.toLowerCase() ||
+          ct.toLowerCase() === cond.medicalTerm.toLowerCase()
       );
+      const isRecommended =
+        isCureToMatch ||
+        cond.recommendedExerciseNames.some(
+          (name) => name.toLowerCase() === ex.name.toLowerCase()
+        );
       const isCautioned = cond.cautionExerciseNames?.some(
         (name) => name.toLowerCase() === ex.name.toLowerCase()
       );
