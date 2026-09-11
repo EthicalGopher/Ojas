@@ -28,7 +28,6 @@ import {
   Settings,
   ShieldAlert,
   Smartphone,
-  Sparkles,
   Stethoscope,
   Swords,
   Trophy,
@@ -478,10 +477,7 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
       {hasAnyCondition && (
         <>
           <View style={styles.recSectionHeader}>
-            <View style={styles.headerLeftRow}>
-              <Sparkles size={16} color="#E25822" style={{ marginRight: 6 }} />
-              <Text style={styles.sectionHeaderTitle}>RECOMMENDED FOR YOUR BODY</Text>
-            </View>
+            <Text style={styles.sectionHeaderTitle}>RECOMMENDED FOR YOUR BODY</Text>
             <Text style={styles.recSectionSubHint}>
               {activeConditions.map((c) => c.title).join(' • ')}
             </Text>
@@ -492,6 +488,7 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
             keyExtractor={(item) => `rec_${item.id}`}
             horizontal
             showsHorizontalScrollIndicator={false}
+            style={styles.recFlatList}
             contentContainerStyle={styles.recExercisesScrollContent}
             renderItem={({ item, index }) => {
               const defaultPalettes = ['#C8B6FF', '#FFD6E0', '#A7F3D0', '#E8D5C4', '#FDE68A'];
@@ -1789,20 +1786,23 @@ const styles = StyleSheet.create({
   /* Tailored Recommended Carousel - ExercisesScreen UI Style */
   recSectionHeader: {
     flexDirection: 'column',
-    marginBottom: 16,
-    marginTop: 6,
+    marginBottom: 14,
+    marginTop: 8,
   },
   recSectionSubHint: {
     fontSize: 12,
     fontWeight: '600',
     color: '#E25822',
-    marginTop: 5,
+    marginTop: 4,
     letterSpacing: 0.2,
+  },
+  recFlatList: {
+    marginBottom: 24,
   },
   recExercisesScrollContent: {
     paddingRight: 24,
     gap: 16,
-    paddingBottom: 10,
+    paddingBottom: 6,
     paddingTop: 2,
   },
   recWorkoutCard: {
