@@ -28,7 +28,6 @@ import {
   Settings,
   ShieldAlert,
   Smartphone,
-  Stethoscope,
   Swords,
   Trophy,
   UserPlus,
@@ -378,100 +377,37 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
         </View>
       </View>
 
-      {/* 1-BY-1 PROGRESSIVE POSTURE ASSESSMENT CARD */}
-      {!isSurveyCompleted ? (
-        (() => {
-          const currentCond = HEALTH_CONDITIONS[currentQuestionIndex];
-          if (!currentCond) return null;
+      {/* DIRECT QUESTION & YES/NO (NO BOX CONTAINER) */}
+      {!isSurveyCompleted && (() => {
+        const currentCond = HEALTH_CONDITIONS[currentQuestionIndex];
+        if (!currentCond) return null;
 
-          return (
-            <View style={styles.singleQuestionCard}>
-              {/* Header: Progress bar & Question number */}
-              <View style={styles.singleQuestionHeader}>
-                <View style={styles.singleProgressBarRow}>
-                  {HEALTH_CONDITIONS.map((_, i) => (
-                    <View
-                      key={i}
-                      style={[
-                        styles.singleProgressSegment,
-                        i <= currentQuestionIndex
-                          ? styles.singleProgressSegmentActive
-                          : styles.singleProgressSegmentInactive,
-                      ]}
-                    />
-                  ))}
-                </View>
+        return (
+          <View style={styles.directQuestionWrapper}>
+            <Text style={styles.directQuestionPrompt}>{currentCond.question}</Text>
 
-                <View style={styles.singleQuestionMetaRow}>
-                  <View style={styles.singleQuestionTagWrap}>
-                    <Stethoscope size={13} color="#E25822" style={{ marginRight: 5 }} />
-                    <Text style={styles.singleQuestionTagText}>
-                      QUESTION {currentQuestionIndex + 1} OF {HEALTH_CONDITIONS.length}
-                    </Text>
-                  </View>
-                  <View style={styles.singleMedicalBadge}>
-                    <Text style={styles.singleMedicalBadgeText}>{currentCond.medicalTerm}</Text>
-                  </View>
-                </View>
-              </View>
+            <View style={styles.directActionsRow}>
+              <TouchableOpacity
+                style={styles.directYesBtn}
+                activeOpacity={0.85}
+                onPress={() => handleAnswerQuestion(true)}
+              >
+                <Check size={18} color="#FFFFFF" strokeWidth={3} style={{ marginRight: 6 }} />
+                <Text style={styles.directYesBtnText}>Yes</Text>
+              </TouchableOpacity>
 
-              {/* Direct Question Content */}
-              <View style={styles.singleQuestionBody}>
-                <Text style={styles.singleQuestionTitle}>{currentCond.title}</Text>
-                <Text style={styles.singleQuestionPrompt}>{currentCond.question}</Text>
-              </View>
-
-              {/* Direct Yes / No Action Buttons */}
-              <View style={styles.singleActionsRow}>
-                <TouchableOpacity
-                  style={styles.singleYesBtn}
-                  activeOpacity={0.85}
-                  onPress={() => handleAnswerQuestion(true)}
-                >
-                  <Check size={16} color="#FFFFFF" strokeWidth={3} style={{ marginRight: 6 }} />
-                  <Text style={styles.singleYesBtnText}>Yes</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.singleNoBtn}
-                  activeOpacity={0.85}
-                  onPress={() => handleAnswerQuestion(false)}
-                >
-                  <X size={16} color="#CBD5E1" strokeWidth={2.5} style={{ marginRight: 6 }} />
-                  <Text style={styles.singleNoBtnText}>No</Text>
-                </TouchableOpacity>
-              </View>
+              <TouchableOpacity
+                style={styles.directNoBtn}
+                activeOpacity={0.85}
+                onPress={() => handleAnswerQuestion(false)}
+              >
+                <X size={18} color="#CBD5E1" strokeWidth={2.5} style={{ marginRight: 6 }} />
+                <Text style={styles.directNoBtnText}>No</Text>
+              </TouchableOpacity>
             </View>
-          );
-        })()
-      ) : (
-        <View style={styles.completedStatusCard}>
-          <View style={{ flex: 1 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-              <Text style={styles.completedStatusTitle}>POSTURE PROFILE ACTIVE</Text>
-              {hasAnyCondition && (
-                <View style={styles.activePillSmall}>
-                  <Text style={styles.activePillSmallText}>{activeConditions.length} TARGETED</Text>
-                </View>
-              )}
-            </View>
-            <Text style={styles.completedStatusDesc} numberOfLines={1}>
-              {hasAnyCondition
-                ? activeConditions.map((c) => c.title).join(' • ')
-                : 'No posture limitations detected. Full training active.'}
-            </Text>
           </View>
-
-          <TouchableOpacity
-            style={styles.retakeBtn}
-            activeOpacity={0.8}
-            onPress={handleRestartSurvey}
-          >
-            <RotateCcw size={12} color="#E25822" style={{ marginRight: 4 }} />
-            <Text style={styles.retakeBtnText}>Retake</Text>
-          </TouchableOpacity>
-        </View>
-      )}
+        );
+      })()}
 
       {/* TAILORED FOR YOUR POSTURE / HEALTH RECOMMENDATIONS CAROUSEL */}
       {hasAnyCondition && (
@@ -1628,160 +1564,52 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '900',
   },
-  /* 1-by-1 Single Question Card */
-  singleQuestionCard: {
-    backgroundColor: '#161B22',
-    borderRadius: 22,
-    padding: 20,
+  /* Direct Minimal Question (No Box Container) */
+  directQuestionWrapper: {
     marginBottom: 24,
-    borderWidth: 1.5,
-    borderColor: 'rgba(226, 88, 34, 0.35)',
+    marginTop: 6,
+    paddingHorizontal: 4,
   },
-  singleQuestionHeader: {
+  directQuestionPrompt: {
+    fontSize: 16.5,
+    color: '#F8FAFC',
+    lineHeight: 24,
+    fontWeight: '700',
     marginBottom: 16,
   },
-  singleProgressBarRow: {
-    flexDirection: 'row',
-    gap: 6,
-    marginBottom: 14,
-  },
-  singleProgressSegment: {
-    flex: 1,
-    height: 5,
-    borderRadius: 2.5,
-  },
-  singleProgressSegmentActive: {
-    backgroundColor: '#E25822',
-  },
-  singleProgressSegmentInactive: {
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-  },
-  singleQuestionMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  singleQuestionTagWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  singleQuestionTagText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#94A3B8',
-    letterSpacing: 0.5,
-  },
-  singleMedicalBadge: {
-    backgroundColor: 'rgba(226, 88, 34, 0.15)',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  singleMedicalBadgeText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#E25822',
-    textTransform: 'uppercase',
-  },
-  singleQuestionBody: {
-    marginBottom: 20,
-  },
-  singleQuestionTitle: {
-    fontSize: 17,
-    fontWeight: '900',
-    color: '#FFFFFF',
-    marginBottom: 6,
-    letterSpacing: -0.2,
-  },
-  singleQuestionPrompt: {
-    fontSize: 14,
-    color: '#CBD5E1',
-    lineHeight: 21,
-    fontWeight: '500',
-  },
-  singleActionsRow: {
+  directActionsRow: {
     flexDirection: 'row',
     gap: 12,
   },
-  singleYesBtn: {
+  directYesBtn: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#E25822',
-    paddingVertical: 13,
+    paddingVertical: 14,
     borderRadius: 14,
   },
-  singleYesBtnText: {
-    fontSize: 14,
+  directYesBtnText: {
+    fontSize: 15,
     fontWeight: '800',
     color: '#FFFFFF',
   },
-  singleNoBtn: {
+  directNoBtn: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#334155',
-    paddingVertical: 13,
+    backgroundColor: '#1E293B',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    paddingVertical: 14,
     borderRadius: 14,
   },
-  singleNoBtnText: {
-    fontSize: 14,
+  directNoBtnText: {
+    fontSize: 15,
     fontWeight: '800',
-    color: '#FFFFFF',
-  },
-  /* Completed Posture Status Card */
-  completedStatusCard: {
-    backgroundColor: '#161B22',
-    borderRadius: 18,
-    paddingVertical: 14,
-    paddingHorizontal: 18,
-    marginBottom: 24,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  completedStatusTitle: {
-    fontSize: 12,
-    fontWeight: '900',
-    color: '#FFFFFF',
-    letterSpacing: 0.5,
-  },
-  activePillSmall: {
-    backgroundColor: 'rgba(16, 185, 129, 0.15)',
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 5,
-  },
-  activePillSmallText: {
-    fontSize: 9.5,
-    fontWeight: '800',
-    color: '#10B981',
-    letterSpacing: 0.3,
-  },
-  completedStatusDesc: {
-    fontSize: 11.5,
-    color: '#94A3B8',
-    marginTop: 4,
-    lineHeight: 16,
-  },
-  retakeBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(226, 88, 34, 0.15)',
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(226, 88, 34, 0.3)',
-  },
-  retakeBtnText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#E25822',
+    color: '#E2E8F0',
   },
   /* Tailored Recommended Carousel - ExercisesScreen UI Style */
   recSectionHeader: {
