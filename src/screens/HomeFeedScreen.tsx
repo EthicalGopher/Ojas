@@ -1553,20 +1553,20 @@ const styles = StyleSheet.create({
   },
   /* Direct Minimal Question (No Box Container) */
   directQuestionWrapper: {
-    marginBottom: 24,
-    marginTop: 6,
-    paddingHorizontal: 4,
+    marginTop: 14,
+    marginBottom: 32,
+    paddingHorizontal: 2,
   },
   directQuestionPrompt: {
-    fontSize: 16.5,
+    fontSize: 16,
     color: '#F8FAFC',
-    lineHeight: 24,
+    lineHeight: 23,
     fontWeight: '700',
-    marginBottom: 16,
+    marginBottom: 18,
   },
   directActionsRow: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 14,
   },
   directYesBtn: {
     flex: 1,
@@ -1574,8 +1574,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#E25822',
-    paddingVertical: 14,
-    borderRadius: 14,
+    paddingVertical: 15,
+    borderRadius: 16,
   },
   directYesBtnText: {
     fontSize: 15,
@@ -1589,9 +1589,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: '#1E293B',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-    paddingVertical: 14,
-    borderRadius: 14,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+    paddingVertical: 15,
+    borderRadius: 16,
   },
   directNoBtnText: {
     fontSize: 15,
