@@ -129,46 +129,21 @@ export const DEFAULT_EXERCISES: ExerciseItem[] = [
 
 export async function fetchExercisesFromSupabase(): Promise<ExerciseItem[]> {
   try {
-    const { data, error } = await supabase
-      .from('exercises')
-      .select('*')
-      .eq('is_active', true)
-      .order('display_order', { ascending: true });
+    // Fast 1.5s timeout promise so offline/airplane mode never hangs
+    const fetchWithTimeout = Promise.race([
+      supabase
+        .from('exercises')
+        .select('*')
+        .eq('is_active', true)
+        .order('display_order', { ascending: true }),
+      new Promise<{ data: null; error: Error }>((_, reject) =>
+        setTimeout(() => reject(new Error('Network timeout - offline')), 1500)
+      ),
+    ]);
+
+    const { data, error } = await fetchWithTimeout;
 
     if (error) {
-      // If user session token expired or has clock skew, fallback to direct public REST API
-      const restRes = await fetch(
-        'https://locsjrjekkyjbeapgreu.supabase.co/rest/v1/exercises?is_active=eq.true&select=*&order=display_order.asc',
-        {
-          headers: {
-            apikey: 'sb_publishable_sHRSstl83vk7Yrurd4aWgA_ENJRFgBm',
-            Authorization: 'Bearer sb_publishable_sHRSstl83vk7Yrurd4aWgA_ENJRFgBm',
-          },
-        }
-      );
-      if (restRes.ok) {
-        const restData = await restRes.json();
-        if (Array.isArray(restData) && restData.length > 0) {
-          return restData.map((row: any) => ({
-            id: String(row.id),
-            name: row.name,
-            category: row.category as ExerciseItem['category'],
-            icon: row.icon || '🏋️',
-            description: row.description || '',
-            bgGradient: row.bg_gradient || row.bg_theme || '#C8B6FF',
-            isFavorite: true,
-            duration_mins: row.duration_mins || 30,
-            muscle_groups: row.muscle_groups || 'Glutes / Squats / Core',
-            reps_target: row.reps_target || 15,
-            difficulty: row.difficulty || 'Intermediate',
-            bg_theme: row.bg_theme || row.bg_gradient || '#C8B6FF',
-            image_url: row.image_url || undefined,
-            type: row.type || (row.category === 'flexibility' ? 'Yoga' : 'Common exercises'),
-          }));
-        }
-      }
-
-      console.warn('Could not fetch exercises from Supabase, using local defaults:', error.message);
       return DEFAULT_EXERCISES;
     }
 
@@ -193,7 +168,7 @@ export async function fetchExercisesFromSupabase(): Promise<ExerciseItem[]> {
 
     return DEFAULT_EXERCISES;
   } catch (err: any) {
-    console.warn('Error fetching exercises from Supabase:', err?.message || err);
+    // Return default exercises immediately when offline or timed out
     return DEFAULT_EXERCISES;
   }
 }

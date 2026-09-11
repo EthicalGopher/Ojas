@@ -12,5 +12,9 @@ local.properties
 *.hprof
 .cxx/
 
-# Bundle artifacts
+# Bundle artifacts & APKs
 *.jsbundle
+*.apk
+*.ap_
+*.aab
+

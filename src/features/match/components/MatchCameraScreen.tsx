@@ -765,7 +765,7 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
             ref={webViewRef}
             source={{
               html: htmlBundle,
-              baseUrl: 'https://cdn.jsdelivr.net',
+              baseUrl: 'http://127.0.0.1:8888',
             }}
             userAgent="MobilePoseApp/1.0"
             style={StyleSheet.absoluteFill}
@@ -842,7 +842,7 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
               ref={webViewRef}
               source={{
                 html: htmlBundle,
-                baseUrl: 'https://cdn.jsdelivr.net',
+                baseUrl: 'http://127.0.0.1:8888',
               }}
               userAgent="MobilePoseApp/1.0"
               style={StyleSheet.absoluteFill}

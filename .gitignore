@@ -1,3 +1,30 @@
+# Environment & Secrets
 .env
-node_modules
+.env.*
+!.env.example
+
+# Dependencies
+node_modules/
+
+# Expo & Metro
 .expo/
+.expo-shared/
+dist/
+web-build/
+
+# Android / iOS Builds & APKs
+*.apk
+*.ap_
+*.aab
+build_output/
+build/
+android/app/build/
+android/build/
+ios/build/
+
+# Logs & Cache
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.metro-health-check*
+

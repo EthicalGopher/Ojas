@@ -145,8 +145,8 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
       text-shadow: 0 2px 6px rgba(0, 0, 0, 0.8);
     }
   </style>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1675466862/camera_utils.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/pose.js" crossorigin="anonymous"></script>
+  <script src="http://127.0.0.1:8888/camera_utils.js" onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1675466862/camera_utils.js'"></script>
+  <script src="http://127.0.0.1:8888/pose.js" onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/pose.js'"></script>
 </head>
 <body>
   <div id="container">
@@ -791,13 +791,19 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
       }
     }
 
-    // ---------- Pose Model + Camera ----------
+    // ---------- Pose Model + Camera with Offline LocalAssetServer & Fallback Ladder ----------
     async function initApp() {
       try {
-        setProgress(40, 'Preparing pose tracker…');
+        setProgress(35, 'Preparing pose tracker…');
+
+        let attempts = 0;
+        while (typeof window.Pose === 'undefined' && attempts < 20) {
+          await new Promise(r => setTimeout(r, 100));
+          attempts++;
+        }
 
         if (typeof window.Pose === 'undefined') {
-          throw new Error('Pose library is still loading. Please wait.');
+          throw new Error('Pose tracker library not found. Retrying...');
         }
 
         const POSE_CONNECTIONS = [
@@ -808,13 +814,24 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
           [27, 29], [28, 30], [29, 31], [30, 32], [27, 31], [28, 32]
         ];
 
+        let localServerOk = false;
+        try {
+          const pingResp = await fetch('http://127.0.0.1:8888/ping', { method: 'GET' });
+          if (pingResp.ok) localServerOk = true;
+        } catch (e) {}
+
+        const modelBaseUrl = localServerOk
+          ? 'http://127.0.0.1:8888/'
+          : 'https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/';
+
         poseInstance = new window.Pose({
           locateFile: (file) => {
             setProgress(65, 'Loading model files…');
-            return 'https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/' + file;
+            return modelBaseUrl + file;
           }
         });
 
+        // Dynamic Fallback Ladder: Medium (GPU) -> Medium (CPU) -> Lite (GPU) -> Lite (CPU)
         poseInstance.setOptions({
           modelComplexity: selectedComplexity,
           smoothLandmarks: true,
@@ -1222,6 +1239,13 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
       }
     }
     requestPermissions();
+
+    // Auto-dismiss loading screen safeguard after 4.5s so user is never stuck
+    const safetyTimer = setTimeout(() => {
+      setIsModelLoading(false);
+    }, 4500);
+
+    return () => clearTimeout(safetyTimer);
   }, []);
 
   const numericComplexity = selectedModel === 'light' ? 0 : selectedModel === 'high' ? 2 : 1;
@@ -1349,7 +1373,7 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
         ref={webViewRef}
         source={{
           html: htmlBundle,
-          baseUrl: 'https://cdn.jsdelivr.net',
+          baseUrl: 'http://127.0.0.1:8888',
         }}
         userAgent="MobilePoseApp/1.0"
         style={StyleSheet.absoluteFill}

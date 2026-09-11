@@ -49,6 +49,8 @@ class MainApplication : Application(), ReactApplication {
     }
     loadReactNative(this)
     ApplicationLifecycleDispatcher.onApplicationCreate(this)
+    // Start local embedded asset server for offline MediaPipe execution
+    LocalAssetServer.start(this)
   }
 
   override fun onConfigurationChanged(newConfig: Configuration) {
