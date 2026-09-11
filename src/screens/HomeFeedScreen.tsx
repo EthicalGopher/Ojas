@@ -432,8 +432,8 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
               const isDarkCard = cardBg === '#354394' || cardBg === '#E25822';
               const textColor = isDarkCard ? '#FFFFFF' : '#11141A';
               const subTextColor = isDarkCard ? '#E2E8F0' : '#374151';
-              const targetTag = item.conditionTags[0]?.title || 'THERAPY';
               const benefitText = item.conditionTags[0]?.tag || item.primaryReason;
+              const duration = item.duration_mins || 15;
 
               return (
                 <TouchableOpacity
@@ -442,13 +442,14 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
                   activeOpacity={0.9}
                   onPress={() => onExerciseSelect(item)}
                 >
-                  {/* Top Row: Title & White Target Badge */}
+                  {/* Top Row: Title & Duration Badge */}
                   <View style={styles.recCardTopRow}>
                     <Text style={[styles.recCardTitle, { color: textColor }]} numberOfLines={1}>
                       {item.name}
                     </Text>
-                    <View style={styles.recTargetBadge}>
-                      <Text style={styles.recTargetBadgeText}>{targetTag.toUpperCase()}</Text>
+                    <View style={styles.recDurationBadge}>
+                      <Text style={styles.recDurationBadgeNumber}>{duration}</Text>
+                      <Text style={styles.recDurationBadgeUnit}>Mins</Text>
                     </View>
                   </View>
 
@@ -468,19 +469,17 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
 
                       <View style={styles.recLevelPill}>
                         <Text style={[styles.recLevelPillText, { color: subTextColor }]} numberOfLines={1}>
-                          {item.difficulty || 'All Levels'} • {item.duration_mins || 20}m
+                          {item.difficulty || 'All Levels'} • {item.type || 'Therapy'}
                         </Text>
                       </View>
                     </View>
                   </View>
 
-                  {/* Bottom Strip: Clinical reason snippet + Play actions */}
+                  {/* Bottom Strip: Description & Play actions */}
                   <View style={styles.recCardBottomRow}>
-                    <View style={[styles.recAiTagPill, isDarkCard && { backgroundColor: 'rgba(255, 255, 255, 0.18)' }]}>
-                      <Text style={[styles.recAiTagText, { color: textColor }]} numberOfLines={1}>
-                        {item.primaryReason}
-                      </Text>
-                    </View>
+                    <Text style={[styles.recBottomSubText, { color: subTextColor }]} numberOfLines={1}>
+                      {item.description || 'Live Pose & Rep Tracking'}
+                    </Text>
 
                     <View style={styles.recPlayButtonsRow}>
                       <TouchableOpacity
@@ -1657,24 +1656,30 @@ const styles = StyleSheet.create({
     marginRight: 8,
     lineHeight: 21,
   },
-  recTargetBadge: {
+  recDurationBadge: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
+    borderRadius: 14,
     paddingHorizontal: 10,
-    paddingVertical: 4.5,
+    paddingVertical: 4,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.08,
     shadowRadius: 3,
     elevation: 2,
   },
-  recTargetBadgeText: {
+  recDurationBadgeNumber: {
     color: '#11141A',
-    fontSize: 10,
+    fontSize: 12.5,
     fontWeight: '900',
-    letterSpacing: 0.3,
+    lineHeight: 14,
+  },
+  recDurationBadgeUnit: {
+    color: '#4B5563',
+    fontSize: 8.5,
+    fontWeight: '700',
+    textTransform: 'uppercase',
   },
   recCardBodyRow: {
     flexDirection: 'row',
@@ -1737,17 +1742,11 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: 'rgba(17, 20, 26, 0.08)',
   },
-  recAiTagPill: {
+  recBottomSubText: {
     flex: 1,
-    backgroundColor: 'rgba(17, 20, 26, 0.06)',
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 4.5,
-    marginRight: 10,
-  },
-  recAiTagText: {
-    fontSize: 10,
-    fontWeight: '700',
+    fontSize: 11,
+    fontWeight: '600',
+    marginRight: 8,
   },
   recPlayButtonsRow: {
     flexDirection: 'row',
