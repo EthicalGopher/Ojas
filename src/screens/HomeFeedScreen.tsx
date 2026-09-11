@@ -477,12 +477,12 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
       {/* TAILORED FOR YOUR POSTURE / HEALTH RECOMMENDATIONS CAROUSEL */}
       {hasAnyCondition && (
         <>
-          <View style={styles.sectionHeaderRow}>
+          <View style={styles.recSectionHeader}>
             <View style={styles.headerLeftRow}>
               <Sparkles size={16} color="#E25822" style={{ marginRight: 6 }} />
               <Text style={styles.sectionHeaderTitle}>RECOMMENDED FOR YOUR BODY</Text>
             </View>
-            <Text style={styles.sectionSubHint}>
+            <Text style={styles.recSectionSubHint}>
               {activeConditions.map((c) => c.title).join(' • ')}
             </Text>
           </View>
@@ -492,67 +492,89 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
             keyExtractor={(item) => `rec_${item.id}`}
             horizontal
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.recommendedFlatListContent}
+            contentContainerStyle={styles.recExercisesScrollContent}
             renderItem={({ item, index }) => {
-              const accentColor = '#E25822';
+              const defaultPalettes = ['#C8B6FF', '#FFD6E0', '#A7F3D0', '#E8D5C4', '#FDE68A'];
+              const cardBg = item.bg_theme || defaultPalettes[index % defaultPalettes.length];
+              const isDarkCard = cardBg === '#354394' || cardBg === '#E25822';
+              const textColor = isDarkCard ? '#FFFFFF' : '#11141A';
+              const subTextColor = isDarkCard ? '#E2E8F0' : '#374151';
+              const targetTag = item.conditionTags[0]?.title || 'THERAPY';
+              const benefitText = item.conditionTags[0]?.tag || item.primaryReason;
 
               return (
-                <View style={[styles.recExerciseCard, { borderColor: `${accentColor}40` }]}>
-                  {/* Top Badge: Condition Tag */}
-                  <View style={styles.recExerciseTopRow}>
-                    <View style={[styles.recConditionTagBadge, { backgroundColor: `${accentColor}25` }]}>
-                      <Text style={[styles.recConditionTagText, { color: accentColor }]}>
-                        {item.conditionTags[0]?.title || 'RECOMMENDED'}
-                      </Text>
-                    </View>
-                    <View style={styles.recDifficultyBadge}>
-                      <Text style={styles.recDifficultyText}>{item.difficulty || 'All Levels'}</Text>
-                    </View>
-                  </View>
-
-                  {/* Visual & Exercise Name */}
-                  <View style={styles.recExerciseCenterRow}>
-                    <View style={styles.recExerciseIconWrap}>
-                      <ExerciseIcon imageUrl={item.image_url} icon={item.icon} size={44} fontSize={24} />
-                    </View>
-                    <View style={{ flex: 1, marginLeft: 10 }}>
-                      <Text style={styles.recExerciseTitle} numberOfLines={1}>
-                        {item.name}
-                      </Text>
-                      <Text style={styles.recExerciseBenefit} numberOfLines={2}>
-                        {item.conditionTags[0]?.tag || item.primaryReason}
-                      </Text>
-                    </View>
-                  </View>
-
-                  {/* Reason Box */}
-                  <View style={styles.recReasonPill}>
-                    <Text style={styles.recReasonPillText} numberOfLines={2}>
-                      {item.primaryReason}
+                <TouchableOpacity
+                  key={item.id}
+                  style={[styles.recWorkoutCard, { backgroundColor: cardBg }]}
+                  activeOpacity={0.9}
+                  onPress={() => onExerciseSelect(item)}
+                >
+                  {/* Top Row: Title & White Target Badge */}
+                  <View style={styles.recCardTopRow}>
+                    <Text style={[styles.recCardTitle, { color: textColor }]} numberOfLines={1}>
+                      {item.name}
                     </Text>
+                    <View style={styles.recTargetBadge}>
+                      <Text style={styles.recTargetBadgeText}>{targetTag.toUpperCase()}</Text>
+                    </View>
                   </View>
 
-                  {/* Actions: Start Solo or AI Tutor */}
-                  <View style={styles.recActionsRow}>
-                    <TouchableOpacity
-                      style={styles.recSoloBtn}
-                      activeOpacity={0.8}
-                      onPress={() => onOpenCamera(item.id, item.name, false)}
-                    >
-                      <Play size={11} color="#FFFFFF" fill="#FFFFFF" style={{ marginRight: 4 }} />
-                      <Text style={styles.recSoloBtnText}>Solo</Text>
-                    </TouchableOpacity>
+                  {/* Center Body: Visual Circle + Tags */}
+                  <View style={styles.recCardBodyRow}>
+                    <View style={styles.recAthleteVisualCircle}>
+                      <ExerciseIcon imageUrl={item.image_url} icon={item.icon} size={50} fontSize={28} />
+                    </View>
 
-                    <TouchableOpacity
-                      style={styles.recTutorBtn}
-                      activeOpacity={0.8}
-                      onPress={() => onOpenCamera(item.id, item.name, true)}
-                    >
-                      <Bot size={11} color="#E25822" style={{ marginRight: 4 }} />
-                      <Text style={styles.recTutorBtnText}>AI Tutor</Text>
-                    </TouchableOpacity>
+                    <View style={styles.recCardTagsWrapper}>
+                      <View style={styles.recTagPill}>
+                        <View style={styles.recDarkDot} />
+                        <Text style={[styles.recTagPillText, { color: textColor }]} numberOfLines={1}>
+                          {benefitText}
+                        </Text>
+                      </View>
+
+                      <View style={styles.recLevelPill}>
+                        <Text style={[styles.recLevelPillText, { color: subTextColor }]} numberOfLines={1}>
+                          {item.difficulty || 'All Levels'} • {item.duration_mins || 20}m
+                        </Text>
+                      </View>
+                    </View>
                   </View>
-                </View>
+
+                  {/* Bottom Strip: Clinical reason snippet + Play actions */}
+                  <View style={styles.recCardBottomRow}>
+                    <View style={[styles.recAiTagPill, isDarkCard && { backgroundColor: 'rgba(255, 255, 255, 0.18)' }]}>
+                      <Text style={[styles.recAiTagText, { color: textColor }]} numberOfLines={1}>
+                        {item.primaryReason}
+                      </Text>
+                    </View>
+
+                    <View style={styles.recPlayButtonsRow}>
+                      <TouchableOpacity
+                        style={styles.recSoloActionCircle}
+                        activeOpacity={0.8}
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          onOpenCamera(item.id, item.name, false);
+                        }}
+                      >
+                        <Play size={11} color="#FFFFFF" fill="#FFFFFF" />
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={styles.recTutorActionPill}
+                        activeOpacity={0.8}
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          onOpenCamera(item.id, item.name, true);
+                        }}
+                      >
+                        <Bot size={11} color="#11141A" style={{ marginRight: 3 }} />
+                        <Text style={styles.recTutorActionText}>Tutor</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </TouchableOpacity>
               );
             }}
           />
@@ -1762,115 +1784,167 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#E25822',
   },
-  /* Tailored Recommended Carousel */
-  recommendedFlatListContent: {
+  /* Tailored Recommended Carousel - ExercisesScreen UI Style */
+  recSectionHeader: {
+    flexDirection: 'column',
+    marginBottom: 12,
+    marginTop: 8,
+  },
+  recSectionSubHint: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#E25822',
+    marginTop: 4,
+  },
+  recExercisesScrollContent: {
     paddingRight: 20,
-    gap: 12,
-    paddingBottom: 4,
+    gap: 14,
+    paddingBottom: 6,
   },
-  recExerciseCard: {
-    width: 240,
-    backgroundColor: '#161B22',
-    borderRadius: 18,
-    padding: 14,
-    borderWidth: 1.5,
+  recWorkoutCard: {
+    width: 250,
+    borderRadius: 24,
+    padding: 16,
     justifyContent: 'space-between',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 3,
   },
-  recExerciseTopRow: {
+  recCardTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  recCardTitle: {
+    fontSize: 16,
+    fontWeight: '900',
+    flex: 1,
+    marginRight: 8,
+  },
+  recTargetBadge: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  recTargetBadgeText: {
+    color: '#11141A',
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 0.3,
+  },
+  recCardBodyRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 10,
+    marginBottom: 12,
   },
-  recConditionTagBadge: {
+  recAthleteVisualCircle: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    backgroundColor: 'transparent',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  recCardTagsWrapper: {
+    flex: 1,
+    marginLeft: 10,
+    gap: 5,
+  },
+  recTagPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(17, 20, 26, 0.08)',
+    borderRadius: 12,
     paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: 6,
+    alignSelf: 'flex-start',
   },
-  recConditionTagText: {
-    fontSize: 10,
+  recDarkDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#11141A',
+    marginRight: 5,
+  },
+  recTagPillText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+  },
+  recLevelPill: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    alignSelf: 'flex-start',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+  },
+  recLevelPillText: {
+    fontSize: 10.5,
     fontWeight: '800',
-    letterSpacing: 0.3,
-    textTransform: 'uppercase',
   },
-  recDifficultyBadge: {
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 5,
-  },
-  recDifficultyText: {
-    fontSize: 10,
-    color: '#94A3B8',
-    fontWeight: '600',
-  },
-  recExerciseCenterRow: {
+  recCardBottomRow: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(17, 20, 26, 0.08)',
   },
-  recExerciseIconWrap: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  recExerciseTitle: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#FFFFFF',
-  },
-  recExerciseBenefit: {
-    fontSize: 11.5,
-    color: '#E25822',
-    fontWeight: '600',
-    marginTop: 1,
-  },
-  recReasonPill: {
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+  recAiTagPill: {
+    flex: 1,
+    backgroundColor: 'rgba(17, 20, 26, 0.06)',
     borderRadius: 8,
-    padding: 8,
-    marginBottom: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    marginRight: 8,
   },
-  recReasonPillText: {
-    fontSize: 11,
-    color: '#CBD5E1',
-    lineHeight: 15,
+  recAiTagText: {
+    fontSize: 10,
+    fontWeight: '700',
   },
-  recActionsRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  recSoloBtn: {
-    flex: 1,
+  recPlayButtonsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#E25822',
-    paddingVertical: 8,
-    borderRadius: 10,
+    gap: 6,
   },
-  recSoloBtnText: {
-    fontSize: 11.5,
-    fontWeight: '800',
-    color: '#FFFFFF',
-  },
-  recTutorBtn: {
-    flex: 1,
-    flexDirection: 'row',
+  recSoloActionCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#11141A',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(226, 88, 34, 0.15)',
-    borderWidth: 1,
-    borderColor: 'rgba(226, 88, 34, 0.35)',
-    paddingVertical: 8,
-    borderRadius: 10,
   },
-  recTutorBtnText: {
-    fontSize: 11.5,
-    fontWeight: '800',
-    color: '#E25822',
+  recTutorActionPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  recTutorActionText: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#11141A',
   },
 });
