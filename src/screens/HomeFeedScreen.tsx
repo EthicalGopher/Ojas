@@ -475,36 +475,24 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
                     </View>
                   </View>
 
-                  {/* Bottom Strip: Description & Play actions */}
+                  {/* Bottom Strip: Description & Play button */}
                   <View style={styles.recCardBottomRow}>
-                    <Text style={[styles.recBottomSubText, { color: subTextColor }]} numberOfLines={1}>
-                      {item.description || 'Live Pose & Rep Tracking'}
-                    </Text>
-
-                    <View style={styles.recPlayButtonsRow}>
-                      <TouchableOpacity
-                        style={styles.recSoloActionCircle}
-                        activeOpacity={0.8}
-                        onPress={(e) => {
-                          e.stopPropagation();
-                          onOpenCamera(item.id, item.name, false);
-                        }}
-                      >
-                        <Play size={11} color="#FFFFFF" fill="#FFFFFF" />
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={styles.recTutorActionPill}
-                        activeOpacity={0.8}
-                        onPress={(e) => {
-                          e.stopPropagation();
-                          onOpenCamera(item.id, item.name, true);
-                        }}
-                      >
-                        <Bot size={11} color="#11141A" style={{ marginRight: 3 }} />
-                        <Text style={styles.recTutorActionText}>Tutor</Text>
-                      </TouchableOpacity>
+                    <View style={styles.recAiTagPill}>
+                      <Text style={[styles.recAiTagText, { color: subTextColor }]} numberOfLines={1}>
+                        {item.description || 'Live Pose & Rep Tracking'}
+                      </Text>
                     </View>
+
+                    <TouchableOpacity
+                      style={styles.recPlayArrowCircle}
+                      activeOpacity={0.8}
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        onOpenCamera(item.id, item.name, false);
+                      }}
+                    >
+                      <Play size={12} color="#FFFFFF" fill="#FFFFFF" />
+                    </TouchableOpacity>
                   </View>
                 </TouchableOpacity>
               );
@@ -1738,45 +1726,26 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: 12,
+    paddingTop: 10,
     borderTopWidth: 1,
     borderTopColor: 'rgba(17, 20, 26, 0.08)',
   },
-  recBottomSubText: {
+  recAiTagPill: {
     flex: 1,
-    fontSize: 11,
-    fontWeight: '600',
-    marginRight: 8,
-  },
-  recPlayButtonsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    marginRight: 10,
   },
-  recSoloActionCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+  recAiTagText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  recPlayArrowCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     backgroundColor: '#11141A',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  recTutorActionPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 10,
-    paddingVertical: 6.5,
-    borderRadius: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  recTutorActionText: {
-    fontSize: 10,
-    fontWeight: '900',
-    color: '#11141A',
   },
 });
