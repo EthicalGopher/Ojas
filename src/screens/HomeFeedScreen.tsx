@@ -44,10 +44,10 @@ import { DEFAULT_EXERCISES, ExerciseItem } from '../utils/exerciseService';
 import { updateUserProfile, UserProfile } from '../utils/profileService';
 import { HealthAssessmentModal } from '../components/HealthAssessmentModal';
 import {
-  getRecommendedExercises,
-  RecommendedExercise,
   HEALTH_CONDITIONS,
 } from '../utils/exerciseRecommendations';
+import { DailyChallengesSection } from '../components/DailyChallengesSection';
+import { useDailyChallengeStore } from '../store/dailyChallengeStore';
 
 export type { ExerciseItem };
 
@@ -144,9 +144,6 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
     setIsSurveyCompleted(false);
   };
 
-  const { recommendedList, activeConditions, hasAnyCondition } = useMemo(() => {
-    return getRecommendedExercises(exercises, profile);
-  }, [exercises, profile]);
 
   const activeExercise: ExerciseItem = featuredExercise || {
     id: '1',
@@ -197,8 +194,15 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
   const [selectedDateString, setSelectedDateString] = useState<string>(todayDateString);
   const selectedDayItem = currentWeekDays.find((d) => d.dateString === selectedDateString) || currentWeekDays.find((d) => d.isToday) || currentWeekDays[0];
 
-  // Daily calories from Supabase profile table
+  // Live exercise progress & calories for today
+  const exerciseProgressToday = useDailyChallengeStore((state) => state.exerciseProgressToday);
+  const liveCaloriesToday = useMemo(() => {
+    return useDailyChallengeStore.getState().getTodayTotalCalories();
+  }, [exerciseProgressToday]);
+
+  // Daily calories from Supabase profile table merged with real-time live session stats
   const dailyCaloriesMap = profile?.daily_calories || {};
+  const isSelectedDateToday = selectedDateString === todayDateString;
   const selectedDayLog = dailyCaloriesMap[selectedDateString] || {
     date: selectedDateString,
     calories: 0,
@@ -206,10 +210,12 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
     matches: 0,
   };
 
-  const dayCaloriesBurned = selectedDayLog.calories || 0;
+  const dayCaloriesBurned = isSelectedDateToday
+    ? Math.max(selectedDayLog.calories || 0, liveCaloriesToday)
+    : (selectedDayLog.calories || 0);
   const dayRepsCompleted = selectedDayLog.reps || 0;
   const dayMatchesPlayed = selectedDayLog.matches || 0;
-  const totalCaloriesAllTime = profile?.total_calories || 0;
+  const totalCaloriesAllTime = (profile?.total_calories || 0) + (isSelectedDateToday ? Math.max(0, liveCaloriesToday - (selectedDayLog.calories || 0)) : 0);
 
   const loadFriendsList = useCallback(async () => {
     if (!user?.id) return;
@@ -377,6 +383,15 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
         </View>
       </View>
 
+      {/* DAILY EXERCISE & ILLNESS THERAPY CHALLENGES AT TOP */}
+      <DailyChallengesSection
+        exercises={exercises}
+        profile={profile}
+        selectedDateString={selectedDateString}
+        onOpenCamera={onOpenCamera}
+        onExerciseSelect={onExerciseSelect}
+      />
+
       {/* DIRECT QUESTION & YES/NO (NO BOX CONTAINER) */}
       {!isSurveyCompleted && (() => {
         const currentCond = HEALTH_CONDITIONS[currentQuestionIndex];
@@ -409,97 +424,7 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
         );
       })()}
 
-      {/* TAILORED FOR YOUR POSTURE / HEALTH RECOMMENDATIONS CAROUSEL */}
-      {hasAnyCondition && (
-        <>
-          <View style={styles.recSectionHeader}>
-            <Text style={styles.sectionHeaderTitle}>RECOMMENDED FOR YOUR BODY</Text>
-            <Text style={styles.recSectionSubHint}>
-              {activeConditions.map((c) => c.title).join(' • ')}
-            </Text>
-          </View>
 
-          <FlatList
-            data={recommendedList.filter((r) => r.isCustomTailored)}
-            keyExtractor={(item) => `rec_${item.id}`}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={styles.recFlatList}
-            contentContainerStyle={styles.recExercisesScrollContent}
-            renderItem={({ item, index }) => {
-              const defaultPalettes = ['#C8B6FF', '#FFD6E0', '#A7F3D0', '#E8D5C4', '#FDE68A'];
-              const cardBg = item.bg_theme || defaultPalettes[index % defaultPalettes.length];
-              const isDarkCard = cardBg === '#354394' || cardBg === '#E25822';
-              const textColor = isDarkCard ? '#FFFFFF' : '#11141A';
-              const subTextColor = isDarkCard ? '#E2E8F0' : '#374151';
-              const benefitText = item.conditionTags[0]?.tag || item.primaryReason;
-              const duration = item.duration_mins || 15;
-
-              return (
-                <TouchableOpacity
-                  key={item.id}
-                  style={[styles.recWorkoutCard, { backgroundColor: cardBg }]}
-                  activeOpacity={0.9}
-                  onPress={() => onExerciseSelect(item)}
-                >
-                  {/* Top Row: Title & Duration Badge */}
-                  <View style={styles.recCardTopRow}>
-                    <Text style={[styles.recCardTitle, { color: textColor }]} numberOfLines={1}>
-                      {item.name}
-                    </Text>
-                    <View style={styles.recDurationBadge}>
-                      <Text style={styles.recDurationBadgeNumber}>{duration}</Text>
-                      <Text style={styles.recDurationBadgeUnit}>Mins</Text>
-                    </View>
-                  </View>
-
-                  {/* Center Body: Visual Circle + Tags */}
-                  <View style={styles.recCardBodyRow}>
-                    <View style={styles.recAthleteVisualCircle}>
-                      <ExerciseIcon imageUrl={item.image_url} icon={item.icon} size={50} fontSize={28} />
-                    </View>
-
-                    <View style={styles.recCardTagsWrapper}>
-                      <View style={styles.recTagPill}>
-                        <View style={styles.recDarkDot} />
-                        <Text style={[styles.recTagPillText, { color: textColor }]} numberOfLines={1}>
-                          {benefitText}
-                        </Text>
-                      </View>
-
-                      <View style={styles.recLevelPill}>
-                        <Text style={[styles.recLevelPillText, { color: subTextColor }]} numberOfLines={1}>
-                          {item.difficulty || 'All Levels'} • {item.type || 'Therapy'}
-                        </Text>
-                      </View>
-                    </View>
-                  </View>
-
-                  {/* Bottom Strip: Description & Play button */}
-                  <View style={styles.recCardBottomRow}>
-                    <View style={styles.recAiTagPill}>
-                      <Text style={[styles.recAiTagText, { color: subTextColor }]} numberOfLines={1}>
-                        {item.description || 'Live Pose & Rep Tracking'}
-                      </Text>
-                    </View>
-
-                    <TouchableOpacity
-                      style={styles.recPlayArrowCircle}
-                      activeOpacity={0.8}
-                      onPress={(e) => {
-                        e.stopPropagation();
-                        onOpenCamera(item.id, item.name, false);
-                      }}
-                    >
-                      <Play size={12} color="#FFFFFF" fill="#FFFFFF" />
-                    </TouchableOpacity>
-                  </View>
-                </TouchableOpacity>
-              );
-            }}
-          />
-        </>
-      )}
 
       {/* 2. HERO HIGHLIGHT CHALLENGE CARD (Neon Lime Card) */}
       <TouchableOpacity

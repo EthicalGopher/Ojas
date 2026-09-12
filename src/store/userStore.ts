@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { supabase } from '../utils/supabase';
 import { UserProfile, getOrCreateUserProfile } from '../utils/profileService';
+import { useDailyChallengeStore } from './dailyChallengeStore';
 
 export type MainTab = 'home' | 'explore' | 'workouts' | 'social' | 'profile';
 
@@ -64,7 +65,12 @@ export const useUserStore = create<UserState>((set, get) => ({
       set({ profile: null });
     }
   },
-  setProfile: (profile) => set({ profile }),
+  setProfile: (profile) => {
+    set({ profile });
+    if (profile?.daily_challenges) {
+      useDailyChallengeStore.getState().hydrateFromProfile(profile.daily_challenges);
+    }
+  },
   setActiveTab: (activeTab) => set({ activeTab }),
   setSelectedExerciseId: (selectedExerciseId) => set({ selectedExerciseId }),
   setIsGuest: (isGuest) => set({ isGuest }),
@@ -75,6 +81,9 @@ export const useUserStore = create<UserState>((set, get) => ({
     try {
       const profileData = await getOrCreateUserProfile(user);
       set({ profile: profileData });
+      if (profileData?.daily_challenges) {
+        useDailyChallengeStore.getState().hydrateFromProfile(profileData.daily_challenges);
+      }
       return profileData;
     } catch (e) {
       return null;

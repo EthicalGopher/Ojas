@@ -28,6 +28,10 @@ import {
   Sparkles,
 } from 'lucide-react-native';
 import { LoadingScreen } from '../../../screens/LoadingScreen';
+import { useDailyChallengeStore } from '../../../store/dailyChallengeStore';
+import { useUserStore } from '../../../store/userStore';
+import { recordDailyChallengeProgress, recordCaloriesToProfile } from '../../../utils/profileService';
+import { calculateExerciseCalories } from '../../../utils/calorieService';
 
 export type ModelComplexity = 'light' | 'medium' | 'high';
 
@@ -878,19 +882,55 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
       }
     }
 
+    // ---------- Dynamic Script Loading Helper ----------
+    async function ensurePoseScriptLoaded() {
+      if (typeof window.Pose !== 'undefined') return true;
+
+      function loadScript(src) {
+        return new Promise((resolve) => {
+          const s = document.createElement('script');
+          s.src = src;
+          s.async = true;
+          s.onload = () => resolve(true);
+          s.onerror = () => resolve(false);
+          document.head.appendChild(s);
+        });
+      }
+
+      // Initial check for 2.5s (in case local server or preloaded script finishes)
+      for (let i = 0; i < 25; i++) {
+        if (typeof window.Pose !== 'undefined') return true;
+        await new Promise(r => setTimeout(r, 100));
+      }
+
+      // Fallback CDNs
+      const cdnUrls = [
+        'https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/pose.js',
+        'https://unpkg.com/@mediapipe/pose@0.5.1675469404/pose.js'
+      ];
+
+      for (const url of cdnUrls) {
+        if (typeof window.Pose !== 'undefined') return true;
+        setProgress(45, 'Connecting AI engine…');
+        await loadScript(url);
+        // Give time for script to execute
+        for (let j = 0; j < 30; j++) {
+          if (typeof window.Pose !== 'undefined') return true;
+          await new Promise(r => setTimeout(r, 100));
+        }
+      }
+
+      return typeof window.Pose !== 'undefined';
+    }
+
     // ---------- Pose Model + Camera with Offline LocalAssetServer & Fallback Ladder ----------
     async function initApp() {
       try {
         setProgress(35, 'Preparing pose tracker…');
 
-        let attempts = 0;
-        while (typeof window.Pose === 'undefined' && attempts < 20) {
-          await new Promise(r => setTimeout(r, 100));
-          attempts++;
-        }
-
-        if (typeof window.Pose === 'undefined') {
-          throw new Error('Pose tracker library not found. Retrying...');
+        const isLoaded = await ensurePoseScriptLoaded();
+        if (!isLoaded || typeof window.Pose === 'undefined') {
+          throw new Error('Pose tracker library not found. Please check connection and retry.');
         }
 
         const POSE_CONNECTIONS = [
@@ -1237,6 +1277,8 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
 
   const lastSpokenTimeRef = useRef<number>(0);
   const lastSpokenPhraseRef = useRef<string>('');
+  const prevSessionRepsRef = useRef<number>(0);
+  const prevSessionHoldRef = useRef<number>(0);
   const webViewRef = useRef<WebView>(null);
   const repScaleAnim = useRef(new Animated.Value(1)).current;
 
@@ -1360,17 +1402,53 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
       } else if (data.type === 'POSE_VISIBILITY' && typeof data.visibility === 'number') {
         setVisibility(data.visibility);
       } else if (data.type === 'POSE_HOLD_TIME' && typeof data.holdSeconds === 'number') {
-        setHoldSeconds(data.holdSeconds);
+        const holdSecs = data.holdSeconds;
+        const deltaHold = Math.max(0, holdSecs - prevSessionHoldRef.current);
+        prevSessionHoldRef.current = holdSecs;
+        setHoldSeconds(holdSecs);
+
+        if (deltaHold > 0) {
+          useDailyChallengeStore.getState().addExerciseDelta(
+            exerciseId || '1',
+            exerciseName || 'Squats',
+            0,
+            deltaHold
+          );
+        }
       } else if (data.type === 'POSE_HINT' && typeof data.hint === 'string') {
         setCurrentTutorHint(data.hint);
         speakTutorFeedback(data.hint);
       } else if (data.type === 'SQUAT_REP' && typeof data.repCount === 'number') {
         const newReps = data.repCount;
+        const deltaReps = Math.max(0, newReps - prevSessionRepsRef.current);
+        prevSessionRepsRef.current = newReps;
         setRepCount(newReps);
+
         if (typeof data.holdSeconds === 'number') {
-          setHoldSeconds(data.holdSeconds);
+          const holdSecs = data.holdSeconds;
+          const deltaHold = Math.max(0, holdSecs - prevSessionHoldRef.current);
+          prevSessionHoldRef.current = holdSecs;
+          setHoldSeconds(holdSecs);
+          if (deltaHold > 0) {
+            useDailyChallengeStore.getState().addExerciseDelta(
+              exerciseId || '1',
+              exerciseName || 'Squats',
+              0,
+              deltaHold
+            );
+          }
         }
         triggerRepBump();
+
+        // Automatically accumulate AI pose tracking reps into daily challenge store across all modes
+        if (deltaReps > 0) {
+          useDailyChallengeStore.getState().addExerciseDelta(
+            exerciseId || '1',
+            exerciseName || 'Squats',
+            deltaReps,
+            0
+          );
+        }
 
         // AI Tutor: Count every rep out loud and provide unique motivational phrases
         if (isAiTutor && newReps > 0) {
@@ -1436,6 +1514,8 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
   const handleRestartSession = () => {
     setRepCount(0);
     setHoldSeconds(0);
+    prevSessionRepsRef.current = 0;
+    prevSessionHoldRef.current = 0;
     if (webViewRef.current) {
       webViewRef.current.injectJavaScript('window.resetSessionScore && window.resetSessionScore(); true;');
     }
@@ -1446,6 +1526,36 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
       Speech.stop();
       await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
     } catch (e) {}
+
+    // Persist full cumulative daily challenge progress across all sessions to Supabase
+    const currentUserId = useUserStore.getState().user?.id;
+    if (currentUserId && exerciseId) {
+      const cumulativeStats = useDailyChallengeStore.getState().getExerciseStats(
+        exerciseId,
+        exerciseName || 'Squats'
+      );
+      if (cumulativeStats.reps > 0 || cumulativeStats.holdSeconds > 0) {
+        recordDailyChallengeProgress(
+          currentUserId,
+          exerciseId,
+          cumulativeStats.reps,
+          cumulativeStats.holdSeconds
+        ).catch(() => {});
+      }
+
+      // Record burned calories to profiles (daily_calories & total_calories)
+      const sessionCalories = calculateExerciseCalories(
+        exerciseId || exerciseName,
+        repCount,
+        holdSeconds
+      );
+      if (sessionCalories > 0 || repCount > 0) {
+        recordCaloriesToProfile(currentUserId, sessionCalories, repCount, undefined, false).then(() => {
+          useUserStore.getState().refreshProfile();
+        }).catch(() => {});
+      }
+    }
+
     onClose();
   };
 

@@ -29,6 +29,7 @@ export interface UserProfile {
   has_rounded_shoulders?: boolean;
   health_conditions_completed?: boolean;
   health_conditions?: Record<string, boolean>;
+  daily_challenges?: Record<string, { completedIds: string[]; progress: Record<string, { reps: number; holdSeconds: number }> }>;
   created_at?: string;
   updated_at?: string;
 }
@@ -110,6 +111,7 @@ export async function getOrCreateUserProfile(user: any): Promise<UserProfile> {
         has_rounded_shoulders: data.has_rounded_shoulders ?? userMeta.has_rounded_shoulders ?? false,
         health_conditions_completed: data.health_conditions_completed ?? userMeta.health_conditions_completed ?? false,
         health_conditions: data.health_conditions || userMeta.health_conditions || {},
+        daily_challenges: data.daily_challenges || userMeta.daily_challenges || {},
         avatar_config: data.avatar_config && Object.keys(data.avatar_config).length > 0 ? data.avatar_config : defaultAvatar,
         avatar_url: data.avatar_url || oauthAvatarUrl || null,
       };
@@ -136,6 +138,7 @@ export async function getOrCreateUserProfile(user: any): Promise<UserProfile> {
       has_rounded_shoulders: userMeta.has_rounded_shoulders ?? false,
       health_conditions_completed: userMeta.health_conditions_completed ?? false,
       health_conditions: userMeta.health_conditions || {},
+      daily_challenges: userMeta.daily_challenges || {},
     };
 
     // Try inserting into Supabase profiles table
@@ -298,7 +301,8 @@ export async function recordCaloriesToProfile(
   userId: string,
   calories: number,
   reps: number = 0,
-  dateStr?: string
+  dateStr?: string,
+  isMatch: boolean = true
 ): Promise<{ success: boolean; dailyStats?: Record<string, DailyCalorieLog>; error?: string }> {
   if (!userId || userId === 'guest') return { success: false, error: 'Guest or invalid user' };
 
@@ -328,7 +332,7 @@ export async function recordCaloriesToProfile(
       date: today,
       calories: Math.round(((existingToday.calories || 0) + calories) * 10) / 10,
       reps: (existingToday.reps || 0) + reps,
-      matches: (existingToday.matches || 0) + 1,
+      matches: isMatch ? (existingToday.matches || 0) + 1 : (existingToday.matches || 0),
     };
 
     currentDailyMap[today] = updatedToday;
@@ -347,5 +351,60 @@ export async function recordCaloriesToProfile(
   } catch (e: any) {
     console.warn('[ProfileService] Failed to record calories to profile:', e);
     return { success: false, error: e?.message || 'Error recording calories' };
+  }
+}
+
+/**
+ * Persist daily challenge completion and real-time exercise progress into public.profiles table.
+ */
+export async function recordDailyChallengeProgress(
+  userId: string,
+  exerciseId: string,
+  reps: number,
+  holdSeconds: number = 0,
+  dateStr?: string
+): Promise<{ success: boolean; error?: string }> {
+  if (!userId || userId === 'guest') return { success: false, error: 'Guest or invalid user' };
+
+  try {
+    const today = dateStr || new Date().toISOString().split('T')[0];
+
+    const { data: profileData } = await supabase
+      .from('profiles')
+      .select('daily_challenges')
+      .eq('id', userId)
+      .maybeSingle();
+
+    const existingDailyChallenges: Record<string, any> =
+      (profileData?.daily_challenges && typeof profileData.daily_challenges === 'object')
+        ? { ...profileData.daily_challenges }
+        : {};
+
+    const todayEntry = existingDailyChallenges[today] || {
+      completedIds: [],
+      progress: {},
+    };
+
+    const exKey = String(exerciseId);
+    const existingProgress = todayEntry.progress?.[exKey] || { reps: 0, holdSeconds: 0 };
+
+    todayEntry.progress = {
+      ...(todayEntry.progress || {}),
+      [exKey]: {
+        reps: Math.max(existingProgress.reps || 0, reps || 0),
+        holdSeconds: Math.max(existingProgress.holdSeconds || 0, holdSeconds || 0),
+      },
+    };
+
+    existingDailyChallenges[today] = todayEntry;
+
+    await updateUserProfile(userId, {
+      daily_challenges: existingDailyChallenges,
+    });
+
+    return { success: true };
+  } catch (e: any) {
+    console.warn('[ProfileService] Failed to record daily challenge progress:', e);
+    return { success: false, error: e?.message || 'Error saving daily challenge' };
   }
 }

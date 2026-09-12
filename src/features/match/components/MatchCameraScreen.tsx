@@ -43,9 +43,11 @@ import {
 } from '../../../utils/matchmaking';
 import { getPoseHtmlBundle } from '../../camera/components/CameraScreen';
 import { recordExerciseMatchResult } from '../../../utils/rankingService';
-import { recordCaloriesToProfile } from '../../../utils/profileService';
+import { recordCaloriesToProfile, recordDailyChallengeProgress } from '../../../utils/profileService';
+import { calculateExerciseCalories } from '../../../utils/calorieService';
 import { useUserStore } from '../../../store/userStore';
 import { useMatchmakingStore } from '../../../store/matchmakingStore';
+import { useDailyChallengeStore } from '../../../store/dailyChallengeStore';
 import { sendFriendRequest } from '../../../utils/friendService';
 import { sendCustomBattleInvite } from '../../../utils/customBattleService';
 import { LoadingScreen } from '../../../screens/LoadingScreen';
@@ -204,25 +206,11 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
 
   const notifSlideAnim = useRef(new Animated.Value(-120)).current;
   const notifOpacityAnim = useRef(new Animated.Value(0)).current;
+  const prevMatchHoldRef = useRef<number>(0);
 
-  // Calorie calculation helper based on exercise and reps
-  const calculateCalories = useCallback((exId?: string, reps: number = 0) => {
-    switch (exId) {
-      case '7': // Push-ups
-        return Math.round(reps * 0.45 * 10) / 10;
-      case '2': // Sit-ups
-      case '5': // Crunches
-        return Math.round(reps * 0.30 * 10) / 10;
-      case '4': // Lunges
-        return Math.round(reps * 0.38 * 10) / 10;
-      case '3': // Triangle Pose
-      case '6': // Cobra Pose
-      case '8': // Child's Pose
-        return Math.round(reps * 0.40 * 10) / 10;
-      case '1': // Squats
-      default:
-        return Math.round(reps * 0.35 * 10) / 10;
-    }
+  // Calorie calculation helper based on exercise, reps, and hold duration
+  const calculateCalories = useCallback((exId?: string, reps: number = 0, holdSecs: number = 0) => {
+    return calculateExerciseCalories(exId, reps, holdSecs);
   }, []);
 
   const getExerciseDisplayName = useCallback((exId?: string) => {
@@ -595,16 +583,40 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
           sendMatchMessage({ type: 'frame', data: data.frame });
         }
 
+        if (data.type === 'POSE_HOLD_TIME' && typeof data.holdSeconds === 'number') {
+          const holdSecs = data.holdSeconds;
+          const deltaHold = Math.max(0, holdSecs - prevMatchHoldRef.current);
+          prevMatchHoldRef.current = holdSecs;
+          if (deltaHold > 0) {
+            const exName = getExerciseDisplayName(exerciseId);
+            useDailyChallengeStore.getState().addExerciseDelta(
+              exerciseId || '1',
+              exName,
+              0,
+              deltaHold
+            );
+          }
+        }
+
         if (matchPhaseRef.current === 'active_match' && !matchEndedRef.current && data.type === 'SQUAT_REP') {
           setSelfScore((current) => {
             const nextScore = current + 1;
             sendMatchMessage({ type: 'score', score: nextScore });
             return nextScore;
           });
+
+          // Automatically count match reps into daily challenge store
+          const exName = getExerciseDisplayName(exerciseId);
+          useDailyChallengeStore.getState().addExerciseDelta(
+            exerciseId || '1',
+            exName,
+            1,
+            0
+          );
         }
       } catch (e) {}
     },
-    [mode]
+    [mode, exerciseId, getExerciseDisplayName]
   );
 
   // Widget Actions Handlers
@@ -655,6 +667,20 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
                 await refreshProfile();
               }
 
+              // Persist cumulative daily challenges
+              if (user?.id && exerciseId) {
+                const exName = getExerciseDisplayName(exerciseId);
+                const cumulativeStats = useDailyChallengeStore.getState().getExerciseStats(exerciseId, exName);
+                if (cumulativeStats.reps > 0 || cumulativeStats.holdSeconds > 0) {
+                  recordDailyChallengeProgress(
+                    user.id,
+                    exerciseId,
+                    cumulativeStats.reps,
+                    cumulativeStats.holdSeconds
+                  ).catch(() => {});
+                }
+              }
+
               try {
                 await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
               } catch (e) {}
@@ -664,6 +690,20 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
         ]
       );
       return;
+    }
+
+    // Persist cumulative daily challenges
+    if (user?.id && exerciseId) {
+      const exName = getExerciseDisplayName(exerciseId);
+      const cumulativeStats = useDailyChallengeStore.getState().getExerciseStats(exerciseId, exName);
+      if (cumulativeStats.reps > 0 || cumulativeStats.holdSeconds > 0) {
+        recordDailyChallengeProgress(
+          user.id,
+          exerciseId,
+          cumulativeStats.reps,
+          cumulativeStats.holdSeconds
+        ).catch(() => {});
+      }
     }
 
     // Setup / Camera adjustment mode or match already ended: Leave without penalty
@@ -681,6 +721,7 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
     setTimeLeft(120);
     setSetupCount(30);
     setMatchEnded(false);
+    prevMatchHoldRef.current = 0;
     matchEndedRef.current = false;
     recordedResultRef.current = false;
     setupPositionAnim.setValue(0);

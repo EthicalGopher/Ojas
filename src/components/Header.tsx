@@ -83,20 +83,12 @@ export const Header: React.FC<HeaderProps> = ({
     </TouchableOpacity>
   );
 
-  const totalCalories = profile?.total_calories || 0;
-
   const defaultRightAction = isGuest ? (
     <View style={[styles.onlinePillBadge, { backgroundColor: 'rgba(100, 116, 139, 0.2)', borderColor: 'rgba(148, 163, 184, 0.25)' }]}>
       <Text style={[styles.onlineCountText, { color: '#94A3B8', fontSize: 11 }]}>Guest</Text>
     </View>
   ) : (
     <View style={styles.headerRightGroup}>
-      {totalCalories > 0 && (
-        <View style={styles.caloriePillBadge}>
-          <Flame size={12} color="#FF6B35" />
-          <Text style={styles.caloriePillText}>{totalCalories} kcal</Text>
-        </View>
-      )}
       <View style={styles.onlinePillBadge}>
         <Text style={styles.onlineCountText}>{displayOnlineCount}</Text>
       </View>
@@ -194,21 +186,5 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-  },
-  caloriePillBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 107, 53, 0.12)',
-    borderRadius: 20,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 107, 53, 0.3)',
-    gap: 5,
-  },
-  caloriePillText: {
-    color: '#FF6B35',
-    fontSize: 11,
-    fontWeight: '900',
   },
 });
