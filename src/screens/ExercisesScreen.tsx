@@ -9,7 +9,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { ChevronRight, Dumbbell, Flame, Play, Sparkles, Swords, Zap } from 'lucide-react-native';
+import { ChevronRight, Dumbbell, Flame, Play, Swords, Zap } from 'lucide-react-native';
 import { Header } from '../components/Header';
 import { ExerciseIcon } from '../components/ExerciseIcon';
 import {

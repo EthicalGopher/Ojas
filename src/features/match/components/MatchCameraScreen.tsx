@@ -27,7 +27,6 @@ import {
   RefreshCw,
   RotateCcw,
   Smartphone,
-  Sparkles,
   SwitchCamera,
   Swords,
   Trophy,

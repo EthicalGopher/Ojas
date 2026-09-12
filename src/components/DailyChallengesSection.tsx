@@ -11,7 +11,6 @@ import {
   Check,
   Flame,
   Play,
-  Sparkles,
   Target,
 } from 'lucide-react-native';
 import { ExerciseIcon } from './ExerciseIcon';

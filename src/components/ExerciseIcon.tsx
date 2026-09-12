@@ -24,6 +24,10 @@ export interface ExerciseIconProps {
 // In-memory cache for remote SVG text to prevent redundant re-fetching
 const svgCache: Record<string, string> = {};
 
+const LOCAL_FALLBACKS: Record<string, any> = {
+  child_pose: require('../../assets/VectorImages/child_pose.png'),
+};
+
 export const ExerciseIcon: React.FC<ExerciseIconProps> = ({
   imageUrl,
   icon = '🏋️',
@@ -33,16 +37,22 @@ export const ExerciseIcon: React.FC<ExerciseIconProps> = ({
   imageStyle,
   textStyle,
 }) => {
+  let targetUrl = imageUrl?.trim() || '';
+  if (targetUrl.includes('child_pose.png') || targetUrl.includes('child-pose.png')) {
+    targetUrl = 'https://locsjrjekkyjbeapgreu.supabase.co/storage/v1/object/public/Images/Excercise/a-guy-doing-child_pose.svg';
+  }
+
+  const cleanUrl = targetUrl;
+  const isSvg = !!cleanUrl && (cleanUrl.toLowerCase().includes('.svg') || cleanUrl.toLowerCase().includes('svg+xml'));
+  const isChildLocal = cleanUrl.includes('child') && !isSvg;
+
   const [svgContent, setSvgContent] = useState<string | null>(() => {
-    if (imageUrl && (imageUrl.includes('.svg') || imageUrl.includes('svg+xml')) && svgCache[imageUrl]) {
-      return svgCache[imageUrl];
+    if (cleanUrl && isSvg && svgCache[cleanUrl]) {
+      return svgCache[cleanUrl];
     }
     return null;
   });
   const [loadError, setLoadError] = useState(false);
-
-  const cleanUrl = imageUrl?.trim();
-  const isSvg = !!cleanUrl && (cleanUrl.toLowerCase().includes('.svg') || cleanUrl.toLowerCase().includes('svg+xml'));
 
   useEffect(() => {
     let isMounted = true;
@@ -116,6 +126,19 @@ export const ExerciseIcon: React.FC<ExerciseIconProps> = ({
         </View>
       );
     }
+  }
+
+  // Local asset fallback if remote image fails
+  if ((cleanUrl?.includes('child') || icon === '🧘') && LOCAL_FALLBACKS.child_pose) {
+    return (
+      <View style={[styles.container, { width: size, height: size }, containerStyle]}>
+        <Image
+          source={LOCAL_FALLBACKS.child_pose}
+          style={[styles.image, { width: size, height: size }, imageStyle]}
+          resizeMode="contain"
+        />
+      </View>
+    );
   }
 
   // Fallback to emoji icon

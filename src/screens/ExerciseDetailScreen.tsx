@@ -29,7 +29,6 @@ import {
   Send,
   Settings,
   Shield,
-  Sparkles,
   Swords,
   Trophy,
   UserCheck,

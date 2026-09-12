@@ -25,7 +25,6 @@ import {
   Volume2,
   VolumeX,
   Bot,
-  Sparkles,
 } from 'lucide-react-native';
 import { LoadingScreen } from '../../../screens/LoadingScreen';
 import { useDailyChallengeStore } from '../../../store/dailyChallengeStore';
@@ -1115,6 +1114,14 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
         let animationFrameId = null;
 
         function startCamera(facingMode) {
+          const isFront = facingMode === 'user';
+          if (video) {
+            video.style.transform = isFront ? 'scaleX(-1)' : 'scaleX(1)';
+          }
+          if (canvas) {
+            canvas.style.transform = isFront ? 'scaleX(-1)' : 'scaleX(1)';
+          }
+
           if (animationFrameId) {
             cancelAnimationFrame(animationFrameId);
             animationFrameId = null;

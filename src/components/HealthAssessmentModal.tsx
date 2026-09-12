@@ -16,7 +16,6 @@ import {
   Heart,
   Info,
   ShieldCheck,
-  Sparkles,
   Stethoscope,
   X,
   XCircle,

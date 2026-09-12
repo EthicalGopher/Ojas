@@ -146,7 +146,7 @@ export const DEFAULT_EXERCISES: ExerciseItem[] = [
     reps_target: 10,
     difficulty: 'Beginner',
     bg_theme: '#A7F3D0',
-    image_url: 'https://locsjrjekkyjbeapgreu.supabase.co/storage/v1/object/public/Images/Excercise/child_pose.png',
+    image_url: 'https://locsjrjekkyjbeapgreu.supabase.co/storage/v1/object/public/Images/Excercise/a-guy-doing-child_pose.svg',
     type: 'Yoga',
     cure_to: ['lower_back_pain', 'rounded_shoulders', 'bow_legs', 'flat_feet', 'knock_knees'],
   },

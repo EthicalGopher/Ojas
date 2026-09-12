@@ -35,6 +35,7 @@ import {
   Volume2,
   X,
   Zap,
+  Scan,
 } from 'lucide-react-native';
 import { Avatar } from '../components/Avatar';
 import { ExerciseIcon } from '../components/ExerciseIcon';
@@ -43,6 +44,7 @@ import { fetchFriends, FriendshipItem } from '../utils/friendService';
 import { DEFAULT_EXERCISES, ExerciseItem } from '../utils/exerciseService';
 import { updateUserProfile, UserProfile } from '../utils/profileService';
 import { HealthAssessmentModal } from '../components/HealthAssessmentModal';
+import { DeformityScannerModal } from '../features/camera/components/DeformityScannerModal';
 import {
   HEALTH_CONDITIONS,
 } from '../utils/exerciseRecommendations';
@@ -85,6 +87,7 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
   const [loadingFriends, setLoadingFriends] = useState<boolean>(false);
   const [selectedTutorial, setSelectedTutorial] = useState<TutorialModalData | null>(null);
   const [showHealthModal, setShowHealthModal] = useState<boolean>(false);
+  const [isDeformityScannerVisible, setIsDeformityScannerVisible] = useState<boolean>(false);
 
   // Single-question progressive flow (0 to 4)
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState<number>(0);
@@ -424,9 +427,39 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
         );
       })()}
 
+      {/* 2. AI BODY POSTURE SCANNER (FEATURED CARD THEME) */}
+      <TouchableOpacity
+        style={styles.heroLimeCard}
+        activeOpacity={0.9}
+        onPress={() => setIsDeformityScannerVisible(true)}
+      >
+        <View style={styles.heroLimeBody}>
+          <View style={styles.heroLimeLeft}>
+            <View style={styles.progressTopRow}>
+              <Text style={styles.heroProgressTag}>AI Scanner</Text>
+              <View style={styles.circularGaugePill}>
+                <Scan size={12} color="#FFFFFF" />
+              </View>
+            </View>
 
+            <Text style={styles.heroMainTitle}>Body Posture Check</Text>
+            <Text style={styles.heroSubTitle}>
+              Check if your knees, shoulders and back are straight
+            </Text>
 
-      {/* 2. HERO HIGHLIGHT CHALLENGE CARD (Neon Lime Card) */}
+            <View style={[styles.caloriesBadgePill, { backgroundColor: '#FFFFFF', marginTop: 14 }]}>
+              <Scan size={13} color="#11141A" style={{ marginRight: 6 }} />
+              <Text style={[styles.caloriesBadgeText, { color: '#11141A' }]}>3-Sec Camera Check</Text>
+            </View>
+          </View>
+
+          <View style={styles.heroLimeRight}>
+            <View style={[styles.athleteVisualCircle, { backgroundColor: 'rgba(255, 255, 255, 0.18)' }]}>
+              <Scan size={38} color="#FFFFFF" />
+            </View>
+          </View>
+        </View>
+      </TouchableOpacity>
       <TouchableOpacity
         style={styles.heroLimeCard}
         activeOpacity={0.9}
@@ -768,6 +801,12 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
         visible={showHealthModal}
         onClose={() => setShowHealthModal(false)}
       />
+
+      {/* AI POSTURE & DEFORMITY SCANNER MODAL */}
+      <DeformityScannerModal
+        visible={isDeformityScannerVisible}
+        onClose={() => setIsDeformityScannerVisible(false)}
+      />
     </ScrollView>
   );
 };
@@ -938,6 +977,133 @@ const styles = StyleSheet.create({
     fontSize: 8,
     fontWeight: '800',
     letterSpacing: 0.5,
+  },
+  workoutPlanCard: {
+    borderRadius: 28,
+    padding: 18,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  cardTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  cardWorkoutTitle: {
+    color: '#11141A',
+    fontSize: 18,
+    fontWeight: '900',
+    flex: 1,
+    marginRight: 10,
+  },
+  durationBadge: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+  },
+  durationBadgeNumber: {
+    color: '#11141A',
+    fontSize: 14,
+    fontWeight: '900',
+    lineHeight: 16,
+  },
+  durationBadgeUnit: {
+    color: '#4B5563',
+    fontSize: 9,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+  },
+  cardBodyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  postureVisualCircle: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'rgba(17, 20, 26, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cardTagsWrapper: {
+    flex: 1,
+    marginLeft: 14,
+    gap: 6,
+  },
+  muscleTagPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(17, 20, 26, 0.1)',
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    alignSelf: 'flex-start',
+  },
+  darkDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: '#11141A',
+    marginRight: 6,
+  },
+  muscleTagPillText: {
+    color: '#11141A',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  activePlayersPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    alignSelf: 'flex-start',
+  },
+  activePlayersText: {
+    color: '#11141A',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  cardBottomRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(17, 20, 26, 0.08)',
+  },
+  aiTagPill: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 10,
+  },
+  aiTagText: {
+    color: '#11141A',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  playArrowCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#11141A',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   heroLimeCard: {
     backgroundColor: '#E25822',

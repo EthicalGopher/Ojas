@@ -22,7 +22,7 @@ import {
   Search,
   Trash2,
   Clock,
-  Sparkles,
+  RotateCcw,
   ShieldCheck,
   LogOut,
   Edit3,
@@ -549,8 +549,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                         <ActivityIndicator size="small" color="#11141A" />
                       ) : (
                         <View style={styles.btnRow}>
-                          <Sparkles size={11} color="#11141A" style={{ marginRight: 4 }} />
-                          <Text style={styles.randomizeUsernameBtnText}>🎲 Randomize</Text>
+                          <RotateCcw size={11} color="#11141A" style={{ marginRight: 4 }} />
+                          <Text style={styles.randomizeUsernameBtnText}>Randomize</Text>
                         </View>
                       )}
                     </TouchableOpacity>

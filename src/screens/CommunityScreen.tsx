@@ -28,7 +28,6 @@ import {
   Dumbbell,
   Trophy,
   ArrowLeft,
-  Sparkles,
   Info,
   Clock,
   Camera,
@@ -1752,7 +1751,7 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
               />
 
               <View style={styles.modalTip}>
-                <Sparkles size={14} color="#E25822" />
+                <Info size={14} color="#E25822" />
                 <Text style={styles.modalTipText}>
                   You will automatically become the Leader of this community.
                 </Text>
@@ -2038,7 +2037,7 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
               />
 
               <View style={styles.modalTip}>
-                <Sparkles size={14} color="#E25822" />
+                <Info size={14} color="#E25822" />
                 <Text style={styles.modalTipText}>
                   As Admin, you can seed brackets and officiate matches after community registration closes.
                 </Text>
