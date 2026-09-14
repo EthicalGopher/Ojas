@@ -13,8 +13,10 @@ export interface MatchSummaryStats {
   durationSeconds: number;
   result: 'win' | 'draw' | 'defeat';
   pointsEarned: number;
-  mode: 'faceoff' | 'quickjoin' | 'ffa';
+  mode: 'faceoff' | 'quickjoin' | 'ffa' | 'ai_battle';
   opponentUsername?: string;
+  aiQuote?: string;
+  botLevel?: number;
 }
 
 interface UserState {

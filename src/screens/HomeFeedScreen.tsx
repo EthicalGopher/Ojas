@@ -36,6 +36,7 @@ import {
   X,
   Zap,
   Scan,
+  Flame,
 } from 'lucide-react-native';
 import { Avatar } from '../components/Avatar';
 import { ExerciseIcon } from '../components/ExerciseIcon';
@@ -62,6 +63,7 @@ interface HomeFeedScreenProps {
   onOpenCamera: (exerciseId?: string, exerciseName?: string, isTutor?: boolean) => void;
   onNavigateToTab?: (tab: 'profile' | 'workouts') => void;
   featuredExercise?: ExerciseItem;
+  onOpenAiDuel?: (exerciseId?: string) => void;
 }
 
 interface TutorialModalData {
@@ -81,6 +83,7 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
   onOpenCamera,
   onNavigateToTab,
   featuredExercise,
+  onOpenAiDuel,
 }) => {
   const { user, profile, setProfile, isGuest } = useUserStore();
   const [friends, setFriends] = useState<FriendshipItem[]>([]);
@@ -437,9 +440,6 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
           <View style={styles.heroLimeLeft}>
             <View style={styles.progressTopRow}>
               <Text style={styles.heroProgressTag}>AI Scanner</Text>
-              <View style={styles.circularGaugePill}>
-                <Scan size={12} color="#FFFFFF" />
-              </View>
             </View>
 
             <Text style={styles.heroMainTitle}>Body Posture Check</Text>
@@ -447,9 +447,9 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
               Check if your knees, shoulders and back are straight
             </Text>
 
-            <View style={[styles.caloriesBadgePill, { backgroundColor: '#FFFFFF', marginTop: 14 }]}>
-              <Scan size={13} color="#11141A" style={{ marginRight: 6 }} />
-              <Text style={[styles.caloriesBadgeText, { color: '#11141A' }]}>3-Sec Camera Check</Text>
+            <View style={[styles.caloriesBadgePill, { backgroundColor: '#11141A', marginTop: 14 }]}>
+              <Scan size={13} color="#FFFFFF" style={{ marginRight: 6 }} />
+              <Text style={[styles.caloriesBadgeText, { color: '#FFFFFF' }]}>3-Sec Camera Check</Text>
             </View>
           </View>
 
@@ -469,9 +469,6 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
           <View style={styles.heroLimeLeft}>
             <View style={styles.progressTopRow}>
               <Text style={styles.heroProgressTag}>Featured Workout</Text>
-              <View style={styles.circularGaugePill}>
-                <Zap size={12} color="#11141A" />
-              </View>
             </View>
 
             <Text style={styles.heroMainTitle}>{activeExercise.name} 1v1 Arena</Text>
@@ -517,6 +514,39 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
                 size={54}
                 fontSize={32}
               />
+            </View>
+          </View>
+        </View>
+      </TouchableOpacity>
+
+      {/* HUMAN VS AI DUEL CARD */}
+      <TouchableOpacity
+        style={styles.heroLimeCard}
+        activeOpacity={0.9}
+        onPress={() => onOpenAiDuel?.(activeExercise.id)}
+      >
+        <View style={styles.heroLimeBody}>
+          <View style={styles.heroLimeLeft}>
+            <View style={styles.progressTopRow}>
+              <Text style={styles.heroProgressTag}>AI Duel</Text>
+            </View>
+
+            <Text style={styles.heroMainTitle}>Human vs AI</Text>
+            <Text style={styles.heroSubTitle}>
+              2-minute calorie burn & rep match vs AI difficulty
+            </Text>
+
+            <View style={[styles.caloriesBadgePill, { backgroundColor: '#11141A', marginTop: 14 }]}>
+              <Flame size={13} color="#FFFFFF" style={{ marginRight: 6 }} />
+              <Text style={[styles.caloriesBadgeText, { color: '#FFFFFF', fontWeight: '900' }]}>
+                START DUEL
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.heroLimeRight}>
+            <View style={[styles.athleteVisualCircle, { backgroundColor: 'rgba(255, 255, 255, 0.18)' }]}>
+              <Swords size={36} color="#FFFFFF" />
             </View>
           </View>
         </View>

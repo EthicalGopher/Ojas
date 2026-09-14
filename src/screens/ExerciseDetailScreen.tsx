@@ -85,6 +85,7 @@ interface ExerciseDetailScreenProps {
   ) => void;
   onOpenCamera?: (exerciseId?: string, exerciseName?: string, isTutor?: boolean) => void;
   onSettingsPress?: () => void;
+  onOpenAiDuel?: (exerciseId?: string) => void;
 }
 
 export const ExerciseDetailScreen: React.FC<ExerciseDetailScreenProps> = ({
@@ -96,6 +97,7 @@ export const ExerciseDetailScreen: React.FC<ExerciseDetailScreenProps> = ({
   onStartCustomMatch,
   onOpenCamera,
   onSettingsPress,
+  onOpenAiDuel,
 }) => {
   const { profile, user, refreshProfile, isGuest } = useUserStore();
   const [exerciseStats, setExerciseStats] = useState<UserExerciseStats | null>(null);
@@ -508,6 +510,17 @@ export const ExerciseDetailScreen: React.FC<ExerciseDetailScreenProps> = ({
                 badge: 'SOLO',
               },
               {
+                id: 'ai_duel',
+                title: 'AI Duel',
+                description: '1v1 match vs AI bot pacing',
+                iconComponent: <Flame size={20} color="#FFFFFF" />,
+                actionText: 'PLAY',
+                isFriendQueue: false,
+                isSoloMode: false,
+                isAiDuel: true,
+                badge: 'VS AI',
+              },
+              {
                 id: 'ffa',
                 title: 'Battle Ground',
                 description: '10-player live leaderboard match',
@@ -549,12 +562,15 @@ export const ExerciseDetailScreen: React.FC<ExerciseDetailScreenProps> = ({
                 badge: 'INVITE',
               },
             ].map((queue) => {
-              const isOnlineQueue = !queue.isAiTutor && !queue.isSoloMode;
-              const isLocked = isGuest && isOnlineQueue;
+              const isAiDuel = (queue as any).isAiDuel;
+              const isSquat = exercise.id === '1' || exercise.name.toLowerCase().includes('squat');
+              const isAiLocked = isAiDuel && !isSquat;
+              const isOnlineQueue = !queue.isAiTutor && !queue.isSoloMode && !isAiDuel;
+              const isLocked = (isGuest && isOnlineQueue) || isAiLocked;
 
               return (
                 <View key={queue.id} style={[styles.queueItemCard, isLocked && { opacity: 0.65 }]}>
-                  <View style={[styles.queueIconBox, isLocked && { backgroundColor: '#1E293B' }]}>
+                  <View style={[styles.queueIconBox, isLocked && { backgroundColor: '#1E293B' }, isAiDuel && !isAiLocked && { backgroundColor: '#E25822' }]}>
                     {queue.iconComponent}
                   </View>
 
@@ -567,12 +583,12 @@ export const ExerciseDetailScreen: React.FC<ExerciseDetailScreenProps> = ({
                         <View style={[styles.queueBadgePill, { backgroundColor: 'rgba(100, 116, 139, 0.25)', borderColor: 'rgba(148, 163, 184, 0.3)' }]}>
                           <Lock size={9} color="#94A3B8" style={{ marginRight: 3 }} />
                           <Text style={[styles.queueBadgePillText, { color: '#94A3B8' }]}>
-                            LOCKED
+                            {isAiLocked ? 'SQUATS ONLY' : 'LOCKED'}
                           </Text>
                         </View>
                       ) : queue.badge ? (
-                        <View style={styles.queueBadgePill}>
-                          <Text style={styles.queueBadgePillText}>
+                        <View style={[styles.queueBadgePill, isAiDuel && { backgroundColor: 'rgba(226, 88, 34, 0.2)', borderColor: 'rgba(226, 88, 34, 0.4)' }]}>
+                          <Text style={[styles.queueBadgePillText, isAiDuel && { color: '#E25822' }]}>
                             {queue.badge}
                           </Text>
                         </View>
@@ -584,19 +600,34 @@ export const ExerciseDetailScreen: React.FC<ExerciseDetailScreenProps> = ({
                   </View>
 
                   <TouchableOpacity
-                    style={[styles.joinButton, isLocked && { backgroundColor: 'rgba(255, 255, 255, 0.08)', borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.15)' }]}
+                    style={[
+                      styles.joinButton,
+                      isLocked && { backgroundColor: 'rgba(255, 255, 255, 0.08)', borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.15)' },
+                      isAiDuel && !isAiLocked && { backgroundColor: '#E25822' },
+                    ]}
                     activeOpacity={0.85}
                     onPress={() => {
-                      if (isLocked) {
+                      if (isAiLocked) {
                         Alert.alert(
-                          '🔒 Account Required',
-                          'Sign in or create a free athlete account to battle live players in online duels.',
+                          'Squats Only',
+                          'AI Duel is currently supported only for Squats. Other exercises will be unlocked soon!',
                           [{ text: 'OK' }]
                         );
                         return;
                       }
 
-                      if (queue.isAiTutor) {
+                      if (isLocked) {
+                        Alert.alert(
+                          'Account Required',
+                          'Sign in or create an athlete account to battle live players in online duels.',
+                          [{ text: 'OK' }]
+                        );
+                        return;
+                      }
+
+                      if (isAiDuel) {
+                        onOpenAiDuel?.('1');
+                      } else if (queue.isAiTutor) {
                         if (onOpenCamera) {
                           onOpenCamera(exercise.id, exercise.name, true);
                         }
@@ -615,7 +646,7 @@ export const ExerciseDetailScreen: React.FC<ExerciseDetailScreenProps> = ({
                     {isLocked ? (
                       <Lock size={14} color="#94A3B8" />
                     ) : (
-                      <Text style={styles.joinButtonText}>
+                      <Text style={[styles.joinButtonText, (queue as any).isAiDuel && { color: '#0F172A', fontWeight: '900' }]}>
                         {queue.actionText}
                       </Text>
                     )}

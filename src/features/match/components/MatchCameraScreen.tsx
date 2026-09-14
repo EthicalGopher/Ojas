@@ -18,6 +18,7 @@ import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import { Camera } from 'expo-camera';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import {
+  Bot,
   Clock,
   Dumbbell,
   Eye,
@@ -52,8 +53,16 @@ import { sendCustomBattleInvite } from '../../../utils/customBattleService';
 import { LoadingScreen } from '../../../screens/LoadingScreen';
 import { Avatar } from '../../../components/Avatar';
 import { supabase } from '../../../utils/supabase';
+import {
+  AIBattleSimulation,
+  AI_BOT_LEVELS,
+  getBotByName,
+  AIBotProfile,
+  AIBotState,
+} from '../../../utils/aiBotService';
+import { AIOpponentView } from './AIOpponentView';
 
-export type MatchMode = 'faceoff' | 'quickjoin' | 'ffa';
+export type MatchMode = 'faceoff' | 'quickjoin' | 'ffa' | 'ai_battle';
 
 type MatchPhase = 'loading_resources' | 'setup_countdown' | 'active_match' | 'match_ended';
 
@@ -160,9 +169,60 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
 
   const { autoRematch, toggleAutoRematch, setAutoRematch } = useMatchmakingStore();
 
+  const currentBot: AIBotProfile = useMemo(() => {
+    if (mode === 'ai_battle') {
+      return getBotByName(opponentUsername || '') || AI_BOT_LEVELS[0];
+    }
+    return AI_BOT_LEVELS[0];
+  }, [mode, opponentUsername]);
+
+  const aiSimulationRef = useRef<AIBattleSimulation | null>(null);
+  const [aiBotState, setAiBotState] = useState<AIBotState | null>(null);
+
+  // Initialize AI Battle Simulation
+  useEffect(() => {
+    if (mode === 'ai_battle') {
+      const sim = new AIBattleSimulation(currentBot, exerciseId);
+      aiSimulationRef.current = sim;
+      setAiBotState({
+        score: 0,
+        formAccuracy: currentBot.formAccuracyPercent,
+        currentPhase: 'eccentric',
+        phaseProgress: 0,
+        comboStreak: 0,
+        currentQuote: currentBot.quotes.greeting[0] || 'System Ready',
+        isLeading: false,
+        leadDiff: 0,
+      });
+      setOpponentScore(0);
+    }
+  }, [mode, currentBot, exerciseId]);
+
+  // When in AI battle and local pose is ready, automatically set opponentReady
+  useEffect(() => {
+    if (mode === 'ai_battle' && localReady) {
+      setOpponentReady(true);
+    }
+  }, [mode, localReady]);
+
+  // Live simulation tick during active match
+  useEffect(() => {
+    if (mode !== 'ai_battle' || matchPhase !== 'active_match' || matchEnded) return;
+
+    const interval = setInterval(() => {
+      if (aiSimulationRef.current) {
+        const res = aiSimulationRef.current.update(0.1, selfScore, timeLeft);
+        setAiBotState(res.state);
+        setOpponentScore(res.state.score);
+      }
+    }, 100);
+
+    return () => clearInterval(interval);
+  }, [mode, matchPhase, matchEnded, selfScore, timeLeft]);
+
   // Fetch opponent's avatar from Supabase profiles
   useEffect(() => {
-    if (!opponentUsername || opponentUsername === 'opponent' || opponentUsername === 'Free For All' || opponentUsername === 'Battle Ground') {
+    if (mode === 'ai_battle' || !opponentUsername || opponentUsername === 'opponent' || opponentUsername === 'Free For All' || opponentUsername === 'Battle Ground') {
       return;
     }
 
@@ -188,7 +248,7 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
     return () => {
       isMounted = false;
     };
-  }, [opponentUsername]);
+  }, [opponentUsername, mode]);
 
   useEffect(() => {
     const sub = Dimensions.addEventListener('change', ({ window }) => {
@@ -260,6 +320,31 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
             refreshProfile();
           });
         });
+      } else if (mode === 'ai_battle') {
+        const result =
+          selfScore > opponentScore ? 'win' : selfScore === opponentScore ? 'draw' : 'defeat';
+        const pointsEarned = result === 'win' ? 10 : result === 'draw' ? 5 : 0;
+        const aiQuote = aiSimulationRef.current?.getFinalQuote(result === 'win') || currentBot.quotes.onWin[0];
+
+        setLastMatchSummary({
+          exerciseId: exerciseId || '1',
+          exerciseName,
+          reps: selfScore,
+          calories: caloriesBurned,
+          durationSeconds: 120 - Math.max(0, timeLeft),
+          result,
+          pointsEarned,
+          mode: 'ai_battle',
+          opponentUsername: currentBot.name,
+          aiQuote,
+          botLevel: currentBot.level,
+        });
+
+        recordExerciseMatchResult(user.id, exerciseId, result, selfScore).then(() => {
+          recordCaloriesToProfile(user.id, caloriesBurned, selfScore).then(() => {
+            refreshProfile();
+          });
+        });
       } else {
         const result =
           selfScore > opponentScore ? 'win' : selfScore === opponentScore ? 'draw' : 'defeat';
@@ -298,6 +383,7 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
     getExerciseDisplayName,
     setLastMatchSummary,
     opponentUsername,
+    currentBot,
     timeLeft,
     notifSlideAnim,
     notifOpacityAnim,
@@ -835,7 +921,7 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
             },
           ]}
         >
-          {/* Left Half (Landscape) / Top Half (Portrait): Opponent's Real-time Frame */}
+          {/* Left Half (Landscape) / Top Half (Portrait): Opponent's Real-time Frame or AI HUD */}
           <View
             style={[
               styles.opponentContainer,
@@ -849,24 +935,35 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
               },
             ]}
           >
-            <WebView
-              ref={opponentWebViewRef}
-              source={{
-                html: OPPONENT_STREAM_HTML,
-              }}
-              style={StyleSheet.absoluteFill}
-              javaScriptEnabled
-              domStorageEnabled
-              scrollEnabled={false}
-              bounces={false}
-              overScrollMode="never"
-              originWhitelist={['*']}
-            />
-            {!hasOpponentStream && (
-              <View style={[StyleSheet.absoluteFill, styles.waitingOpponentBox]}>
-                <ActivityIndicator size="small" color="#C8B6FF" />
-                <Text style={styles.waitingOpponentText}>@{opponentUsername}</Text>
-              </View>
+            {mode === 'ai_battle' ? (
+              <AIOpponentView
+                bot={currentBot}
+                botState={aiBotState}
+                exerciseId={exerciseId}
+                isMatchActive={matchPhase === 'active_match'}
+              />
+            ) : (
+              <>
+                <WebView
+                  ref={opponentWebViewRef}
+                  source={{
+                    html: OPPONENT_STREAM_HTML,
+                  }}
+                  style={StyleSheet.absoluteFill}
+                  javaScriptEnabled
+                  domStorageEnabled
+                  scrollEnabled={false}
+                  bounces={false}
+                  overScrollMode="never"
+                  originWhitelist={['*']}
+                />
+                {!hasOpponentStream && (
+                  <View style={[StyleSheet.absoluteFill, styles.waitingOpponentBox]}>
+                    <ActivityIndicator size="small" color="#C8B6FF" />
+                    <Text style={styles.waitingOpponentText}>@{opponentUsername}</Text>
+                  </View>
+                )}
+              </>
             )}
           </View>
 
@@ -1027,7 +1124,7 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
           ended={matchEnded}
           selfUsername={selfUsername}
           selfAvatarUrl={profile?.avatar_url}
-          opponentUsername={opponentUsername}
+          opponentUsername={mode === 'ai_battle' ? currentBot.name : opponentUsername}
           opponentAvatarUrl={opponentAvatarUrl}
           ffaLeaderboard={ffaLeaderboard}
           poseState={currentPoseState}
@@ -1086,12 +1183,29 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
                 <>
                   <Text style={styles.matchEndedScoreVs}>VS</Text>
                   <View style={styles.matchEndedScoreBox}>
-                    <Text style={styles.matchEndedScoreLabel}>{opponentUsername?.toUpperCase() || 'RIVAL'}</Text>
+                    <Text style={styles.matchEndedScoreLabel}>
+                      {mode === 'ai_battle' ? currentBot.name : opponentUsername?.toUpperCase() || 'RIVAL'}
+                    </Text>
                     <Text style={styles.matchEndedScoreNum}>{opponentScore}</Text>
                   </View>
                 </>
               )}
             </View>
+
+            {/* AI Bot Post-Match Quote if AI battle */}
+            {mode === 'ai_battle' && (
+              <View style={styles.aiEndQuoteCard}>
+                <View style={{ backgroundColor: '#1E293B', width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' }}>
+                  <Bot size={14} color="#E25822" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.aiEndQuoteBotName}>{currentBot.name} • {currentBot.tier}</Text>
+                  <Text style={styles.aiEndQuoteText}>
+                    {aiSimulationRef.current?.getFinalQuote(selfScore > opponentScore) || currentBot.quotes.onWin[0]}
+                  </Text>
+                </View>
+              </View>
+            )}
 
             {/* Post-Match Workout Stats Bar (Calories, Reps, Time, Rating) */}
             <View style={styles.matchWorkoutStatsGrid}>
@@ -1127,39 +1241,41 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
               </View>
             </View>
 
-            {/* Auto Rematch Toggle & 5s Countdown */}
-            <View style={styles.autoRematchContainer}>
-              <TouchableOpacity
-                style={[
-                  styles.autoRematchTogglePill,
-                  autoRematch ? styles.autoRematchToggleActive : styles.autoRematchToggleInactive,
-                ]}
-                activeOpacity={0.8}
-                onPress={toggleAutoRematch}
-              >
-                <Zap size={18} color={autoRematch ? '#11141A' : '#8E95A0'} />
-                <View style={{ flex: 1 }}>
-                  <Text
-                    style={[
-                      styles.autoRematchToggleTitle,
-                      autoRematch ? styles.autoRematchToggleTitleActive : styles.autoRematchToggleTitleInactive,
-                    ]}
-                  >
-                    Auto-Queue Next Battle: {autoRematch ? 'ON' : 'OFF'}
-                  </Text>
-                  <Text style={styles.autoRematchToggleSub}>
-                    {autoRematch
-                      ? `Starting next match in ${autoCountdown}s...`
-                      : 'Toggle on for non-stop matches'}
-                  </Text>
-                </View>
-                {autoRematch && (
-                  <View style={styles.countdownBadgeSmall}>
-                    <Text style={styles.countdownBadgeText}>{autoCountdown}s</Text>
+            {/* Auto Rematch Toggle & 5s Countdown (Only for Multiplayer matches) */}
+            {mode !== 'ai_battle' && (
+              <View style={styles.autoRematchContainer}>
+                <TouchableOpacity
+                  style={[
+                    styles.autoRematchTogglePill,
+                    autoRematch ? styles.autoRematchToggleActive : styles.autoRematchToggleInactive,
+                  ]}
+                  activeOpacity={0.8}
+                  onPress={toggleAutoRematch}
+                >
+                  <Zap size={18} color={autoRematch ? '#11141A' : '#8E95A0'} />
+                  <View style={{ flex: 1 }}>
+                    <Text
+                      style={[
+                        styles.autoRematchToggleTitle,
+                        autoRematch ? styles.autoRematchToggleTitleActive : styles.autoRematchToggleTitleInactive,
+                      ]}
+                    >
+                      Auto-Queue Next Battle: {autoRematch ? 'ON' : 'OFF'}
+                    </Text>
+                    <Text style={styles.autoRematchToggleSub}>
+                      {autoRematch
+                        ? `Starting next match in ${autoCountdown}s...`
+                        : 'Toggle on for non-stop matches'}
+                    </Text>
                   </View>
-                )}
-              </TouchableOpacity>
-            </View>
+                  {autoRematch && (
+                    <View style={styles.countdownBadgeSmall}>
+                      <Text style={styles.countdownBadgeText}>{autoCountdown}s</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              </View>
+            )}
 
             {/* Action Buttons */}
             <View style={styles.matchEndedActionsRow}>
@@ -1172,20 +1288,31 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
                 <Text style={styles.matchEndedCloseBtnText}>Exit to Workout</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity
-                style={styles.matchEndedNextBtn}
-                activeOpacity={0.8}
-                onPress={() => {
-                  if (onRequeue) {
-                    onRequeue(mode, exerciseId);
-                  } else {
-                    handleRestartMatch();
-                  }
-                }}
-              >
-                <Swords size={16} color="#11141A" />
-                <Text style={styles.matchEndedNextBtnText}>Next Battle ⚡</Text>
-              </TouchableOpacity>
+              {mode === 'ai_battle' ? (
+                <TouchableOpacity
+                  style={styles.matchEndedNextBtn}
+                  activeOpacity={0.8}
+                  onPress={handleRestartMatch}
+                >
+                  <RotateCcw size={16} color="#11141A" />
+                  <Text style={styles.matchEndedNextBtnText}>Play Again</Text>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  style={styles.matchEndedNextBtn}
+                  activeOpacity={0.8}
+                  onPress={() => {
+                    if (onRequeue) {
+                      onRequeue(mode, exerciseId);
+                    } else {
+                      handleRestartMatch();
+                    }
+                  }}
+                >
+                  <Swords size={16} color="#11141A" />
+                  <Text style={styles.matchEndedNextBtnText}>Next Battle ⚡</Text>
+                </TouchableOpacity>
+              )}
             </View>
           </View>
         </View>
@@ -1193,6 +1320,7 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
 
       {/* FLOATING DRAGGABLE ACTIONS WIDGET */}
       <DraggableActionsWidget
+        isAiBattle={mode === 'ai_battle'}
         onLeave={handleClose}
         onFlipCamera={handleFlipCamera}
         onToggleOrientation={handleToggleOrientation}
@@ -1218,6 +1346,7 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
 // Draggable Actions Floating Widget
 // ---------------------------------------------------------------------------
 interface DraggableWidgetProps {
+  isAiBattle?: boolean;
   onLeave: () => void;
   onFlipCamera: () => void;
   onToggleOrientation: () => void;
@@ -1231,6 +1360,7 @@ interface DraggableWidgetProps {
 }
 
 const DraggableActionsWidget: React.FC<DraggableWidgetProps> = ({
+  isAiBattle = false,
   onLeave,
   onFlipCamera,
   onToggleOrientation,
@@ -1293,13 +1423,17 @@ const DraggableActionsWidget: React.FC<DraggableWidgetProps> = ({
       {...panResponder.panHandlers}
     >
       <View style={styles.widgetPillBox}>
-        {/* Dumbbell Icon Floating Handle & Toggle */}
+        {/* Dumbbell / Bot Icon Floating Handle & Toggle */}
         <TouchableOpacity
           style={styles.dumbbellHandleBtn}
           activeOpacity={0.8}
           onPress={() => setIsExpanded(!isExpanded)}
         >
-          <Dumbbell size={18} color="#11141A" strokeWidth={2.5} />
+          {isAiBattle ? (
+            <Bot size={18} color="#11141A" strokeWidth={2.5} />
+          ) : (
+            <Dumbbell size={18} color="#11141A" strokeWidth={2.5} />
+          )}
         </TouchableOpacity>
 
         {isExpanded && (
@@ -1337,7 +1471,7 @@ const DraggableActionsWidget: React.FC<DraggableWidgetProps> = ({
               <SwitchCamera size={16} color="#11141A" />
             </TouchableOpacity>
 
-            {/* 3. Rotate Orientation (Portrait / Landscape) */}
+            {/* 4. Rotate Orientation (Portrait / Landscape) */}
             <TouchableOpacity
               style={styles.widgetActionBtn}
               activeOpacity={0.75}
@@ -1346,7 +1480,7 @@ const DraggableActionsWidget: React.FC<DraggableWidgetProps> = ({
               <Smartphone size={16} color="#11141A" />
             </TouchableOpacity>
 
-            {/* 4. Try Again / Rematch */}
+            {/* 5. Try Again / Rematch */}
             <TouchableOpacity
               style={styles.widgetActionBtn}
               activeOpacity={0.75}
@@ -1355,28 +1489,32 @@ const DraggableActionsWidget: React.FC<DraggableWidgetProps> = ({
               <RotateCcw size={16} color="#11141A" />
             </TouchableOpacity>
 
-            {/* 5. Addictive Auto-Rematch / Next Battle Toggle (Swords) */}
-            <TouchableOpacity
-              style={[
-                styles.widgetActionBtn,
-                styles.addictiveActionBtn,
-                autoRematch && styles.addictiveActionBtnActive,
-              ]}
-              activeOpacity={0.75}
-              onPress={onToggleAutoRematch}
-            >
-              <Swords size={16} color={autoRematch ? '#11141A' : '#64748B'} strokeWidth={2.5} />
-              {autoRematch && <View style={styles.addictiveActiveDot} />}
-            </TouchableOpacity>
+            {/* 6. Addictive Auto-Rematch / Next Battle Toggle (Swords) - Only for PVP */}
+            {!isAiBattle && (
+              <TouchableOpacity
+                style={[
+                  styles.widgetActionBtn,
+                  styles.addictiveActionBtn,
+                  autoRematch && styles.addictiveActionBtnActive,
+                ]}
+                activeOpacity={0.75}
+                onPress={onToggleAutoRematch}
+              >
+                <Swords size={16} color={autoRematch ? '#11141A' : '#64748B'} strokeWidth={2.5} />
+                {autoRematch && <View style={styles.addictiveActiveDot} />}
+              </TouchableOpacity>
+            )}
 
-            {/* 6. Send Friend Request */}
-            <TouchableOpacity
-              style={[styles.widgetActionBtn, styles.friendActionBtn]}
-              activeOpacity={0.75}
-              onPress={onSendFriendRequest}
-            >
-              <UserPlus size={16} color="#11141A" />
-            </TouchableOpacity>
+            {/* 7. Send Friend Request - Only for PVP */}
+            {!isAiBattle && (
+              <TouchableOpacity
+                style={[styles.widgetActionBtn, styles.friendActionBtn]}
+                activeOpacity={0.75}
+                onPress={onSendFriendRequest}
+              >
+                <UserPlus size={16} color="#11141A" />
+              </TouchableOpacity>
+            )}
           </View>
         )}
       </View>
@@ -1433,6 +1571,7 @@ const ScoreBoard: React.FC<{
   opponentAvatarUrl?: string | null;
   ffaLeaderboard?: FFALeaderboardPlayer[];
   poseState?: { text: string; color: string; bg: string; border: string };
+  botAvatarIcon?: string;
 }> = ({
   mode = 'faceoff',
   selfScore,
@@ -1445,6 +1584,7 @@ const ScoreBoard: React.FC<{
   opponentAvatarUrl,
   ffaLeaderboard = [],
   poseState,
+  botAvatarIcon,
 }) => {
   const selfScale = useBumpAnim(selfScore);
   const opponentScale = useBumpAnim(opponentScore);
@@ -1479,37 +1619,40 @@ const ScoreBoard: React.FC<{
     }
     const loop = Animated.loop(
       Animated.sequence([
-        Animated.timing(pulseScale, { toValue: 1.12, duration: 320, useNativeDriver: true }),
-        Animated.timing(pulseScale, { toValue: 1, duration: 320, useNativeDriver: true }),
+        Animated.timing(pulseScale, {
+          toValue: 1.15,
+          duration: 350,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseScale, {
+          toValue: 1,
+          duration: 350,
+          useNativeDriver: true,
+        }),
       ])
     );
     loop.start();
     return () => loop.stop();
   }, [urgent, pulseScale]);
 
-  const timerColor = ended
-    ? outcome === 'WIN'
-      ? WIN_COLOR
-      : outcome === 'LOSE'
-      ? LOSE_COLOR
-      : DRAW_COLOR
-    : urgent
-    ? LOSE_COLOR
-    : timeLeft <= 30
-    ? DRAW_COLOR
-    : NEUTRAL_TIMER_COLOR;
+  const timerColor = urgent ? '#EF4444' : ended ? '#34D399' : '#FFFFFF';
 
   if (mode === 'ffa') {
     const myRank = activeFfaList.findIndex((p) => p.username === selfUsername) + 1;
 
     return (
       <View style={styles.ffaScoreBoardContainer} pointerEvents="none">
-        {/* Top Header: My Reps & Big Clean Timer */}
-        <View style={styles.ffaTopBar}>
-          <View style={styles.ffaMyStatsBadge}>
-            <Text style={styles.ffaMyStatsLabel}>YOU (RANK {myRank || 1})</Text>
-            <Text style={styles.ffaMyStatsScore}>{selfScore} REPS</Text>
-          </View>
+        <View style={styles.ffaScoreBoardTopRow}>
+          <PlayerBadge
+            isSelf
+            label="YOU"
+            username={selfUsername}
+            avatarUrl={selfAvatarUrl}
+            score={selfScore}
+            color={SELF_COLOR}
+            leading={myRank === 1}
+            scale={selfScale}
+          />
 
           <View style={styles.timerColumn}>
             <Animated.View
@@ -1573,29 +1716,18 @@ const ScoreBoard: React.FC<{
           <ScrollView style={styles.ffaLeaderboardScroll} showsVerticalScrollIndicator={false}>
             {activeFfaList.map((player, idx) => {
               const isMe = player.username === selfUsername;
-              const isTop3 = idx < 3;
               const isFirst = idx === 0;
-              const isSecond = idx === 1;
-              const isThird = idx === 2;
-
-              const rankColor = isFirst ? '#FDE047' : isSecond ? '#E2E8F0' : isThird ? '#FDBA74' : '#8E95A0';
-              const repColor = isFirst
-                ? '#FDE047'
-                : isSecond
-                ? '#FFFFFF'
-                : isThird
-                ? '#FDBA74'
-                : isMe
-                ? '#E8D5C4'
-                : '#94A3B8';
+              const isTop3 = idx < 3;
+              const rankColor = idx === 0 ? '#FBBF24' : idx === 1 ? '#CBD5E1' : idx === 2 ? '#CD7F32' : '#64748B';
+              const repColor = isFirst ? '#FBBF24' : isMe ? '#E25822' : '#38BDF8';
 
               return (
                 <View
-                  key={player.username || idx}
+                  key={player.username + idx}
                   style={[
                     styles.ffaLeaderboardRow,
                     isMe && styles.ffaLeaderboardRowMe,
-                    isTop3 && styles.ffaLeaderboardRowTop3,
+                    isFirst && styles.ffaLeaderboardRowFirst,
                   ]}
                 >
                   <Text style={[styles.ffaRankText, { color: rankColor, fontWeight: isTop3 ? '900' : '700' }]}>
@@ -1711,6 +1843,7 @@ const ScoreBoard: React.FC<{
         color={OPPONENT_COLOR}
         leading={!ended && leader === 'opponent'}
         scale={opponentScale}
+        isBot={mode === 'ai_battle'}
       />
     </View>
   );
@@ -1725,12 +1858,19 @@ const PlayerBadge: React.FC<{
   color: string;
   leading: boolean;
   scale: Animated.Value;
-}> = ({ isSelf = false, label, username, avatarUrl, score, color, leading, scale }) => {
+  botAvatarIcon?: string;
+  isBot?: boolean;
+}> = ({ isSelf = false, label, username, avatarUrl, score, color, leading, scale, isBot }) => {
   return (
     <View style={[styles.playerBadge, !isSelf && styles.playerBadgeReverse, leading && styles.playerBadgeLeading]}>
       <View style={styles.avatarWrap}>
-        {leading && <Text style={styles.crown}>👑</Text>}
-        <Avatar username={username} avatarUrl={avatarUrl} size={36} />
+        {isBot ? (
+          <View style={[styles.botAvatarCircle, { backgroundColor: '#1E293B', width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center' }]}>
+            <Bot size={18} color="#E25822" />
+          </View>
+        ) : (
+          <Avatar username={username} avatarUrl={avatarUrl} size={36} />
+        )}
       </View>
       <View style={isSelf ? styles.playerTextLeft : styles.playerTextRight}>
         <Text style={styles.playerLabel} numberOfLines={1}>
@@ -2160,46 +2300,17 @@ const styles = StyleSheet.create({
   },
   ffaScoreBoardContainer: {
     position: 'absolute',
-    top: 14,
-    left: 14,
-    right: 14,
-    zIndex: 80,
-    alignItems: 'flex-end',
+    top: 16,
+    left: 12,
+    right: 12,
+    zIndex: 900,
+    gap: 8,
   },
-  ffaTopBar: {
+  ffaScoreBoardTopRow: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
+    alignItems: 'flex-start',
     width: '100%',
-    marginBottom: 8,
-  },
-  ffaMyStatsBadge: {
-    backgroundColor: 'rgba(12, 15, 20, 0.92)',
-    borderRadius: 22,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderWidth: 2,
-    borderColor: '#E8D5C4',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.5,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  ffaMyStatsLabel: {
-    color: '#E8D5C4',
-    fontSize: 11,
-    fontWeight: '900',
-    letterSpacing: 0.8,
-  },
-  ffaMyStatsScore: {
-    color: '#FFFFFF',
-    fontSize: 22,
-    fontWeight: '900',
-    marginTop: 2,
-    textShadowColor: 'rgba(0, 0, 0, 0.8)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 6,
   },
   ffaLobbyCountBadge: {
     backgroundColor: 'rgba(12, 15, 20, 0.85)',
@@ -2268,6 +2379,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     borderRadius: 8,
     marginVertical: 1,
+  },
+  ffaLeaderboardRowFirst: {
+    backgroundColor: 'rgba(251, 191, 36, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(251, 191, 36, 0.35)',
   },
   ffaLeaderboardRowTop3: {
     backgroundColor: 'rgba(255, 255, 255, 0.07)',
@@ -2454,6 +2570,46 @@ const styles = StyleSheet.create({
     color: '#E8D5C4',
     fontSize: 12,
     fontWeight: '900',
+  },
+  botAvatarCircle: {
+    backgroundColor: '#1E293B',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+  },
+  aiEndQuoteCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 10,
+    marginBottom: 4,
+    gap: 10,
+    width: '100%',
+  },
+  aiEndQuoteAvatar: {
+    fontSize: 26,
+  },
+  aiEndQuoteBotName: {
+    color: '#38BDF8',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    marginBottom: 2,
+  },
+  aiEndQuoteText: {
+    color: '#E2E8F0',
+    fontSize: 12,
+    fontStyle: 'italic',
+    lineHeight: 16,
   },
   matchEndedActionsRow: {
     flexDirection: 'row',

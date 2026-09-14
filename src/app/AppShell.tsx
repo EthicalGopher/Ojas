@@ -9,7 +9,7 @@ import { FFALoadingScreen } from '../screens/FFALoadingScreen';
 import { HomeScreen } from '../components/HomeScreen';
 import { AuthModal } from '../features/auth/components/AuthModal';
 import { CameraScreen } from '../features/camera/components/CameraScreen';
-import { MatchCameraScreen } from '../features/match/components/MatchCameraScreen';
+import { MatchCameraScreen, MatchMode } from '../features/match/components/MatchCameraScreen';
 import { TabBar } from '../components/TabBar';
 
 import { Swords, Video, Zap, Check, X, Flame } from 'lucide-react-native';
@@ -42,7 +42,7 @@ export default function AppShell() {
   const [waitingBadge, setWaitingBadge] = useState<string | undefined>(undefined);
   const [waitingSubInfo, setWaitingSubInfo] = useState<string | undefined>(undefined);
   const [opponentUsername, setOpponentUsername] = useState<string>('');
-  const [matchMode, setMatchMode] = useState<'faceoff' | 'quickjoin' | 'ffa'>('faceoff');
+  const [matchMode, setMatchMode] = useState<MatchMode>('faceoff');
   const [matchExerciseId, setMatchExerciseId] = useState<string>('1');
   const [selectedModel, setSelectedModel] = useState<ModelComplexity>('medium');
   const [showAuthModal, setShowAuthModal] = useState<boolean>(false);
@@ -314,7 +314,7 @@ export default function AppShell() {
                 setIsAiTutorMode(!!isTutor);
                 setIsFullscreen(true);
               }}
-              onOpenMatchCamera={(opponent: string, mode: 'faceoff' | 'quickjoin' | 'ffa', exerciseId?: string) => {
+              onOpenMatchCamera={(opponent: string, mode: MatchMode, exerciseId?: string) => {
                 setMatchWaiting(false);
                 setIsFFALobby(false);
                 setOpponentUsername(opponent);

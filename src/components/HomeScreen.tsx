@@ -30,6 +30,9 @@ import { ProfileScreen } from '../screens/ProfileScreen';
 import { CommunityScreen } from '../screens/CommunityScreen';
 import { DEFAULT_EXERCISES, fetchExercisesFromSupabase } from '../utils/exerciseService';
 import { Header } from './Header';
+import { HumanVsAIModal } from './HumanVsAIModal';
+import { MatchMode } from '../features/match/components/MatchCameraScreen';
+import { AIBotProfile } from '../utils/aiBotService';
 
 export type MainTab = 'home' | 'explore' | 'workouts' | 'social' | 'profile';
 
@@ -41,7 +44,7 @@ interface HomeScreenProps {
   activeTab: MainTab;
   onTabChange: (tab: MainTab) => void;
   onOpenCamera: (exerciseId?: string, exerciseName?: string, isTutor?: boolean) => void;
-  onOpenMatchCamera: (opponent: string, mode: 'faceoff' | 'quickjoin' | 'ffa', exerciseId?: string) => void;
+  onOpenMatchCamera: (opponent: string, mode: MatchMode, exerciseId?: string) => void;
   onEnterQueue: (title?: string, message?: string, badge?: string, subInfo?: string, isFFA?: boolean) => void;
   onUpdateQueueStatus?: (title?: string, message?: string, badge?: string, subInfo?: string, countdown?: number, playerCount?: number) => void;
   onCancelQueue: () => void;
@@ -245,6 +248,19 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     onOpenMatchCamera(opponent, mode, exerciseId);
   };
 
+  const [showAiModal, setShowAiModal] = useState<boolean>(false);
+  const [aiModalExerciseId, setAiModalExerciseId] = useState<string>('1');
+
+  const handleOpenAiDuel = useCallback((exerciseId?: string) => {
+    if (exerciseId) setAiModalExerciseId(exerciseId);
+    setShowAiModal(true);
+  }, []);
+
+  const handleStartAiDuel = useCallback((bot: AIBotProfile, exerciseId: string) => {
+    setShowAiModal(false);
+    onOpenMatchCamera(bot.name, 'ai_battle', exerciseId);
+  }, [onOpenMatchCamera]);
+
   const renderUnderDevelopment = (featureName: string) => (
     <View style={styles.devContainer}>
       <View style={styles.devCard}>
@@ -274,6 +290,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           onStartCustomMatch={handleStartCustomMatch}
           onOpenCamera={onOpenCamera}
           onSettingsPress={() => setShowSettingsModal(true)}
+          onOpenAiDuel={handleOpenAiDuel}
         />
       );
     }
@@ -329,9 +346,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         onOpenCamera={onOpenCamera}
         onNavigateToTab={onTabChange}
         featuredExercise={exercisesList[0]}
+        onOpenAiDuel={handleOpenAiDuel}
       />
     );
-  }, [activeSubTab, activeTab, currentUser, detailSubTab, exercisesList, onlineCount, onLogout, onOpenCamera, onTabChange, queueCounts, selectedCategory, selectedExercise, selectedModel]);
+  }, [activeSubTab, activeTab, currentUser, detailSubTab, exercisesList, handleOpenAiDuel, onlineCount, onLogout, onOpenCamera, onTabChange, queueCounts, selectedCategory, selectedExercise, selectedModel]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -361,6 +379,14 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       )}
 
       <View style={styles.mainContent}>{mainContent}</View>
+
+      <HumanVsAIModal
+        visible={showAiModal}
+        onClose={() => setShowAiModal(false)}
+        exercises={exercisesList}
+        selectedExerciseId={aiModalExerciseId}
+        onStartMatch={handleStartAiDuel}
+      />
 
       <Modal visible={showSettingsModal} transparent animationType="slide">
         <View style={styles.modalOverlay}>
