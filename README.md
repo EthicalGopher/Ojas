@@ -85,7 +85,7 @@
 | **Child's Pose** | Deep hip rest, arm stretch, relaxing hold timer |
 
 <p align="center">
-  <img src="https://placehold.co/360x760/11141a/ffffff?text=Exercise+Catalog+Screen" width="280" alt="Exercise Catalog Screen" />
+  <img src="./assets/screenshots/exercise_catalog.png" width="280" alt="Exercise Catalog Screen" />
 </p>
 
 ---
