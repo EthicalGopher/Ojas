@@ -1,100 +1,120 @@
-# ⚡ Ojas — AI Workout & Fitness Battles
+<p align="center">
+  <img src="./assets/icon.png" width="100" height="100" alt="Ojas App Icon" style="border-radius: 20px;" />
+</p>
 
-Ojas is a smart fitness app that uses your phone camera to track your body movements in real time. It counts your reps, checks your workout posture, and lets you battle friends or AI in fun workout games.
+<h1 align="center">⚡ Ojas — AI Workout & Fitness Battles</h1>
+
+<p align="center">
+  <b>A smart mobile fitness app that uses your phone's camera to track your workouts in real time, count your reps, check your posture, and let you battle friends or AI.</b>
+</p>
+
+<p align="center">
+  <img src="https://placehold.co/360x760/11141a/e25822?text=Ojas+Mobile+App+Home+Screen" width="280" alt="Ojas Home Screen" />
+</p>
 
 ---
 
-![App Banner](https://placehold.co/1000x450/11141a/e25822?text=Ojas+App+Banner)
-
----
-
-## 🌟 What You Can Do
+## 🌟 App Features
 
 ### 1. 🤖 AI Workout Coach (Camera Tracking)
-- Uses your phone camera to watch your form in real time.
-- Automatically counts your reps as you exercise.
-- Tells you if you need to go lower, straighten your back, or fix your posture.
-- Everything runs on your phone, so your camera video stays 100% private.
+- Uses your mobile camera to track your movements in real time.
+- Automatically counts every good rep you complete.
+- Gives live audio and visual form tips to keep your posture safe.
+- **100% On-Device**: Camera frames never leave your phone.
 
-![AI Camera Tracking](https://placehold.co/800x450/11141a/ffffff?text=AI+Camera+Tracking+%26+Rep+Counter)
+<p align="center">
+  <img src="https://placehold.co/360x760/11141a/ffffff?text=AI+Camera+Rep+Tracking+Screen" width="280" alt="AI Camera Tracking Screen" />
+</p>
 
 ---
 
 ### 2. 🦾 Human vs AI Duels
-- Play a 2-minute workout match against an AI bot.
-- Choose from 4 difficulty levels: **Beginner**, **Intermediate**, **Advanced**, and **Pro**.
-- Watch the AI bot move and burn calories with you in real time.
+- Jump into a 2-minute workout battle against an AI opponent.
+- 4 difficulty levels: **Beginner**, **Intermediate**, **Advanced**, and **Pro**.
+- Real-time calorie burn and rep comparison.
 
-![Human vs AI Match](https://placehold.co/800x450/11141a/ffffff?text=Human+vs+AI+Match+Screen)
+<p align="center">
+  <img src="https://placehold.co/360x760/11141a/ffffff?text=Human+vs+AI+Duel+Screen" width="280" alt="Human vs AI Duel Screen" />
+</p>
 
 ---
 
-### 3. 🔍 AI Posture & Body Check
-- A quick 3-second camera scan.
-- Checks if your shoulders, knees, and back are straight.
-- Gives you helpful suggestions and exercises to improve your posture.
+### 3. 🔍 AI Body Posture Scanner
+- Quick 3-second full-body camera scan.
+- Checks shoulder level, knee alignment, and spine straightness.
+- Suggests targeted daily exercises to fix posture issues.
 
-![AI Posture Check](https://placehold.co/800x450/11141a/ffffff?text=AI+Posture+%26+Body+Scan+Result)
+<p align="center">
+  <img src="https://placehold.co/360x760/11141a/ffffff?text=AI+Body+Posture+Scan+Result" width="280" alt="AI Posture Scan Screen" />
+</p>
 
 ---
 
 ### 4. ⚔️ Live 1v1 Multiplayer Battles
-- Challenge your friends or join a quick match against real people.
-- Both players see each other's live rep score and video.
-- 2-minute timer to see who finishes more good reps.
+- Real-time 2-minute split-screen battles with friends or matched players.
+- Live video stream and rep counter synchronization.
+- Compete to see who gets the highest clean rep count.
 
-![1v1 Multiplayer Battle](https://placehold.co/800x450/11141a/ffffff?text=Live+1v1+Multiplayer+Battle)
+<p align="center">
+  <img src="https://placehold.co/360x760/11141a/ffffff?text=1v1+Live+Battle+Screen" width="280" alt="Live 1v1 Battle Screen" />
+</p>
 
 ---
 
-### 5. 👥 Friends & Daily Challenges
-- Add friends and send instant match invites.
-- Complete daily workout targets and earn points.
-- Track your streak, calories burned, and total workouts.
+### 5. 👥 Friends, Streaks & Daily Challenges
+- Add fitness friends and send instant 1-tap battle invites.
+- Daily workout challenges and streak counters to keep you consistent.
+- Track total calories burned, workout time, and level progress.
 
-![Home Screen & Friends](https://placehold.co/800x450/11141a/ffffff?text=Home+Feed+%26+Friends+Hub)
+<p align="center">
+  <img src="https://placehold.co/360x760/11141a/ffffff?text=Friends+%26+Daily+Challenges+Screen" width="280" alt="Friends and Challenges Screen" />
+</p>
 
 ---
 
 ## 🏋️ Supported Exercises
 
-- **Squats**: Tracks knee bending and full depth.
-- **Push-ups**: Checks chest drop and arm push.
-- **Lunges**: Checks front and back leg angles.
-- **Crunches**: Counts clean stomach crunches without neck strain.
-- **Triangle Pose (Trikonasana)**: Checks body stretch and balance hold.
-- **Cobra Pose**: Checks chest lift and back stretch.
-- **Child's Pose**: Relaxing rest pose with hold timer.
+| Exercise | What the AI Checks |
+|---|---|
+| **Squats** | Knee bend depth, back posture, standing lockout |
+| **Push-ups** | Chest drop depth, arm extension, straight core |
+| **Lunges** | Front knee angle, back knee clearance, vertical spine |
+| **Crunches** | Shoulder lift angle, core contraction without neck pulling |
+| **Triangle Pose** | Leg straightness, lateral hip hinge, arm reach |
+| **Cobra Pose** | Chest elevation, lower back arch, neck alignment |
+| **Child's Pose** | Deep hip rest, arm stretch, relaxing hold timer |
 
-![Exercise Catalog](https://placehold.co/800x450/11141a/ffffff?text=Workout+Exercise+List)
+<p align="center">
+  <img src="https://placehold.co/360x760/11141a/ffffff?text=Exercise+Catalog+Screen" width="280" alt="Exercise Catalog Screen" />
+</p>
 
 ---
 
-## 🚀 How to Run the App
+## 🚀 How to Run on Your Mobile Device
 
 ### 1. Requirements
-- Node.js (version 18 or higher)
+- Node.js (v18+)
 - npm or yarn
-- Android phone or Android Studio emulator
+- Android phone (connected via USB with debugging enabled) or Android Studio emulator
 
 ### 2. Install Packages
 ```bash
 npm install
 ```
 
-### 3. Create .env File
-Create a `.env` file in the main folder:
+### 3. Setup Environment
+Create a `.env` file in the project root:
 ```env
 EXPO_PUBLIC_BACKEND_URL=https://app.codequestpro.in
 CLOUDFLARE_TUNNEL_TOKEN=your_token_here
 ```
 
-### 4. Start the App
+### 4. Start the Metro Server
 ```bash
 npx expo start
 ```
 
-### 5. Run on Android
+### 5. Run on Connected Android Device
 ```bash
 npx expo run:android
 ```
@@ -103,14 +123,14 @@ npx expo run:android
 
 ## 🛠️ Built With
 
-| Part | Tool / Library |
+| Layer | Technology |
 |---|---|
-| **App Framework** | React Native & Expo |
+| **Mobile Framework** | React Native & Expo SDK 57 |
 | **Language** | TypeScript |
-| **AI Body Tracking** | MediaPipe Pose (runs on your phone) |
-| **Database & Auth** | Supabase |
-| **Live Match Server** | WebSockets |
-| **Icons & Design** | Lucide Icons & Custom SVG Artwork |
+| **AI Pose Engine** | MediaPipe Pose (On-Device GPU acceleration) |
+| **Backend & Realtime** | Supabase (Database, Auth, Channels) |
+| **Live Match Server** | WebSocket Server |
+| **Icons & UI** | Lucide Icons & Custom SVG Vector Graphics |
 
 ---
 
