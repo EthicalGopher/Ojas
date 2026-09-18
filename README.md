@@ -23,7 +23,7 @@
 - **100% On-Device**: Camera frames never leave your phone.
 
 <p align="center">
-  <img src="https://placehold.co/360x760/11141a/ffffff?text=AI+Camera+Rep+Tracking+Screen" width="280" alt="AI Camera Tracking Screen" />
+  <img src="./assets/screenshots/ai_rep_tracking.png" width="280" alt="AI Camera Rep Tracking Screen" />
 </p>
 
 ---
