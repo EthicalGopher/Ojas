@@ -90,12 +90,34 @@
 
 ---
 
-## How to Run on Your Mobile Device
+## How to Start the Backend Server
+
+The backend runs a Python FastAPI server for WebSocket multiplayer rooms and MediaPipe support.
+
+### 1. Requirements
+- Python 3.10 or higher
+- pip
+
+### 2. Install Dependencies
+```bash
+pip install -r backend/requirements.txt
+```
+
+### 3. Run the Server
+From the project root directory:
+```bash
+python backend/server.py
+```
+The server will start on port `8000` (e.g. `http://localhost:8000`).
+
+---
+
+## How to Run the Mobile App
 
 ### 1. Requirements
 - Node.js (v18+)
 - npm or yarn
-- Android phone (connected via USB with debugging enabled) or Android Studio emulator
+- Android phone (with USB debugging enabled) or Android Studio emulator
 
 ### 2. Install Packages
 ```bash
@@ -126,9 +148,10 @@ npx expo run:android
 | Layer | Technology |
 |---|---|
 | **Mobile Framework** | React Native & Expo SDK 57 |
-| **Language** | TypeScript |
+| **Language** | TypeScript & Python |
 | **AI Pose Engine** | MediaPipe Pose (On-Device GPU acceleration) |
-| **Backend & Realtime** | Supabase (Database, Auth, Channels) |
+| **Backend Framework** | FastAPI & Uvicorn |
+| **Database & Auth** | Supabase (Database, Auth, Channels) |
 | **Live Match Server** | WebSocket Server |
 | **Icons & UI** | Lucide Icons & Custom SVG Vector Graphics |
 
