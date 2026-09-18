@@ -2,7 +2,7 @@
   <img src="./assets/icon.png" width="100" height="100" alt="Ojas App Icon" style="border-radius: 20px;" />
 </p>
 
-<h1 align="center">⚡ Ojas — AI Workout & Fitness Battles</h1>
+<h1 align="center">Ojas — AI Workout & Fitness Battles</h1>
 
 <p align="center">
   <b>A smart mobile fitness app that uses your phone's camera to track your workouts in real time, count your reps, check your posture, and let you battle friends or AI.</b>
@@ -14,9 +14,9 @@
 
 ---
 
-## 🌟 App Features
+## App Features
 
-### 1. 🤖 AI Workout Coach (Camera Tracking)
+### 1. AI Workout Coach (Camera Tracking)
 - Uses your mobile camera to track your movements in real time.
 - Automatically counts every good rep you complete.
 - Gives live audio and visual form tips to keep your posture safe.
@@ -28,7 +28,7 @@
 
 ---
 
-### 2. 🦾 Human vs AI Duels
+### 2. Human vs AI Duels
 - Jump into a 2-minute workout battle against an AI opponent.
 - 4 difficulty levels: **Beginner**, **Intermediate**, **Advanced**, and **Pro**.
 - Real-time calorie burn and rep comparison.
@@ -39,7 +39,7 @@
 
 ---
 
-### 3. 🔍 AI Body Posture Scanner
+### 3. AI Body Posture Scanner
 - Quick 3-second full-body camera scan.
 - Checks shoulder level, knee alignment, and spine straightness.
 - Suggests targeted daily exercises to fix posture issues.
@@ -50,7 +50,7 @@
 
 ---
 
-### 4. ⚔️ Live 1v1 Multiplayer Battles
+### 4. Live 1v1 Multiplayer Battles
 - Real-time 2-minute split-screen battles with friends or matched players.
 - Live video stream and rep counter synchronization.
 - Compete to see who gets the highest clean rep count.
@@ -61,7 +61,7 @@
 
 ---
 
-### 5. 👥 Friends, Streaks & Daily Challenges
+### 5. Friends, Streaks & Daily Challenges
 - Add fitness friends and send instant 1-tap battle invites.
 - Daily workout challenges and streak counters to keep you consistent.
 - Track total calories burned, workout time, and level progress.
@@ -72,7 +72,7 @@
 
 ---
 
-## 🏋️ Supported Exercises
+## Supported Exercises
 
 | Exercise | What the AI Checks |
 |---|---|
@@ -90,7 +90,7 @@
 
 ---
 
-## 🚀 How to Run on Your Mobile Device
+## How to Run on Your Mobile Device
 
 ### 1. Requirements
 - Node.js (v18+)
@@ -121,7 +121,7 @@ npx expo run:android
 
 ---
 
-## 🛠️ Built With
+## Built With
 
 | Layer | Technology |
 |---|---|
@@ -134,5 +134,5 @@ npx expo run:android
 
 ---
 
-## 📄 License
+## License
 This project is licensed under the MIT License.
