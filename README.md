@@ -55,10 +55,6 @@
 - Live video stream and rep counter synchronization.
 - Compete to see who gets the highest clean rep count.
 
-<p align="center">
-  <img src="https://placehold.co/360x760/11141a/ffffff?text=1v1+Live+Battle+Screen" width="280" alt="Live 1v1 Battle Screen" />
-</p>
-
 ---
 
 ### 5. Friends, Streaks & Daily Challenges
