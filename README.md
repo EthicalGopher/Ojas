@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img src="https://placehold.co/360x760/11141a/e25822?text=Ojas+Mobile+App+Home+Screen" width="280" alt="Ojas Home Screen" />
+  <img src="./assets/screenshots/home_screen.png" width="280" alt="Ojas Home Screen" />
 </p>
 
 ---
@@ -67,7 +67,7 @@
 - Track total calories burned, workout time, and level progress.
 
 <p align="center">
-  <img src="https://placehold.co/360x760/11141a/ffffff?text=Friends+%26+Daily+Challenges+Screen" width="280" alt="Friends and Challenges Screen" />
+  <img src="./assets/screenshots/home_screen.png" width="280" alt="Daily Challenges and Streak Screen" />
 </p>
 
 ---
