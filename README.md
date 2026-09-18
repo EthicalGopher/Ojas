@@ -34,7 +34,7 @@
 - Real-time calorie burn and rep comparison.
 
 <p align="center">
-  <img src="https://placehold.co/360x760/11141a/ffffff?text=Human+vs+AI+Duel+Screen" width="280" alt="Human vs AI Duel Screen" />
+  <img src="./assets/screenshots/human_vs_ai.png" width="280" alt="Human vs AI Duel Screen" />
 </p>
 
 ---
