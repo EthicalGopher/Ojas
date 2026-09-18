@@ -45,7 +45,7 @@
 - Suggests targeted daily exercises to fix posture issues.
 
 <p align="center">
-  <img src="https://placehold.co/360x760/11141a/ffffff?text=AI+Body+Posture+Scan+Result" width="280" alt="AI Posture Scan Screen" />
+  <img src="./assets/screenshots/ai_body_scan.png" width="280" alt="AI Body Posture Scan Screen" />
 </p>
 
 ---
