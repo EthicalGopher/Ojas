@@ -1,192 +1,116 @@
-# ⚡ Ojas — Real-Time AI Fitness & Multiplayer Arena
+# ⚡ Ojas — AI Workout & Fitness Battles
 
-Ojas is an AI-powered fitness and real-time multiplayer exercise duel mobile application built with **React Native (Expo SDK 57)**, **TypeScript**, **On-Device MediaPipe Pose Tracking**, **Supabase Realtime**, and **High-FPS GPU Canvas Video Streaming**.
-
----
-
-## 🌟 Key Highlights & Current Features
-
-- 🧠 **On-Device MediaPipe AI Form Analysis**: 33-point real-time 3D skeleton tracking and angle analysis directly on the device GPU (no cloud video upload latency, zero privacy concerns).
-- ⚙️ **Multi-Model Device Adaptation**: Dynamic auto-detection of device specs (RAM/CPU) with selectable MediaPipe models (**Lite ~2.7MB**, **Full ~6.2MB**, **Heavy ~27MB**).
-- 🏆 **Multiplayer Duel Modes**:
-  - **1v1 Matchmaking (Faceoff & Quick Join)**: Real-time 2-minute duels with live score and video sync.
-  - **10-Player Free For All (FFA) Arena**: High-energy group battles with real-time room status and countdown timers.
-  - **Direct Friend Challenges**: Instant 0ms invite broadcast hub via Supabase Realtime channels.
-- 📺 **Zero-Flicker GPU Canvas Video Streaming**: Custom HTML5 WebGL offscreen frame pipeline delivering continuous 25–30 FPS peer video streams without Android surface texture recreation flickering.
-- 🎨 **Sleek Modern Design**: Modern Dark Slate (`#1A1C20`) aesthetic with vibrant Burnt Orange (`#E25822`) accents, clean typography, custom scalloped navigation dock, and smooth UI animations.
-- 🛡️ **Biomechanical Exercise Engines**: Production-tested form evaluation for **Squats**, **Triangle Pose (Trikonasana)**, **Lunges**, **Crunches**, and **Sit-ups**.
+Ojas is a smart fitness app that uses your phone camera to track your body movements in real time. It counts your reps, checks your workout posture, and lets you battle friends or AI in fun workout games.
 
 ---
 
-## 🏗️ Architecture Overview
-
-```
- ┌─────────────────────────────────────────────────────────────────────────────┐
- │                         Ojas Mobile App (React Native)                      │
- └──────┬──────────────────────┬────────────────────────┬──────────────────────┘
-        │                      │                        │
-        ▼                      ▼                        ▼
- ┌──────────────┐      ┌───────────────┐        ┌────────────────┐
- │ MediaPipe AI │      │   Supabase    │        │ WebSockets &   │
- │ WebGL Engine │      │ Realtime Hub  │        │ Matchmaking    │
- └──────┬───────┘      └───────┬───────┘        └────────┬───────┘
-        │ (25-30 FPS)          │ (Live Broadcast & REST) │ (Match Rooms & Sync)
-        ▼                      ▼                         ▼
- ┌──────────────┐      ┌───────────────┐        ┌────────────────┐
- │ Form Engines │      │ Friend Duels  │        │ 1v1 & FFA      │
- │ & Joint HUD  │      │ & Peer Frames │        │ Matchmaking    │
- └──────────────┘      └───────────────┘        └────────────────┘
-```
+![App Banner](https://placehold.co/1000x450/11141a/e25822?text=Ojas+App+Banner)
 
 ---
 
-## 🧠 Biomechanical Form Engines
+## 🌟 What You Can Do
 
-### 1. 🏋️ Squats Engine
-- **Angle Calculation**: Evaluates hip-to-knee-to-ankle vector trigonometry with rolling window smoothing (`SMOOTHING_WINDOW = 5`).
-- **State Machine**:
-  - `TOP` (Standing): Knee angle $\ge 155^\circ$
-  - `DOWN` (Descending): Angle between $95^\circ$ and $155^\circ$
-  - `BOTTOM` (Deep / Parallel): Knee angle $\le 95^\circ$
-- **Validation**: Rep count is awarded only after completing a full cycle: `TOP` $\rightarrow$ `DOWN` $\rightarrow$ `BOTTOM` $\rightarrow$ `TOP`.
+### 1. 🤖 AI Workout Coach (Camera Tracking)
+- Uses your phone camera to watch your form in real time.
+- Automatically counts your reps as you exercise.
+- Tells you if you need to go lower, straighten your back, or fix your posture.
+- Everything runs on your phone, so your camera video stays 100% private.
 
-### 2. 📐 Triangle Pose (Trikonasana)
-- **Rules**:
-  - Front & rear knee extension $\ge 155^\circ$ (straight legs)
-  - Top arm reach $\ge 135^\circ$ with extended elbow $\ge 150^\circ$
-  - Lateral hip hinge with shoulder tilt $\ge 25^\circ$
-  - Shoulder $Z$-depth divergence $\le 0.35$ to prevent forward collapse
-- **Feedback**: Awards continuous points for maintaining perfect hold form in 3-second intervals.
-
-### 3. 🦵 Lunges Engine
-- **Rules**: Dynamically tracks lead vs. trailing leg, requiring front knee depth $\le 100^\circ$, back knee clearance $\le 115^\circ$, and vertical torso alignment ($\le 22^\circ$ deviation).
-
-### 4. 🧘 Crunches & 💪 Sit-ups Engines
-- **Rules**: Evaluates torso-to-floor inclination vectors:
-  - **Crunches**: Flat base $\le 8^\circ$, apex shoulder elevation $\ge 22^\circ$, with an overlift guard ($> 42^\circ$) to isolate abdominal contraction.
-  - **Sit-ups**: Full range from floor $\le 20^\circ$ to full seated upright apex $\ge 60^\circ$.
+![AI Camera Tracking](https://placehold.co/800x450/11141a/ffffff?text=AI+Camera+Tracking+%26+Rep+Counter)
 
 ---
 
-## ⚔️ Matchmaking & Live Duel Pipeline
+### 2. 🦾 Human vs AI Duels
+- Play a 2-minute workout match against an AI bot.
+- Choose from 4 difficulty levels: **Beginner**, **Intermediate**, **Advanced**, and **Pro**.
+- Watch the AI bot move and burn calories with you in real time.
 
-1. **Persistent Hub Connection**: App joins the `custom_battles_hub` broadcast channel upon boot for immediate friend challenge delivery.
-2. **Resource Synchronization**: Both peers confirm camera setup and model loading (`peer_ready`).
-3. **20s Setup Countdown**: Allows athletes to position their phones and check their field of view.
-4. **2-Minute Duel**: Real-time rep validation, HUD cues, and continuous score synchronization.
-5. **Post-Match Settlement**: Secure server-validated results, XP awards, and ranking progression.
-
----
-
-## 📁 Project Structure
-
-```
-sih_exercise/
-├── android/                         # Android native project files & Gradle build configs
-├── assets/
-│   ├── adaptive-icon.png            # Android adaptive launcher icon
-│   ├── icon.png                     # Standard app icon
-│   ├── logo.svg                     # OJAS Radiance source logo
-│   ├── splash.png                   # App splash screen asset
-│   ├── Videoes/                     # Animations (loading_animation.gif, splash.gif)
-│   └── models/                      # MediaPipe TFLite & WebAssembly assets
-├── src/
-│   ├── app/
-│   │   └── AppShell.tsx             # Root container, orientation management & duel modal hub
-│   ├── components/
-│   │   ├── Avatar.tsx               # Customizable SVG/DiceBear athlete avatars
-│   │   ├── Header.tsx               # Top header with profile greetings & status
-│   │   ├── HomeScreen.tsx           # Home container, workout tabs & dev modals
-│   │   └── TabBar.tsx               # Floating bottom navigation bar
-│   ├── features/
-│   │   ├── auth/                    # Supabase authentication modals & flows
-│   │   ├── camera/
-│   │   │   └── components/
-│   │   │       └── CameraScreen.tsx # MediaPipe WebGL bundle & live pose tracking
-│   │   └── match/
-│   │       └── components/
-│   │           └── MatchCameraScreen.tsx # 1v1 Split-screen arena & GPU canvas stream receiver
-│   ├── screens/
-│   │   ├── ExerciseDetailScreen.tsx # Exercise guides, rules, 1v1 queue cards & friend invites
-│   │   ├── ExercisesScreen.tsx      # Workout category catalog & active queue athlete counters
-│   │   ├── FFALoadingScreen.tsx     # 10-Player Free For All lobby waiting room
-│   │   ├── GetStartedScreen.tsx     # Clean onboarding and authentication entry
-│   │   ├── HomeFeedScreen.tsx       # Dynamic weekly calendar, featured routines & online athlete strip
-│   │   ├── LoadingScreen.tsx        # Animated matchmaking screen with motivational quotes
-│   │   └── ProfileScreen.tsx        # Athlete details, friend management & request hub
-│   ├── store/
-│   │   └── userStore.ts             # Zustand global state for active user & navigation
-│   └── utils/
-│       ├── customBattleService.ts   # Realtime 1v1 friend invite broadcast service
-│       ├── deviceSpecs.ts           # Hardware auto-detection (RAM / model recommendations)
-│       ├── exerciseService.ts       # Supabase exercise catalog with resilient REST fallback
-│       ├── friendService.ts         # Social friends & friendship requests API
-│       ├── matchmaking.ts           # WebSocket client for 1v1 and FFA match queues
-│       ├── rankingService.ts        # ELO ratings, match results & leaderboard tiers
-│       └── supabase.ts              # Supabase client configuration
-├── app.json                         # Expo Application Configuration (slug: ojas)
-├── eas.json                         # EAS Build configuration (preview APK & production)
-├── package.json                     # Project scripts and dependencies
-└── tsconfig.json                    # TypeScript compiler options
-```
+![Human vs AI Match](https://placehold.co/800x450/11141a/ffffff?text=Human+vs+AI+Match+Screen)
 
 ---
 
-## ⚙️ Environment Setup & Installation
+### 3. 🔍 AI Posture & Body Check
+- A quick 3-second camera scan.
+- Checks if your shoulders, knees, and back are straight.
+- Gives you helpful suggestions and exercises to improve your posture.
 
-### 1. Prerequisites
-- **Node.js**: v18 or higher
-- **npm** or **yarn**
-- **Android SDK & Command-Line Tools** (for local Android builds/emulators)
-- **EAS CLI** (optional for cloud builds): `npm install -g eas-cli`
+![AI Posture Check](https://placehold.co/800x450/11141a/ffffff?text=AI+Posture+%26+Body+Scan+Result)
 
-### 2. Install Dependencies
+---
+
+### 4. ⚔️ Live 1v1 Multiplayer Battles
+- Challenge your friends or join a quick match against real people.
+- Both players see each other's live rep score and video.
+- 2-minute timer to see who finishes more good reps.
+
+![1v1 Multiplayer Battle](https://placehold.co/800x450/11141a/ffffff?text=Live+1v1+Multiplayer+Battle)
+
+---
+
+### 5. 👥 Friends & Daily Challenges
+- Add friends and send instant match invites.
+- Complete daily workout targets and earn points.
+- Track your streak, calories burned, and total workouts.
+
+![Home Screen & Friends](https://placehold.co/800x450/11141a/ffffff?text=Home+Feed+%26+Friends+Hub)
+
+---
+
+## 🏋️ Supported Exercises
+
+- **Squats**: Tracks knee bending and full depth.
+- **Push-ups**: Checks chest drop and arm push.
+- **Lunges**: Checks front and back leg angles.
+- **Crunches**: Counts clean stomach crunches without neck strain.
+- **Triangle Pose (Trikonasana)**: Checks body stretch and balance hold.
+- **Cobra Pose**: Checks chest lift and back stretch.
+- **Child's Pose**: Relaxing rest pose with hold timer.
+
+![Exercise Catalog](https://placehold.co/800x450/11141a/ffffff?text=Workout+Exercise+List)
+
+---
+
+## 🚀 How to Run the App
+
+### 1. Requirements
+- Node.js (version 18 or higher)
+- npm or yarn
+- Android phone or Android Studio emulator
+
+### 2. Install Packages
 ```bash
 npm install
 ```
 
-### 3. Environment Variables
-Ensure a `.env` file exists in the root directory:
+### 3. Create .env File
+Create a `.env` file in the main folder:
 ```env
 EXPO_PUBLIC_BACKEND_URL=https://app.codequestpro.in
-CLOUDFLARE_TUNNEL_TOKEN=your_tunnel_token
+CLOUDFLARE_TUNNEL_TOKEN=your_token_here
 ```
 
-*(Supabase public configuration is automatically pre-configured in `src/utils/supabase.ts` with instant anonymous REST fallback).*
-
----
-
-## 🚀 Running & Building the App
-
-### Start Metro Bundler
+### 4. Start the App
 ```bash
 npx expo start
 ```
 
-### Run Locally on Android
+### 5. Run on Android
 ```bash
 npx expo run:android
 ```
 
-### Build Preview APK via EAS
-```bash
-eas build --profile preview --platform android
-```
-
 ---
 
-## 🏆 Tech Stack
+## 🛠️ Built With
 
-| Layer | Technology |
+| Part | Tool / Library |
 |---|---|
-| **Framework** | React Native 0.86.3 (Expo SDK 57) |
+| **App Framework** | React Native & Expo |
 | **Language** | TypeScript |
-| **AI / Computer Vision** | MediaPipe Pose (WebGL / WebAssembly 33-point tracking) |
-| **Backend & Realtime** | Supabase (Postgres, Auth, Realtime Broadcast) |
-| **Multiplayer / Matchmaking** | WebSocket Match Server (`app.codequestpro.in`) |
-| **Video Streaming** | Offscreen HTML5 Canvas Frame Capture & GPU Buffer Rendering |
-| **State Management** | Zustand |
-| **Icons & Design** | Lucide React Native, Custom SVG Vector Artwork |
+| **AI Body Tracking** | MediaPipe Pose (runs on your phone) |
+| **Database & Auth** | Supabase |
+| **Live Match Server** | WebSockets |
+| **Icons & Design** | Lucide Icons & Custom SVG Artwork |
 
 ---
 
