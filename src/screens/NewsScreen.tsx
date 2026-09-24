@@ -33,7 +33,7 @@ import {
   X,
 } from 'lucide-react-native';
 import { Avatar } from '../components/Avatar';
-import { colors, radius, shadow } from '../theme';
+import { makeStyles, radius, shadow, ThemeColors, useColors } from '../theme';
 import { useNewsStore } from '../store/newsStore';
 import { useUserStore } from '../store/userStore';
 import {
@@ -73,6 +73,8 @@ const timeAgo = (iso: string): string => {
 const EMPTY_DRAFT: NewsDraft = { title: '', body: '', category: 'update', is_pinned: false };
 
 export const NewsScreen: React.FC = () => {
+  const colors = useColors();
+  const styles = useStyles();
   const { items, loading, error, isAdmin, lastSeenAt, refresh, markAllSeen } = useNewsStore();
   const user = useUserStore((s) => s.user);
   const [filter, setFilter] = useState<NewsCategory | 'all'>('all');
@@ -361,7 +363,8 @@ export const NewsScreen: React.FC = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors: ThemeColors) =>
+  StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   listContent: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 140 },
   filterRow: { gap: 8, paddingBottom: 14 },
@@ -529,4 +532,5 @@ const styles = StyleSheet.create({
     backgroundColor: colors.accent,
   },
   publishText: { color: colors.onAccent, fontSize: 14, fontWeight: '900', letterSpacing: 0.6 },
-});
+})
+);

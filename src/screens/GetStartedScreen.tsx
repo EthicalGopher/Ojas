@@ -11,6 +11,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { SvgXml } from 'react-native-svg';
 import { YOGA_MASCOT_SVG, PUSHUPS_MASCOT_SVG } from '../assets/mascots';
 
+import { makeStyles, ThemeColors, useColors } from '../theme';
+import { ThemedStatusBar } from '../components/ThemedStatusBar';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const MASCOT_WIDTH = (SCREEN_WIDTH - 48) / 2;
 
@@ -25,9 +27,11 @@ export const GetStartedScreen: React.FC<GetStartedScreenProps> = ({
   onLogIn,
   onContinueAsGuest,
 }) => {
+  const colors = useColors();
+  const styles = useStyles();
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="light-content" backgroundColor="#1A1C20" />
+      <ThemedStatusBar />
       <View style={styles.container}>
         {/* Top Brand Logo */}
         <View style={styles.header}>
@@ -95,10 +99,11 @@ export const GetStartedScreen: React.FC<GetStartedScreenProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors: ThemeColors) =>
+  StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#1A1C20',
+    backgroundColor: colors.bg,
   },
   container: {
     flex: 1,
@@ -114,7 +119,7 @@ const styles = StyleSheet.create({
   brandLogo: {
     fontSize: 36,
     fontWeight: '900',
-    color: '#FFFFFF',
+    color: colors.text,
     letterSpacing: -0.5,
   },
   mascotsContainer: {
@@ -137,7 +142,7 @@ const styles = StyleSheet.create({
   headline: {
     fontSize: 30,
     fontWeight: '900',
-    color: '#FFFFFF',
+    color: colors.text,
     textAlign: 'center',
     lineHeight: 36,
     letterSpacing: -0.5,
@@ -145,7 +150,7 @@ const styles = StyleSheet.create({
   },
   subheadline: {
     fontSize: 14,
-    color: '#8E95A0',
+    color: colors.textMuted,
     textAlign: 'center',
     lineHeight: 20,
     paddingHorizontal: 16,
@@ -171,9 +176,9 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
   },
   guestButton: {
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    backgroundColor: colors.surfaceHi,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.15)',
+    borderColor: colors.border,
     width: '100%',
     paddingVertical: 14,
     borderRadius: 30,
@@ -182,7 +187,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   guestButtonText: {
-    color: '#E8D5C4',
+    color: colors.text,
     fontSize: 14,
     fontWeight: '800',
     letterSpacing: 0.3,
@@ -194,7 +199,7 @@ const styles = StyleSheet.create({
     marginTop: 16,
   },
   loginQuestion: {
-    color: '#8E95A0',
+    color: colors.textMuted,
     fontSize: 13.5,
     fontWeight: '500',
   },
@@ -203,4 +208,5 @@ const styles = StyleSheet.create({
     fontSize: 13.5,
     fontWeight: '800',
   },
-});
+})
+);

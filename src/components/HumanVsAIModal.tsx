@@ -23,6 +23,7 @@ import {
 import { AI_BOT_LEVELS, AIBotProfile } from '../utils/aiBotService';
 import { ExerciseItem } from '../utils/exerciseService';
 
+import { makeStyles, ThemeColors, useColors } from '../theme';
 interface HumanVsAIModalProps {
   visible: boolean;
   onClose: () => void;
@@ -38,6 +39,8 @@ export const HumanVsAIModal: React.FC<HumanVsAIModalProps> = ({
   selectedExerciseId = '1',
   onStartMatch,
 }) => {
+  const colors = useColors();
+  const styles = useStyles();
   const [selectedBot, setSelectedBot] = useState<AIBotProfile>(AI_BOT_LEVELS[1]);
   const [chosenExerciseId, setChosenExerciseId] = useState<string>('1');
 
@@ -181,18 +184,19 @@ export const HumanVsAIModal: React.FC<HumanVsAIModalProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors: ThemeColors) =>
+  StyleSheet.create({
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.78)',
     justifyContent: 'flex-end',
   },
   modalCard: {
-    backgroundColor: '#11141A',
+    backgroundColor: colors.bg,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.12)',
+    borderColor: colors.border,
     paddingTop: 20,
     paddingHorizontal: 20,
     paddingBottom: 34,
@@ -224,7 +228,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   modalMainTitle: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 20,
     fontWeight: '900',
   },
@@ -232,7 +236,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    backgroundColor: colors.surfaceHi,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -240,7 +244,7 @@ const styles = StyleSheet.create({
     maxHeight: 460,
   },
   sectionLabel: {
-    color: '#94A3B8',
+    color: colors.textMuted,
     fontSize: 11,
     fontWeight: '800',
     letterSpacing: 0.6,
@@ -251,9 +255,9 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   botCard: {
-    backgroundColor: '#161B22',
+    backgroundColor: colors.surface,
     borderWidth: 1.5,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: colors.border,
     borderRadius: 14,
     padding: 12,
   },
@@ -276,7 +280,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   botNameText: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 14,
     fontWeight: '800',
   },
@@ -287,7 +291,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   botPaceText: {
-    color: '#94A3B8',
+    color: colors.textMuted,
     fontSize: 11.5,
     fontWeight: '600',
     marginTop: 2,
@@ -298,9 +302,9 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   exerciseChip: {
-    backgroundColor: '#161B22',
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: colors.border,
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 8,
@@ -310,7 +314,7 @@ const styles = StyleSheet.create({
     borderColor: '#E25822',
   },
   exerciseChipText: {
-    color: '#94A3B8',
+    color: colors.textMuted,
     fontSize: 12,
     fontWeight: '700',
   },
@@ -319,10 +323,10 @@ const styles = StyleSheet.create({
     fontWeight: '900',
   },
   summaryCard: {
-    backgroundColor: '#161B22',
+    backgroundColor: colors.surface,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: colors.border,
     padding: 14,
     marginTop: 14,
     marginBottom: 8,
@@ -334,12 +338,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   summaryLabel: {
-    color: '#94A3B8',
+    color: colors.textMuted,
     fontSize: 12,
     fontWeight: '600',
   },
   summaryValue: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 12,
     fontWeight: '800',
   },
@@ -363,4 +367,5 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     letterSpacing: 0.5,
   },
-});
+})
+);

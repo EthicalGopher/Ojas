@@ -44,10 +44,11 @@ import {
   Crown,
   Medal,
 } from 'lucide-react-native';
-import { colors, radius } from '../theme';
+import { makeStyles, radius, ThemeColors, useColors } from '../theme';
 import * as ImagePicker from 'expo-image-picker';
 import { Avatar } from '../components/Avatar';
 import { supabase } from '../utils/supabase';
+import { ThemedStatusBar } from '../components/ThemedStatusBar';
 import {
   Community,
   CommunityMember,
@@ -88,6 +89,8 @@ interface CommunityScreenProps {
 const CATEGORIES = ['All', 'School', 'University', 'Gym', 'Sports Club', 'Organization', 'General'] as const;
 
 export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, onBack, onOpenMatchCamera }) => {
+  const colors = useColors();
+  const styles = useStyles();
   const [resolvedUserId, setResolvedUserId] = useState<string>(
     currentUser?.id || currentUser?.user?.id || ''
   );
@@ -803,7 +806,7 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
 
   const CATEGORY_COLORS: Record<string, string> = {
     School: '#38BDF8',
-    University: '#C8B6FF',
+    University: '#8B5CF6',
     Gym: '#E25822',
     'Sports Club': '#F59E0B',
     Organization: '#10B981',
@@ -844,12 +847,12 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#1A1C20" />
+      <ThemedStatusBar />
 
       {/* Top Header */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={onBack} activeOpacity={0.7}>
-          <ArrowLeft size={20} color="#FFFFFF" />
+          <ArrowLeft size={20} color={colors.text} />
         </TouchableOpacity>
         <View style={styles.headerTitleBox}>
           <Text style={styles.headerTitle}>SQUAD</Text>
@@ -2240,10 +2243,11 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
   );
 };
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors: ThemeColors) =>
+  StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1A1C20',
+    backgroundColor: colors.bg,
   },
   header: {
     flexDirection: 'row',
@@ -2252,13 +2256,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 14,
     paddingBottom: 12,
-    backgroundColor: '#1A1C20',
+    backgroundColor: colors.bg,
   },
   backButton: {
     width: 38,
     height: 38,
     borderRadius: 12,
-    backgroundColor: '#161B22',
+    backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -2267,13 +2271,13 @@ const styles = StyleSheet.create({
     marginLeft: 12,
   },
   headerTitle: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 16,
     fontWeight: '900',
     letterSpacing: 0.8,
   },
   headerSubtitle: {
-    color: '#8E95A0',
+    color: colors.textMuted,
     fontSize: 11,
     fontWeight: '600',
   },
@@ -2293,9 +2297,9 @@ const styles = StyleSheet.create({
   },
   tabsContainer: {
     flexDirection: 'row',
-    backgroundColor: '#161B22',
+    backgroundColor: colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.06)',
+    borderBottomColor: colors.border,
     paddingHorizontal: 16,
   },
   tabBtn: {
@@ -2308,7 +2312,7 @@ const styles = StyleSheet.create({
     borderBottomColor: '#E25822',
   },
   tabBtnText: {
-    color: '#8E95A0',
+    color: colors.textMuted,
     fontSize: 13,
     fontWeight: '700',
   },
@@ -2327,7 +2331,7 @@ const styles = StyleSheet.create({
     paddingVertical: 1,
   },
   tabCounterText: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 10,
     fontWeight: '900',
   },
@@ -2341,7 +2345,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   loadingText: {
-    color: '#8E95A0',
+    color: colors.textMuted,
     fontSize: 13,
     marginTop: 12,
     fontWeight: '600',
@@ -2370,12 +2374,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   pendingBannerTitle: {
-    color: '#FBBF24',
+    color: colors.gold,
     fontSize: 13,
     fontWeight: '800',
   },
   pendingBannerDesc: {
-    color: '#CBD5E1',
+    color: colors.text,
     fontSize: 11,
     marginTop: 2,
   },
@@ -2414,7 +2418,7 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     paddingHorizontal: 9,
   },
-  ratingLabel: { color: '#E2E8F0', fontSize: 12, fontWeight: '700' },
+  ratingLabel: { color: colors.text, fontSize: 12, fontWeight: '700' },
   ratingNumBox: {
     backgroundColor: 'rgba(26, 28, 35, 0.7)',
     borderRadius: 6,
@@ -2449,8 +2453,8 @@ const styles = StyleSheet.create({
   },
   userRankInfo: { marginLeft: 14, flex: 1 },
   rankTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  rankTitle: { color: '#FFFFFF', fontSize: 19, fontWeight: '900' },
-  playedWonStats: { color: '#E2E8F0', fontSize: 12, marginTop: 4, lineHeight: 17 },
+  rankTitle: { color: colors.text, fontSize: 19, fontWeight: '900' },
+  playedWonStats: { color: colors.text, fontSize: 12, marginTop: 4, lineHeight: 17 },
   heroActionsRow: {
     flexDirection: 'row',
     marginTop: 16,
@@ -2466,7 +2470,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     gap: 6,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.15)',
+    borderColor: colors.border,
   },
   heroActionBtnEditText: {
     color: '#FFFFFF',
@@ -2513,13 +2517,13 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   sectionHeaderTitle: {
-    color: '#8E95A0',
+    color: colors.textMuted,
     fontSize: 12,
     fontWeight: '800',
     letterSpacing: 0.8,
   },
   sectionHeaderSub: {
-    color: '#8E95A0',
+    color: colors.textMuted,
     fontSize: 12,
     marginBottom: 14,
     lineHeight: 18,
@@ -2534,12 +2538,12 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   roleBadgeLeaderText: {
-    color: '#FBBF24',
+    color: colors.gold,
     fontSize: 10,
     fontWeight: '800',
   },
   membersListCard: {
-    backgroundColor: '#161B22',
+    backgroundColor: colors.surface,
     borderRadius: 20,
     overflow: 'hidden',
   },
@@ -2548,7 +2552,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 14,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.05)',
+    borderBottomColor: colors.border,
   },
   memberInfo: {
     flex: 1,
@@ -2560,7 +2564,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   memberName: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 14,
     fontWeight: '800',
   },
@@ -2570,12 +2574,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   memberUsername: {
-    color: '#8E95A0',
+    color: colors.textMuted,
     fontSize: 12,
     marginTop: 1,
   },
   memberBio: {
-    color: '#9CA3AF',
+    color: colors.textMuted,
     fontSize: 11,
     marginTop: 2,
   },
@@ -2594,7 +2598,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   rolePillLeaderText: {
-    color: '#FBBF24',
+    color: colors.gold,
     fontSize: 10,
     fontWeight: '800',
   },
@@ -2613,13 +2617,13 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   rolePillMember: {
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    backgroundColor: colors.surfaceHi,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 8,
   },
   rolePillMemberText: {
-    color: '#8E95A0',
+    color: colors.textMuted,
     fontSize: 10,
     fontWeight: '700',
   },
@@ -2634,7 +2638,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 14,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.05)',
+    borderBottomColor: colors.border,
   },
   proposalActions: {
     flexDirection: 'row',
@@ -2663,7 +2667,7 @@ const styles = StyleSheet.create({
   searchBarWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#161B22',
+    backgroundColor: colors.surface,
     borderRadius: 16,
     paddingHorizontal: 14,
     height: 48,
@@ -2673,7 +2677,7 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 14,
     fontWeight: '600',
   },
@@ -2685,19 +2689,19 @@ const styles = StyleSheet.create({
     paddingRight: 16,
   },
   categoryPill: {
-    backgroundColor: '#161B22',
+    backgroundColor: colors.surface,
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderColor: colors.border,
   },
   categoryPillActive: {
     backgroundColor: '#E25822',
     borderColor: '#E25822',
   },
   categoryPillText: {
-    color: '#8E95A0',
+    color: colors.textMuted,
     fontSize: 12,
     fontWeight: '700',
   },
@@ -2718,7 +2722,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(226, 88, 34, 0.2)',
   },
   ruleBannerText: {
-    color: '#CBD5E1',
+    color: colors.text,
     fontSize: 11,
     flex: 1,
     lineHeight: 16,
@@ -2727,11 +2731,11 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   communityCard: {
-    backgroundColor: '#161B22',
+    backgroundColor: colors.surface,
     borderRadius: 20,
     padding: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.07)',
+    borderColor: colors.border,
   },
   communityCardMine: {
     borderColor: 'rgba(226, 88, 34, 0.55)',
@@ -2739,7 +2743,7 @@ const styles = StyleSheet.create({
   },
   rankBadge: { width: 34, alignItems: 'center', marginRight: 8 },
   rankMedal: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
-  rankNumber: { color: '#8E95A0', fontSize: 13, fontWeight: '900' },
+  rankNumber: { color: colors.textMuted, fontSize: 13, fontWeight: '900' },
   cardMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 5 },
   catChip: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6, marginRight: 4 },
   catChipText: { fontSize: 9, fontWeight: '900', letterSpacing: 0.5 },
@@ -2753,7 +2757,7 @@ const styles = StyleSheet.create({
   },
   yoursChipText: { color: '#E25822', fontSize: 10.5, fontWeight: '900', letterSpacing: 0.6 },
   rankingsHeader: { flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 12 },
-  rankingsTitle: { color: '#FFFFFF', fontSize: 13, fontWeight: '900', letterSpacing: 0.8 },
+  rankingsTitle: { color: colors.text, fontSize: 13, fontWeight: '900', letterSpacing: 0.8 },
   squadHero: {
     backgroundColor: colors.accent,
     borderRadius: radius.xl,
@@ -2787,7 +2791,7 @@ const styles = StyleSheet.create({
   squadHeroStat: { flex: 1, alignItems: 'center' },
   squadHeroStatValue: { color: colors.onAccent, fontSize: 17, fontWeight: '900' },
   squadHeroStatLabel: { color: 'rgba(255,255,255,0.75)', fontSize: 9, fontWeight: '900', letterSpacing: 0.8, marginTop: 2 },
-  squadHeroDivider: { width: 1, height: 26, backgroundColor: 'rgba(255,255,255,0.22)' },
+  squadHeroDivider: { width: 1, height: 26, backgroundColor: colors.surfaceHi },
   joinCallout: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2827,13 +2831,13 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 16,
-    backgroundColor: '#323742',
+    backgroundColor: colors.surfaceHi,
   },
   cardLogoPlaceholder: {
     width: 48,
     height: 48,
     borderRadius: 16,
-    backgroundColor: '#323742',
+    backgroundColor: colors.surfaceHi,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -2849,12 +2853,12 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   cardTitle: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 15,
     fontWeight: '900',
   },
   queueBadgePill: {
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    backgroundColor: colors.surfaceHi,
     paddingHorizontal: 7,
     paddingVertical: 2,
     borderRadius: 6,
@@ -2866,13 +2870,13 @@ const styles = StyleSheet.create({
     letterSpacing: 0.4,
   },
   cardDescText: {
-    color: '#9CA3AF',
+    color: colors.textMuted,
     fontSize: 11,
     marginTop: 2,
     lineHeight: 15,
   },
   cardMemberSubText: {
-    color: '#8E95A0',
+    color: colors.textMuted,
     fontSize: 10,
     fontWeight: '700',
     marginTop: 3,
@@ -2901,23 +2905,23 @@ const styles = StyleSheet.create({
     letterSpacing: 0.4,
   },
   cardActionBtnTextPending: {
-    color: '#FBBF24',
+    color: colors.gold,
   },
   emptyCard: {
-    backgroundColor: '#161B22',
+    backgroundColor: colors.surface,
     borderRadius: 20,
     padding: 30,
     alignItems: 'center',
     marginTop: 20,
   },
   emptyTitle: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 16,
     fontWeight: '800',
     marginTop: 14,
   },
   emptySubtitle: {
-    color: '#8E95A0',
+    color: colors.textMuted,
     fontSize: 12,
     textAlign: 'center',
     marginTop: 6,
@@ -2953,7 +2957,7 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     padding: 20,
     borderWidth: 1.5,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: colors.border,
   },
   modalCardSmall: {
     width: '100%',
@@ -2962,7 +2966,7 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     padding: 20,
     borderWidth: 1.5,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: colors.border,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -2971,7 +2975,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   modalTitle: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 18,
     fontWeight: '900',
   },
@@ -3014,15 +3018,15 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   textInput: {
-    backgroundColor: '#161B22',
+    backgroundColor: colors.surface,
     borderRadius: 14,
     paddingHorizontal: 14,
     paddingVertical: 12,
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 14,
     fontWeight: '600',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderColor: colors.border,
   },
   textArea: {
     height: 80,
@@ -3034,19 +3038,19 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   catOptionPill: {
-    backgroundColor: '#161B22',
+    backgroundColor: colors.surface,
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderColor: colors.border,
   },
   catOptionPillActive: {
     backgroundColor: '#E25822',
     borderColor: '#E25822',
   },
   catOptionText: {
-    color: '#8E95A0',
+    color: colors.textMuted,
     fontSize: 11,
     fontWeight: '700',
   },
@@ -3081,7 +3085,7 @@ const styles = StyleSheet.create({
     fontWeight: '900',
   },
   inviteHelpText: {
-    color: '#8E95A0',
+    color: colors.textMuted,
     fontSize: 12,
     lineHeight: 18,
     marginBottom: 14,
@@ -3089,12 +3093,12 @@ const styles = StyleSheet.create({
   usernameInputWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#161B22',
+    backgroundColor: colors.surface,
     borderRadius: 14,
     paddingHorizontal: 14,
     height: 48,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderColor: colors.border,
   },
   atSign: {
     color: '#E25822',
@@ -3104,7 +3108,7 @@ const styles = StyleSheet.create({
   },
   usernameInput: {
     flex: 1,
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 14,
     fontWeight: '600',
   },
@@ -3142,7 +3146,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   tournLeaderOnlyBadgeText: {
-    color: '#FBBF24',
+    color: colors.gold,
     fontSize: 10,
     fontWeight: '800',
   },
@@ -3151,17 +3155,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 32,
     paddingHorizontal: 20,
-    backgroundColor: '#161B22',
+    backgroundColor: colors.surface,
     borderRadius: 24,
   },
   exerciseScreenEmptyTitle: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 15,
     fontWeight: '800',
     marginTop: 4,
   },
   exerciseScreenEmptySubtitle: {
-    color: '#8E95A0',
+    color: colors.textMuted,
     fontSize: 12,
     textAlign: 'center',
     marginTop: 4,
@@ -3208,7 +3212,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   tournRuleText: {
-    color: '#CBD5E1',
+    color: colors.text,
     fontSize: 11,
     lineHeight: 16,
     flex: 1,
@@ -3227,7 +3231,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   tournCardDetail: {
-    backgroundColor: '#161B22',
+    backgroundColor: colors.surface,
     borderRadius: 22,
     padding: 18,
     marginBottom: 18,
@@ -3263,18 +3267,18 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(16, 185, 129, 0.2)',
   },
   statusBadgeText: {
-    color: '#FBBF24',
+    color: colors.gold,
     fontSize: 10,
     fontWeight: '900',
   },
   tournDetailTitle: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 18,
     fontWeight: '900',
     marginTop: 2,
   },
   tournDetailDesc: {
-    color: '#9CA3AF',
+    color: colors.textMuted,
     fontSize: 12,
     lineHeight: 17,
     marginTop: 6,
@@ -3286,7 +3290,7 @@ const styles = StyleSheet.create({
     marginTop: 14,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.05)',
+    borderTopColor: colors.border,
   },
   tournMetaStat: {
     flexDirection: 'row',
@@ -3294,7 +3298,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   tournMetaStatText: {
-    color: '#8E95A0',
+    color: colors.textMuted,
     fontSize: 11,
     fontWeight: '700',
   },
@@ -3313,13 +3317,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   championBannerSubtitle: {
-    color: '#FBBF24',
+    color: colors.gold,
     fontSize: 10,
     fontWeight: '900',
     letterSpacing: 0.6,
   },
   championBannerTitle: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 16,
     fontWeight: '900',
     marginTop: 2,
@@ -3368,7 +3372,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   bracketSectionTitle: {
-    color: '#8E95A0',
+    color: colors.textMuted,
     fontSize: 11,
     fontWeight: '900',
     letterSpacing: 0.8,
@@ -3385,18 +3389,18 @@ const styles = StyleSheet.create({
     fontWeight: '900',
   },
   emptyEntriesBox: {
-    backgroundColor: '#161B22',
+    backgroundColor: colors.surface,
     borderRadius: 20,
     padding: 24,
     alignItems: 'center',
   },
   emptyEntriesText: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 14,
     fontWeight: '800',
   },
   emptyEntriesSub: {
-    color: '#8E95A0',
+    color: colors.textMuted,
     fontSize: 11,
     textAlign: 'center',
     marginTop: 4,
@@ -3405,7 +3409,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   entryCard: {
-    backgroundColor: '#161B22',
+    backgroundColor: colors.surface,
     borderRadius: 18,
     padding: 12,
   },
@@ -3417,13 +3421,13 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 12,
-    backgroundColor: '#323742',
+    backgroundColor: colors.surfaceHi,
   },
   entryLogoPlaceholder: {
     width: 38,
     height: 38,
     borderRadius: 12,
-    backgroundColor: '#323742',
+    backgroundColor: colors.surfaceHi,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -3432,23 +3436,23 @@ const styles = StyleSheet.create({
     marginLeft: 10,
   },
   entryName: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 13,
     fontWeight: '800',
   },
   entryLeader: {
-    color: '#8E95A0',
+    color: colors.textMuted,
     fontSize: 10,
     marginTop: 1,
   },
   seedBadge: {
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    backgroundColor: colors.surfaceHi,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 8,
   },
   seedBadgeText: {
-    color: '#8E95A0',
+    color: colors.textMuted,
     fontSize: 10,
     fontWeight: '800',
   },
@@ -3460,24 +3464,24 @@ const styles = StyleSheet.create({
     marginTop: 8,
     paddingTop: 8,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.05)',
+    borderTopColor: colors.border,
   },
   entryAthletesLabel: {
-    color: '#8E95A0',
+    color: colors.textMuted,
     fontSize: 10,
     fontWeight: '700',
   },
   entryAthletePill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#161B22',
+    backgroundColor: colors.surface,
     paddingHorizontal: 7,
     paddingVertical: 3,
     borderRadius: 8,
     gap: 4,
   },
   entryAthleteName: {
-    color: '#CBD5E1',
+    color: colors.text,
     fontSize: 10,
     fontWeight: '700',
   },
@@ -3485,7 +3489,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   matchCard: {
-    backgroundColor: '#161B22',
+    backgroundColor: colors.surface,
     borderRadius: 20,
     padding: 14,
   },
@@ -3558,18 +3562,18 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: -6,
     right: -6,
-    backgroundColor: '#161B22',
+    backgroundColor: colors.surface,
     borderRadius: 10,
     padding: 2,
   },
   fighterCommunityName: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 12,
     fontWeight: '800',
     textAlign: 'center',
   },
   fighterAthleteName: {
-    color: '#8E95A0',
+    color: colors.textMuted,
     fontSize: 10,
     marginTop: 2,
     textAlign: 'center',
@@ -3594,12 +3598,12 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   vsText: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 9,
     fontWeight: '900',
   },
   vsExerciseText: {
-    color: '#8E95A0',
+    color: colors.textMuted,
     fontSize: 9,
     fontWeight: '700',
   },
@@ -3663,7 +3667,7 @@ const styles = StyleSheet.create({
     lineHeight: 14,
   },
   durationBadgeUnit: {
-    color: '#4B5563',
+    color: colors.textDim,
     fontSize: 8,
     fontWeight: '800',
     textTransform: 'uppercase',
@@ -3690,7 +3694,7 @@ const styles = StyleSheet.create({
     width: 5,
     height: 5,
     borderRadius: 2.5,
-    backgroundColor: '#1A1C20',
+    backgroundColor: '#11141A',
     marginRight: 5,
   },
   muscleTagPillText: {
@@ -3732,7 +3736,7 @@ const styles = StyleSheet.create({
     width: 26,
     height: 26,
     borderRadius: 13,
-    backgroundColor: '#1A1C20',
+    backgroundColor: '#11141A',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -3749,7 +3753,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderColor: colors.border,
     gap: 6,
   },
   exerciseSelectPillActive: {
@@ -3760,7 +3764,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   exercisePillText: {
-    color: '#8E95A0',
+    color: colors.textMuted,
     fontSize: 11,
     fontWeight: '700',
   },
@@ -3769,7 +3773,7 @@ const styles = StyleSheet.create({
     fontWeight: '900',
   },
   nominateDesc: {
-    color: '#8E95A0',
+    color: colors.textMuted,
     fontSize: 12,
     lineHeight: 18,
     marginBottom: 8,
@@ -3782,7 +3786,7 @@ const styles = StyleSheet.create({
     padding: 10,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderColor: colors.border,
   },
   athleteSelectRowSelected: {
     borderColor: '#E25822',
@@ -3793,12 +3797,12 @@ const styles = StyleSheet.create({
     marginLeft: 10,
   },
   athleteSelectName: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 13,
     fontWeight: '800',
   },
   athleteSelectUsername: {
-    color: '#8E95A0',
+    color: colors.textMuted,
     fontSize: 11,
   },
   checkboxCircle: {
@@ -3814,4 +3818,5 @@ const styles = StyleSheet.create({
     backgroundColor: '#E25822',
     borderColor: '#E25822',
   },
-});
+})
+);

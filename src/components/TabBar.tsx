@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { Alert, Animated, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Dumbbell, Home, Lock, User, Users } from 'lucide-react-native';
-import { colors, radius, shadow } from '../theme';
+import { makeStyles, radius, shadow, ThemeColors, useColors } from '../theme';
 
 export type TabBarItem = 'home' | 'explore' | 'workouts' | 'social' | 'profile';
 
@@ -30,6 +30,8 @@ interface TabButtonProps {
 }
 
 const TabButton: React.FC<TabButtonProps> = ({ label, isActive, isLocked, Icon, onPress }) => {
+  const colors = useColors();
+  const styles = useStyles();
   const anim = useRef(new Animated.Value(isActive ? 1 : 0)).current;
 
   useEffect(() => {
@@ -74,6 +76,8 @@ export const TabBar: React.FC<TabBarProps> = ({
   isGuest = false,
   onRequireAuth,
 }) => {
+  const colors = useColors();
+  const styles = useStyles();
   const insets = useSafeAreaInsets();
 
   const handlePress = (item: (typeof TAB_ITEMS)[number]) => {
@@ -115,7 +119,8 @@ export const TabBar: React.FC<TabBarProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors: ThemeColors) =>
+  StyleSheet.create({
   wrapper: {
     position: 'absolute',
     left: 0,
@@ -128,7 +133,7 @@ const styles = StyleSheet.create({
     gap: 6,
     padding: 7,
     borderRadius: radius.pill,
-    backgroundColor: 'rgba(22, 27, 34, 0.97)',
+    backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.borderStrong,
     ...shadow(14),
@@ -162,4 +167,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-});
+})
+);

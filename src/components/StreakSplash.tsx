@@ -4,7 +4,7 @@ import { Flame } from 'lucide-react-native';
 import { useGameStats } from '../hooks/useGameStats';
 import { useUserStore } from '../store/userStore';
 import { isActiveDay, toDateKey } from '../utils/gamification';
-import { colors, radius } from '../theme';
+import { makeStyles, radius, ThemeColors, useColors } from '../theme';
 
 const VISIBLE_MS = 4000;
 const DAY_LETTERS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
@@ -15,6 +15,8 @@ let shownThisLaunch = false;
 
 /** Animated daily-streak card shown for a few seconds when the home screen first opens. */
 export const StreakSplash: React.FC = () => {
+  const colors = useColors();
+  const styles = useStyles();
   const profile = useUserStore((s) => s.profile);
   const { streak } = useGameStats();
   const [visible, setVisible] = useState(false);
@@ -176,10 +178,11 @@ export const StreakSplash: React.FC = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors: ThemeColors) =>
+  StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(10, 12, 17, 0.96)',
+    backgroundColor: colors.bg,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -213,5 +216,6 @@ const styles = StyleSheet.create({
   dayDotActive: { backgroundColor: colors.flame },
   dayDotToday: { borderWidth: 2, borderColor: colors.flame },
   best: { color: colors.textDim, fontSize: 12, fontWeight: '700', marginTop: 16 },
-  skip: { position: 'absolute', bottom: 56, color: 'rgba(255,255,255,0.45)', fontSize: 12, fontWeight: '700' },
-});
+  skip: { position: 'absolute', bottom: 56, color: colors.textDim, fontSize: 12, fontWeight: '700' },
+})
+);

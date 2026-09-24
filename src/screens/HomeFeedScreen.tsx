@@ -54,7 +54,7 @@ import { DailyChallengesSection } from '../components/DailyChallengesSection';
 import { useDailyChallengeStore } from '../store/dailyChallengeStore';
 import { useGameStats } from '../hooks/useGameStats';
 import { isActiveDay, toDateKey, XP_PER_MATCH } from '../utils/gamification';
-import { colors, exerciseCardThemes, radius } from '../theme';
+import { exerciseCardThemes, makeStyles, radius, ThemeColors, useColors } from '../theme';
 
 export type { ExerciseItem };
 
@@ -89,6 +89,8 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
   featuredExercise,
   onOpenAiDuel,
 }) => {
+  const colors = useColors();
+  const styles = useStyles();
   const { user, profile, setProfile, isGuest } = useUserStore();
   const { level, streak } = useGameStats();
   const [friends, setFriends] = useState<FriendshipItem[]>([]);
@@ -735,7 +737,8 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors: ThemeColors) =>
+  StyleSheet.create({
   feedScrollView: { flex: 1, backgroundColor: colors.bg },
   feedScrollContent: { paddingHorizontal: 18, paddingTop: 14, paddingBottom: 150 },
 
@@ -1010,4 +1013,5 @@ const styles = StyleSheet.create({
   stepDesc: { color: colors.textMuted, fontSize: 12.5, lineHeight: 18, marginTop: 3 },
   gotItButton: { marginTop: 10, height: 52, borderRadius: radius.pill, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
   gotItButtonText: { color: colors.onAccent, fontSize: 15, fontWeight: '900' },
-});
+})
+);

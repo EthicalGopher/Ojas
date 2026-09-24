@@ -26,6 +26,7 @@ import { useGameStats } from '../hooks/useGameStats';
 import type { SimulatedOpponent } from '../utils/simulatedOpponent';
 import { supabase } from '../utils/supabase';
 import { useUserStore } from '../store/userStore';
+import { makeStyles, ThemeColors, useColors } from '../theme';
 import {
   initBattleChannel,
   acceptCustomBattleInvite,
@@ -34,6 +35,8 @@ import {
 } from '../utils/customBattleService';
 
 export default function AppShell() {
+  const colors = useColors();
+  const styles = useStyles();
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   const [isMatchCamera, setIsMatchCamera] = useState<boolean>(false);
   const [matchWaiting, setMatchWaiting] = useState<boolean>(false);
@@ -500,10 +503,11 @@ export default function AppShell() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors: ThemeColors) =>
+  StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1A1C20',
+    backgroundColor: colors.bg,
   },
   matchWaitingOverlay: {
     position: 'absolute',
@@ -517,24 +521,24 @@ const styles = StyleSheet.create({
     zIndex: 100,
   },
   matchWaitingCard: {
-    backgroundColor: '#161B22',
+    backgroundColor: colors.surface,
     borderRadius: 28,
     padding: 32,
     alignItems: 'center',
     width: '80%',
     maxWidth: 320,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: colors.border,
   },
   matchWaitingTitle: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 20,
     fontWeight: '700',
     marginTop: 20,
     marginBottom: 8,
   },
   matchWaitingDesc: {
-    color: '#94A3B8',
+    color: colors.textMuted,
     fontSize: 14,
     textAlign: 'center',
     lineHeight: 20,
@@ -556,10 +560,10 @@ const styles = StyleSheet.create({
   centerLoading: {
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#0D111A',
+    backgroundColor: colors.surfaceSunken,
   },
   loadingText: {
-    color: '#94A3B8',
+    color: colors.textMuted,
     fontSize: 14,
     fontWeight: '600',
     marginTop: 14,
@@ -577,14 +581,14 @@ const styles = StyleSheet.create({
     zIndex: 200,
   },
   incomingInviteCard: {
-    backgroundColor: '#161B22',
+    backgroundColor: colors.surface,
     borderRadius: 28,
     padding: 24,
     width: '100%',
     maxWidth: 350,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: colors.border,
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.5,
@@ -619,12 +623,12 @@ const styles = StyleSheet.create({
     borderColor: '#C8B6FF',
   },
   incomingSenderName: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 20,
     fontWeight: '900',
   },
   incomingChallengeText: {
-    color: '#94A3B8',
+    color: colors.textMuted,
     fontSize: 13.5,
     textAlign: 'center',
     marginTop: 6,
@@ -641,14 +645,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.07)',
+    backgroundColor: colors.surfaceHi,
     borderRadius: 18,
     paddingVertical: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.12)',
+    borderColor: colors.border,
   },
   incomingDeclineText: {
-    color: '#94A3B8',
+    color: colors.textMuted,
     fontSize: 13.5,
     fontWeight: '800',
   },
@@ -672,4 +676,5 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     letterSpacing: 0.5,
   },
-});
+})
+);

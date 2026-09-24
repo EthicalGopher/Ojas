@@ -3,7 +3,7 @@ import { Animated, Modal, StyleSheet, Text, TouchableOpacity, View } from 'react
 import { Trophy } from 'lucide-react-native';
 import { useGameStats } from '../hooks/useGameStats';
 import { useUserStore } from '../store/userStore';
-import { colors, radius, shadow } from '../theme';
+import { makeStyles, radius, shadow, ThemeColors, useColors } from '../theme';
 
 // Kept at module level: this component unmounts while the camera/match screens are open,
 // which is exactly when level-ups happen, so a ref would lose the baseline.
@@ -11,6 +11,8 @@ const baseline: { profileId: string | null; level: number | null } = { profileId
 
 /** Pops a celebration whenever the athlete's level goes up during this session. */
 export const LevelUpCelebration: React.FC = () => {
+  const colors = useColors();
+  const styles = useStyles();
   const profile = useUserStore((s) => s.profile);
   const { level } = useGameStats();
   const [shownLevel, setShownLevel] = useState<number | null>(null);
@@ -61,7 +63,8 @@ export const LevelUpCelebration: React.FC = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors: ThemeColors) =>
+  StyleSheet.create({
   overlay: { flex: 1, backgroundColor: 'rgba(3,5,10,0.85)', alignItems: 'center', justifyContent: 'center', padding: 24 },
   card: {
     width: '100%',
@@ -108,4 +111,5 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   btnText: { color: colors.onAccent, fontSize: 15, fontWeight: '900', letterSpacing: 1 },
-});
+})
+);

@@ -43,10 +43,14 @@ import {
   Users,
   X,
   Zap,
+  Sun,
+  Moon,
+  SunMoon,
+  Smartphone,
 } from 'lucide-react-native';
 import { ProgressRing } from '../components/ui/ProgressRing';
 import { useGameStats } from '../hooks/useGameStats';
-import { cardThemes, colors, radius } from '../theme';
+import { makeStyles, radius, ThemeColors, ThemeMode, useColors, useThemeStore } from '../theme';
 
 type IconType = React.ComponentType<{ size?: number; color?: string; strokeWidth?: number }>;
 import { Avatar } from '../components/Avatar';
@@ -76,6 +80,7 @@ import { generateRandomUsername } from '../utils/usernameGenerator';
 import { supabase } from '../utils/supabase';
 import { useUserStore } from '../store/userStore';
 
+import { ThemedStatusBar } from '../components/ThemedStatusBar';
 interface ProfileScreenProps {
   currentUser: any;
   onBack: () => void;
@@ -89,6 +94,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   onBack,
   onLogout,
 }) => {
+  const colors = useColors();
+  const styles = useStyles();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isSaving, setIsSaving] = useState<boolean>(false);
@@ -116,6 +123,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const [isSendingRequest, setIsSendingRequest] = useState<boolean>(false);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const { level, streak } = useGameStats();
+  const themeMode = useThemeStore((s) => s.mode);
+  const setThemeMode = useThemeStore((s) => s.setMode);
 
   const loadProfileData = useCallback(async () => {
     if (!currentUser) return;
@@ -467,7 +476,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={colors.bg} />
+      <ThemedStatusBar />
 
       {/* HEADER */}
       <View style={styles.topHeader}>
@@ -507,7 +516,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
         <View style={styles.heroCard}>
           <View style={styles.heroTopRow}>
             <TouchableOpacity activeOpacity={0.85} onPress={handlePickAndUploadPhoto} disabled={isUploadingPhoto}>
-              <ProgressRing size={96} strokeWidth={4} progress={level.progress}>
+              <ProgressRing size={96} strokeWidth={4} progress={level.progress} color="#FFFFFF" trackColor="rgba(0,0,0,0.2)">
                 <Avatar
                   username={username || currentUser?.email || 'athlete'}
                   size={82}
@@ -533,7 +542,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
               <Text style={styles.heroName} numberOfLines={1}>{fullName || username || 'Ojas Athlete'}</Text>
               <Text style={styles.heroUsername} numberOfLines={1}>@{username || 'athlete'}</Text>
               <View style={styles.titleChip}>
-                <ShieldCheck size={12} color={colors.accent} />
+                <ShieldCheck size={12} color="#FFFFFF" />
                 <Text style={styles.titleChipText}>{level.title}</Text>
               </View>
             </View>
@@ -559,7 +568,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
               { label: 'KCAL', value: totalCalories.toLocaleString(), Icon: Activity },
             ].map(({ label, value, Icon }) => (
               <View key={label} style={styles.statTile}>
-                <Icon size={14} color={colors.accent} />
+                <Icon size={14} color="#FFFFFF" />
                 <Text style={styles.statValue}>{value}</Text>
                 <Text style={styles.statLabel}>{label}</Text>
               </View>
@@ -595,7 +604,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
         {activeTab === 'profile' ? (
           <>
             {/* ACHIEVEMENTS */}
-            <View style={[styles.sectionCard, { backgroundColor: cardThemes.lavender.bg }]}>
+            <View style={styles.sectionCard}>
               <View style={styles.sectionHeaderRow}>
                 <View style={styles.sectionTitleRow}>
                   <Award size={15} color={colors.accent} />
@@ -609,7 +618,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                     <View style={[styles.achievementIcon, unlocked && { backgroundColor: colors.accent }]}>
                       {unlocked ? <Icon size={18} color={colors.onAccent} /> : <Lock size={15} color={colors.textDim} />}
                     </View>
-                    <Text style={[styles.achievementTitle, !unlocked && { color: cardThemes.lavender.sub }]} numberOfLines={1}>
+                    <Text style={[styles.achievementTitle, !unlocked && { color: colors.textMuted }]} numberOfLines={1}>
                       {title}
                     </Text>
                     <Text style={styles.achievementHint} numberOfLines={1}>{hint}</Text>
@@ -619,7 +628,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
             </View>
 
             {/* DETAILS */}
-            <View style={[styles.sectionCard, { backgroundColor: cardThemes.sand.bg }]}>
+            <View style={styles.sectionCard}>
               <View style={styles.sectionTitleRow}>
                 <User size={15} color={colors.accent} />
                 <Text style={styles.sectionHeader}>PERSONAL DETAILS</Text>
@@ -665,7 +674,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
             </View>
 
             {/* HEALTH */}
-            <View style={[styles.sectionCard, { backgroundColor: cardThemes.mint.bg }]}>
+            <View style={styles.sectionCard}>
               <View style={styles.sectionHeaderRow}>
                 <View style={styles.sectionTitleRow}>
                   <HeartPulse size={15} color={colors.accent} />
@@ -744,6 +753,36 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                 </>
               )}
             </View>
+
+            {/* APPEARANCE */}
+            {!isEditing && (
+              <View style={styles.sectionCard}>
+                <View style={styles.sectionTitleRow}>
+                  <SunMoon size={15} color={colors.accent} />
+                  <Text style={styles.sectionHeader}>APPEARANCE</Text>
+                </View>
+                <View style={styles.themeSwitch}>
+                  {([
+                    { key: 'system', label: 'System', Icon: Smartphone },
+                    { key: 'light', label: 'Light', Icon: Sun },
+                    { key: 'dark', label: 'Dark', Icon: Moon },
+                  ] as { key: ThemeMode; label: string; Icon: IconType }[]).map(({ key, label, Icon }) => {
+                    const active = themeMode === key;
+                    return (
+                      <TouchableOpacity
+                        key={key}
+                        style={[styles.themeOption, active && styles.themeOptionActive]}
+                        activeOpacity={0.85}
+                        onPress={() => setThemeMode(key)}
+                      >
+                        <Icon size={15} color={active ? colors.onAccent : colors.textMuted} />
+                        <Text style={[styles.themeOptionText, active && styles.themeOptionTextActive]}>{label}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+            )}
 
             {isEditing ? (
               <TouchableOpacity style={styles.cancelEditBtn} activeOpacity={0.85} onPress={() => { setIsEditing(false); loadProfileData(); }}>
@@ -886,7 +925,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           </View>
         ) : (
           <View>
-            <View style={[styles.sectionCard, { backgroundColor: cardThemes.pink.bg }]}>
+            <View style={styles.sectionCard}>
               <View style={styles.sectionTitleRow}>
                 <UserPlus size={15} color={colors.accent} />
                 <Text style={styles.sectionHeader}>ADD A FRIEND</Text>
@@ -933,7 +972,13 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors: ThemeColors) =>
+  StyleSheet.create({
+  themeOptionTextActive: { color: colors.onAccent },
+  themeOptionText: { color: colors.textMuted, fontSize: 13, fontWeight: '800' },
+  themeOptionActive: { backgroundColor: colors.accent },
+  themeOption: { flex: 1, height: 40, borderRadius: radius.pill, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
+  themeSwitch: { flexDirection: 'row', gap: 8, marginTop: 14, padding: 4, borderRadius: radius.pill, backgroundColor: colors.surfaceSunken },
   container: { flex: 1, backgroundColor: colors.bg },
   loadingContainer: { flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center', gap: 12 },
   loadingText: { color: colors.textMuted, fontSize: 13, fontWeight: '600' },
@@ -977,27 +1022,27 @@ const styles = StyleSheet.create({
   scrollContainer: { paddingHorizontal: 18, paddingBottom: 150 },
 
   // Hero
-  heroCard: { padding: 22, borderRadius: radius.xl, backgroundColor: cardThemes.navy.bg },
+  heroCard: { padding: 22, borderRadius: radius.xl, backgroundColor: colors.flame },
   heroTopRow: { flexDirection: 'row', alignItems: 'center' },
-  cameraBadge: { position: 'absolute', right: -2, top: 2, width: 30, height: 30, borderRadius: 15, backgroundColor: colors.accent, borderWidth: 2, borderColor: cardThemes.navy.bg, alignItems: 'center', justifyContent: 'center' },
+  cameraBadge: { position: 'absolute', right: -2, top: 2, width: 30, height: 30, borderRadius: 15, backgroundColor: '#11141A', borderWidth: 2, borderColor: colors.flame, alignItems: 'center', justifyContent: 'center' },
   levelBadgeRow: { position: 'absolute', left: 0, right: 0, bottom: -6, alignItems: 'center' },
-  levelBadge: { paddingHorizontal: 8, height: 20, borderRadius: 10, backgroundColor: colors.accent, borderWidth: 2, borderColor: cardThemes.navy.bg, justifyContent: 'center' },
-  levelBadgeText: { color: colors.onAccent, fontSize: 10, fontWeight: '900' },
+  levelBadge: { paddingHorizontal: 8, height: 20, borderRadius: 10, backgroundColor: '#11141A', borderWidth: 2, borderColor: colors.flame, justifyContent: 'center' },
+  levelBadgeText: { color: '#FFFFFF', fontSize: 10, fontWeight: '900' },
   heroInfo: { flex: 1, marginLeft: 16 },
-  heroName: { color: colors.text, fontSize: 21, fontWeight: '900' },
-  heroUsername: { color: cardThemes.navy.sub, fontSize: 13, fontWeight: '600', marginTop: 3 },
-  titleChip: { flexDirection: 'row', alignItems: 'center', gap: 5, alignSelf: 'flex-start', marginTop: 10, paddingHorizontal: 10, paddingVertical: 5, borderRadius: radius.pill, backgroundColor: cardThemes.navy.chip },
+  heroName: { color: '#FFFFFF', fontSize: 21, fontWeight: '900' },
+  heroUsername: { color: 'rgba(255,255,255,0.85)', fontSize: 13, fontWeight: '600', marginTop: 3 },
+  titleChip: { flexDirection: 'row', alignItems: 'center', gap: 5, alignSelf: 'flex-start', marginTop: 10, paddingHorizontal: 10, paddingVertical: 5, borderRadius: radius.pill, backgroundColor: 'rgba(0, 0, 0, 0.18)' },
   titleChipText: { color: '#FFFFFF', fontSize: 11, fontWeight: '900', letterSpacing: 0.4 },
-  heroBio: { color: cardThemes.navy.sub, fontSize: 13, lineHeight: 19, marginTop: 16 },
+  heroBio: { color: 'rgba(255,255,255,0.85)', fontSize: 13, lineHeight: 19, marginTop: 16 },
   xpLabelRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 20, marginBottom: 8 },
-  xpLabel: { color: colors.text, fontSize: 12, fontWeight: '800' },
-  xpNext: { color: cardThemes.navy.sub, fontSize: 11, fontWeight: '700' },
-  xpTrack: { height: 9, borderRadius: 5, backgroundColor: 'rgba(0, 0, 0, 0.25)', overflow: 'hidden' },
-  xpFill: { height: '100%', borderRadius: 4, backgroundColor: colors.accent },
+  xpLabel: { color: '#FFFFFF', fontSize: 12, fontWeight: '800' },
+  xpNext: { color: 'rgba(255,255,255,0.85)', fontSize: 11, fontWeight: '700' },
+  xpTrack: { height: 9, borderRadius: 5, backgroundColor: 'rgba(0, 0, 0, 0.2)', overflow: 'hidden' },
+  xpFill: { height: '100%', borderRadius: 5, backgroundColor: '#FFFFFF' },
   statGrid: { flexDirection: 'row', gap: 10, marginTop: 18 },
-  statTile: { flex: 1, alignItems: 'center', paddingVertical: 12, borderRadius: radius.md, backgroundColor: 'rgba(0, 0, 0, 0.2)' },
-  statValue: { color: colors.text, fontSize: 15, fontWeight: '900', marginTop: 4 },
-  statLabel: { color: cardThemes.navy.sub, fontSize: 8.5, fontWeight: '900', letterSpacing: 0.6, marginTop: 2 },
+  statTile: { flex: 1, alignItems: 'center', paddingVertical: 12, borderRadius: radius.md, backgroundColor: 'rgba(0, 0, 0, 0.18)' },
+  statValue: { color: '#FFFFFF', fontSize: 15, fontWeight: '900', marginTop: 4 },
+  statLabel: { color: 'rgba(255,255,255,0.85)', fontSize: 8.5, fontWeight: '900', letterSpacing: 0.6, marginTop: 2 },
 
   // Tabs
   subTabBar: { flexDirection: 'row', marginVertical: 20, padding: 5, borderRadius: radius.pill, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
@@ -1017,27 +1062,27 @@ const styles = StyleSheet.create({
   badgeCountText: { color: '#fff', fontSize: 9, fontWeight: '900' },
 
   // Sections
-  sectionCard: { padding: 20, borderRadius: radius.xl, marginBottom: 18 },
+  sectionCard: { padding: 20, borderRadius: radius.xl, marginBottom: 18, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
   sectionHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   sectionTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
-  sectionHeader: { color: '#11141A', fontSize: 12.5, fontWeight: '900', letterSpacing: 0.8 },
-  sectionMeta: { color: '#374151', fontSize: 11, fontWeight: '800' },
+  sectionHeader: { color: colors.text, fontSize: 12.5, fontWeight: '900', letterSpacing: 0.8 },
+  sectionMeta: { color: colors.textMuted, fontSize: 11, fontWeight: '800' },
 
   // Achievements
   achievementGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 16 },
-  achievement: { width: '30%', flexGrow: 1, alignItems: 'center', paddingVertical: 12, paddingHorizontal: 8, borderRadius: radius.lg, backgroundColor: 'rgba(17, 20, 26, 0.08)' },
-  achievementUnlocked: { backgroundColor: '#FFFFFF' },
-  achievementIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(17, 20, 26, 0.1)', alignItems: 'center', justifyContent: 'center' },
-  achievementTitle: { color: '#11141A', fontSize: 11.5, fontWeight: '900', marginTop: 8 },
-  achievementHint: { color: '#374151', fontSize: 9.5, fontWeight: '700', marginTop: 2 },
+  achievement: { width: '30%', flexGrow: 1, alignItems: 'center', paddingVertical: 12, paddingHorizontal: 8, borderRadius: radius.lg, backgroundColor: colors.surfaceHi, borderWidth: 1, borderColor: 'transparent' },
+  achievementUnlocked: { backgroundColor: 'rgba(226, 88, 34, 0.12)', borderColor: 'rgba(226, 88, 34, 0.4)' },
+  achievementIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
+  achievementTitle: { color: colors.text, fontSize: 11.5, fontWeight: '900', marginTop: 8 },
+  achievementHint: { color: colors.textMuted, fontSize: 9.5, fontWeight: '700', marginTop: 2 },
 
   // Details
   detailRow: { flexDirection: 'row', gap: 14, marginTop: 16 },
-  detailIcon: { width: 34, height: 34, borderRadius: 11, backgroundColor: 'rgba(17, 20, 26, 0.08)', alignItems: 'center', justifyContent: 'center' },
+  detailIcon: { width: 34, height: 34, borderRadius: 11, backgroundColor: 'rgba(226, 88, 34, 0.12)', alignItems: 'center', justifyContent: 'center' },
   detailLabelRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  detailLabel: { color: '#374151', fontSize: 10.5, fontWeight: '900', letterSpacing: 0.6, textTransform: 'uppercase' },
-  detailValue: { color: '#11141A', fontSize: 15, fontWeight: '700', marginTop: 3 },
-  input: { marginTop: 6, backgroundColor: '#FFFFFF', borderRadius: radius.md, borderWidth: 1, borderColor: 'rgba(17, 20, 26, 0.12)', color: '#11141A', fontSize: 14, paddingHorizontal: 12, paddingVertical: 10 },
+  detailLabel: { color: colors.textMuted, fontSize: 10.5, fontWeight: '900', letterSpacing: 0.6, textTransform: 'uppercase' },
+  detailValue: { color: colors.text, fontSize: 15, fontWeight: '700', marginTop: 3 },
+  input: { marginTop: 6, backgroundColor: colors.surfaceSunken, borderRadius: radius.md, borderWidth: 1, borderColor: colors.borderStrong, color: colors.text, fontSize: 14, paddingHorizontal: 12, paddingVertical: 10 },
   textArea: { minHeight: 80, textAlignVertical: 'top' },
   randomizeBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   randomizeBtnText: { color: colors.accent, fontSize: 11, fontWeight: '800' },
@@ -1045,23 +1090,23 @@ const styles = StyleSheet.create({
   // Health
   linkBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   linkBtnText: { color: colors.accent, fontSize: 12, fontWeight: '800' },
-  healthSectionDesc: { color: '#374151', fontSize: 12.5, lineHeight: 18, marginTop: 10 },
+  healthSectionDesc: { color: colors.textMuted, fontSize: 12.5, lineHeight: 18, marginTop: 10 },
   conditionChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
-  conditionChip: { paddingHorizontal: 11, paddingVertical: 6, borderRadius: radius.pill, backgroundColor: '#FFFFFF' },
+  conditionChip: { paddingHorizontal: 11, paddingVertical: 6, borderRadius: radius.pill, backgroundColor: 'rgba(226, 88, 34, 0.12)', borderWidth: 1, borderColor: 'rgba(226, 88, 34, 0.35)' },
   conditionChipText: { color: colors.accent, fontSize: 12, fontWeight: '800' },
-  healthItem: { marginTop: 12, padding: 14, borderRadius: radius.lg, backgroundColor: 'rgba(255, 255, 255, 0.6)', borderWidth: 1, borderColor: 'transparent' },
+  healthItem: { marginTop: 12, padding: 14, borderRadius: radius.lg, backgroundColor: colors.surfaceSunken, borderWidth: 1, borderColor: 'transparent' },
   healthItemSelected: { borderColor: 'rgba(226, 88, 34, 0.5)' },
   healthItemTop: { flexDirection: 'row', alignItems: 'center' },
-  healthTitle: { color: '#11141A', fontSize: 14, fontWeight: '900' },
-  healthSubtitle: { color: '#374151', fontSize: 11, fontWeight: '700', marginTop: 1 },
-  healthQuestion: { color: '#374151', fontSize: 12, lineHeight: 17, marginTop: 8 },
+  healthTitle: { color: colors.text, fontSize: 14, fontWeight: '900' },
+  healthSubtitle: { color: colors.textMuted, fontSize: 11, fontWeight: '700', marginTop: 1 },
+  healthQuestion: { color: colors.textMuted, fontSize: 12, lineHeight: 17, marginTop: 8 },
   healthToggleRow: { flexDirection: 'row', gap: 6 },
-  healthToggleBtn: { width: 38, height: 34, borderRadius: 11, backgroundColor: 'rgba(17, 20, 26, 0.08)', alignItems: 'center', justifyContent: 'center' },
+  healthToggleBtn: { width: 38, height: 34, borderRadius: 11, backgroundColor: colors.surfaceHi, alignItems: 'center', justifyContent: 'center' },
   healthYesActive: { backgroundColor: colors.accent },
   healthNoActive: { backgroundColor: '#334155' },
   healthRecBadges: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 },
-  healthRecBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, backgroundColor: '#FFFFFF' },
-  healthRecBadgeText: { color: '#11141A', fontSize: 11, fontWeight: '700' },
+  healthRecBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, backgroundColor: colors.surfaceHi },
+  healthRecBadgeText: { color: colors.text, fontSize: 11, fontWeight: '700' },
 
   logoutButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 52, marginTop: 6, borderRadius: radius.pill, borderWidth: 1, borderColor: 'rgba(239, 68, 68, 0.4)', backgroundColor: 'rgba(239, 68, 68, 0.08)' },
   logoutButtonText: { color: colors.danger, fontSize: 14.5, fontWeight: '900' },
@@ -1162,8 +1207,8 @@ const styles = StyleSheet.create({
 
   // Add friend
   searchRow: { flexDirection: 'row', gap: 8, marginTop: 14 },
-  searchInputWrapper: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, height: 48, paddingHorizontal: 14, borderRadius: radius.pill, backgroundColor: '#FFFFFF' },
-  searchInput: { flex: 1, color: '#11141A', fontSize: 14 },
+  searchInputWrapper: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, height: 48, paddingHorizontal: 14, borderRadius: radius.pill, backgroundColor: colors.surfaceSunken, borderWidth: 1, borderColor: colors.border },
+  searchInput: { flex: 1, color: colors.text, fontSize: 14 },
   sendRequestBtn: {
     width: 46,
     height: 46,
@@ -1183,4 +1228,5 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(226, 88, 34, 0.25)',
   },
   infoTipText: { flex: 1, color: colors.textMuted, fontSize: 12.5, lineHeight: 18 },
-});
+})
+);

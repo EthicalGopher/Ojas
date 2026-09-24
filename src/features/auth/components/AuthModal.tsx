@@ -14,6 +14,7 @@ import { Avatar } from '../../../components/Avatar';
 import { generateRandomUsername } from '../../../utils/usernameGenerator';
 import { signInWithGoogleOAuth } from '../../../utils/googleAuth';
 
+import { makeStyles, ThemeColors, useColors } from '../../../theme';
 interface AuthModalProps {
   visible: boolean;
   onClose: () => void;
@@ -24,6 +25,8 @@ interface AuthModalProps {
 type AuthStep = 'welcome' | 'auth' | 'verify_email' | 'profile';
 
 export const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onUserChange, initialMode = 'signin' }) => {
+  const colors = useColors();
+  const styles = useStyles();
   const [step, setStep] = useState<AuthStep>('auth');
   const [isSignUp, setIsSignUp] = useState<boolean>(initialMode === 'signup');
   const [email, setEmail] = useState<string>('');
@@ -399,7 +402,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onUserCh
   );
 };
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors: ThemeColors) =>
+  StyleSheet.create({
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(5, 8, 14, 0.82)',
@@ -411,11 +415,11 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 390,
     maxHeight: '85%',
-    backgroundColor: '#161F30',
+    backgroundColor: colors.surface,
     borderRadius: 28,
     padding: 22,
     borderWidth: 1.5,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: colors.border,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 12 },
     shadowOpacity: 0.45,
@@ -433,7 +437,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   modalTitle: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 20,
     fontWeight: '900',
     letterSpacing: -0.3,
@@ -442,12 +446,12 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    backgroundColor: colors.surfaceHi,
     alignItems: 'center',
     justifyContent: 'center',
   },
   closeBtnText: {
-    color: '#8E95A0',
+    color: colors.textMuted,
     fontSize: 16,
     fontWeight: '700',
   },
@@ -464,16 +468,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 12,
     borderWidth: 2,
-    borderColor: '#E8D5C4',
+    borderColor: colors.accent,
   },
   userNameText: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 20,
     fontWeight: '900',
     letterSpacing: -0.3,
   },
   userEmailText: {
-    color: '#8E95A0',
+    color: colors.textMuted,
     fontSize: 13,
     marginTop: 2,
     marginBottom: 12,
@@ -493,11 +497,11 @@ const styles = StyleSheet.create({
     width: 7,
     height: 7,
     borderRadius: 4,
-    backgroundColor: '#E8D5C4',
+    backgroundColor: colors.accent,
     marginRight: 6,
   },
   statusBadgeText: {
-    color: '#E8D5C4',
+    color: colors.accent,
     fontSize: 11,
     fontWeight: '800',
     letterSpacing: 0.5,
@@ -539,7 +543,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   inputLabel: {
-    color: '#8E95A0',
+    color: colors.textMuted,
     fontSize: 12,
     fontWeight: '700',
     marginBottom: 4,
@@ -553,34 +557,34 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(232, 213, 196, 0.3)',
   },
   randomizeBtnText: {
-    color: '#E8D5C4',
+    color: colors.accent,
     fontSize: 11,
     fontWeight: '800',
   },
   textInput: {
-    backgroundColor: '#0D111A',
+    backgroundColor: colors.surfaceSunken,
     borderRadius: 16,
     paddingHorizontal: 16,
     paddingVertical: 12,
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: colors.border,
   },
   primaryActionButton: {
-    backgroundColor: '#E8D5C4',
+    backgroundColor: colors.accent,
     paddingVertical: 15,
     borderRadius: 26,
     alignItems: 'center',
     marginTop: 8,
-    shadowColor: '#E8D5C4',
+    shadowColor: colors.accent,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.3,
     shadowRadius: 14,
     elevation: 6,
   },
   primaryActionButtonText: {
-    color: '#11141A',
+    color: '#FFFFFF',
     fontSize: 15,
     fontWeight: '900',
     letterSpacing: 0.2,
@@ -591,12 +595,12 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   switchModeText: {
-    color: '#8E95A0',
+    color: colors.textMuted,
     fontSize: 13,
     fontWeight: '500',
   },
   switchModeHighlight: {
-    color: '#E8D5C4',
+    color: colors.accent,
     fontWeight: '800',
   },
   verifyContainer: {
@@ -615,20 +619,20 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   verifyTitle: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 20,
     fontWeight: '900',
     marginBottom: 8,
   },
   verifyDescription: {
-    color: '#8E95A0',
+    color: colors.textMuted,
     fontSize: 13,
     textAlign: 'center',
     lineHeight: 19,
     marginBottom: 18,
   },
   verifyHighlightEmail: {
-    color: '#E8D5C4',
+    color: colors.accent,
     fontWeight: '800',
   },
   resendButton: {
@@ -639,7 +643,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   resendButtonText: {
-    color: '#8E95A0',
+    color: colors.textMuted,
     fontSize: 12.5,
     fontWeight: '600',
     textDecorationLine: 'underline',
@@ -663,23 +667,23 @@ const styles = StyleSheet.create({
   dividerLine: {
     flex: 1,
     height: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: colors.surfaceHi,
   },
   dividerText: {
-    color: '#8E95A0',
+    color: colors.textMuted,
     fontSize: 10,
     fontWeight: '800',
     marginHorizontal: 10,
     letterSpacing: 0.5,
   },
   googleButton: {
-    backgroundColor: '#262A32',
+    backgroundColor: colors.surfaceHi,
     borderRadius: 26,
     paddingVertical: 14,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.12)',
+    borderColor: colors.border,
   },
   googleBtnContent: {
     flexDirection: 'row',
@@ -688,13 +692,14 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   googleIconText: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 16,
     fontWeight: '900',
   },
   googleButtonText: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 14,
     fontWeight: '800',
   },
-});
+})
+);

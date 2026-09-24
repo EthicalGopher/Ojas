@@ -40,8 +40,9 @@ import { NewsScreen } from '../screens/NewsScreen';
 import { LevelUpCelebration } from './LevelUpCelebration';
 import { StreakSplash } from './StreakSplash';
 import { selectUnreadCount, useNewsStore } from '../store/newsStore';
-import { colors, radius } from '../theme';
+import { makeStyles, radius, ThemeColors, useColors } from '../theme';
 
+import { ThemedStatusBar } from './ThemedStatusBar';
 export type MainTab = 'home' | 'explore' | 'workouts' | 'social' | 'profile';
 
 type DetailSubTab = 'workouts' | 'shop' | 'leaderboard' | 'how_to_play';
@@ -76,6 +77,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   onSelectModel,
   onLogout,
 }) => {
+  const colors = useColors();
+  const styles = useStyles();
   const [exercisesList, setExercisesList] = useState<ExerciseItem[]>(DEFAULT_EXERCISES);
   const activeSubTab = useUserStore((state) => state.homeSubTab);
   const setActiveSubTab = useUserStore((state) => state.setHomeSubTab);
@@ -374,7 +377,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={colors.bg} />
+      <ThemedStatusBar />
 
       {activeTab === 'home' && !selectedExercise && (
         <Header
@@ -475,7 +478,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors: ThemeColors) =>
+  StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   subNavBar: { flexDirection: 'row', marginHorizontal: 16, marginBottom: 4, padding: 4, borderRadius: radius.pill, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
   subNavTab: { flex: 1, height: 36, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderRadius: radius.pill, gap: 6 },
@@ -486,33 +490,34 @@ const styles = StyleSheet.create({
   newsBadgeText: { color: '#fff', fontSize: 9.5, fontWeight: '900' },
   mainContent: { flex: 1 },
   devContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 16 },
-  devCard: { backgroundColor: '#161F30', borderRadius: 24, padding: 24, width: '100%', maxWidth: 360, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
+  devCard: { backgroundColor: colors.surface, borderRadius: 24, padding: 24, width: '100%', maxWidth: 360, alignItems: 'center', borderWidth: 1, borderColor: colors.border },
   devIconBadge: { width: 64, height: 64, borderRadius: 20, backgroundColor: 'rgba(232, 213, 196, 0.15)', borderWidth: 1, borderColor: 'rgba(232, 213, 196, 0.3)', alignItems: 'center', justifyContent: 'center' },
   devIconText: { fontSize: 28 },
-  devTitle: { color: '#FFF', fontSize: 22, fontWeight: '800', marginTop: 16 },
+  devTitle: { color: colors.text, fontSize: 22, fontWeight: '800', marginTop: 16 },
   devPillTag: { marginTop: 10, backgroundColor: 'rgba(245, 158, 11, 0.15)', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 5, borderWidth: 1, borderColor: 'rgba(245, 158, 11, 0.3)' },
   devPillTagText: { color: '#FBBF24', fontSize: 11, fontWeight: '700' },
-  devSubtitle: { color: '#8E95A0', textAlign: 'center', lineHeight: 20, marginTop: 14, fontSize: 13 },
+  devSubtitle: { color: colors.textMuted, textAlign: 'center', lineHeight: 20, marginTop: 14, fontSize: 13 },
   devBackButton: { marginTop: 20, backgroundColor: '#E8D5C4', borderRadius: 20, paddingHorizontal: 22, paddingVertical: 12 },
   devBackButtonText: { color: '#11141A', fontWeight: '800', fontSize: 14 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(5, 8, 14, 0.82)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 16 },
-  modalCard: { width: '100%', maxWidth: 400, backgroundColor: '#161F30', borderRadius: 28, padding: 20, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.08)', shadowColor: '#000', shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.45, shadowRadius: 20, elevation: 10 },
+  modalCard: { width: '100%', maxWidth: 400, backgroundColor: colors.surface, borderRadius: 28, padding: 20, borderWidth: 1.5, borderColor: colors.border, shadowColor: '#000', shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.45, shadowRadius: 20, elevation: 10 },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
-  modalTitle: { color: '#FFF', fontSize: 19, fontWeight: '900' },
-  modalCloseIconText: { color: '#8E95A0', fontSize: 20, fontWeight: '700', padding: 4 },
-  specCard: { backgroundColor: '#0D111A', borderRadius: 16, padding: 14, marginTop: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' },
-  specCardTitle: { color: '#FFF', fontSize: 14, fontWeight: '800', marginBottom: 6 },
-  specDetailText: { color: '#8E95A0', fontSize: 12.5, lineHeight: 18 },
-  specHighlightText: { color: '#FFF', fontWeight: '700' },
+  modalTitle: { color: colors.text, fontSize: 19, fontWeight: '900' },
+  modalCloseIconText: { color: colors.textMuted, fontSize: 20, fontWeight: '700', padding: 4 },
+  specCard: { backgroundColor: colors.surfaceSunken, borderRadius: 16, padding: 14, marginTop: 14, borderWidth: 1, borderColor: colors.border },
+  specCardTitle: { color: colors.text, fontSize: 14, fontWeight: '800', marginBottom: 6 },
+  specDetailText: { color: colors.textMuted, fontSize: 12.5, lineHeight: 18 },
+  specHighlightText: { color: colors.text, fontWeight: '700' },
   specRecommendText: { color: '#E8D5C4', fontWeight: '800' },
-  modelSectionHeading: { color: '#F8FAFC', fontSize: 15, fontWeight: '800', marginTop: 16, marginBottom: 8 },
-  optionCard: { backgroundColor: '#0D111A', borderRadius: 16, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' },
+  modelSectionHeading: { color: colors.text, fontSize: 15, fontWeight: '800', marginTop: 16, marginBottom: 8 },
+  optionCard: { backgroundColor: colors.surfaceSunken, borderRadius: 16, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: colors.border },
   optionCardSelected: { borderColor: '#E8D5C4', backgroundColor: 'rgba(232, 213, 196, 0.08)' },
   optionHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  optionTitle: { color: '#FFF', fontSize: 14, fontWeight: '800' },
+  optionTitle: { color: colors.text, fontSize: 14, fontWeight: '800' },
   recommendBadge: { backgroundColor: 'rgba(232, 213, 196, 0.2)', borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: 'rgba(232, 213, 196, 0.35)' },
   recommendBadgeText: { color: '#E8D5C4', fontSize: 10, fontWeight: '800' },
-  optionDescription: { color: '#8E95A0', fontSize: 12, marginTop: 6, lineHeight: 17 },
+  optionDescription: { color: colors.textMuted, fontSize: 12, marginTop: 6, lineHeight: 17 },
   saveSettingsButton: { marginTop: 16, backgroundColor: '#E8D5C4', borderRadius: 24, paddingVertical: 14, alignItems: 'center', shadowColor: '#E8D5C4', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.3, shadowRadius: 12, elevation: 6 },
   saveSettingsButtonText: { color: '#11141A', fontSize: 15, fontWeight: '900' },
-});
+})
+);

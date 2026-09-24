@@ -6,7 +6,7 @@ import { ProgressRing } from './ui/ProgressRing';
 import { useMatchmakingStore } from '../store/matchmakingStore';
 import { useUserStore } from '../store/userStore';
 import { useGameStats } from '../hooks/useGameStats';
-import { colors, radius } from '../theme';
+import { makeStyles, radius, ThemeColors, useColors } from '../theme';
 import { selectUnreadCount, useNewsStore } from '../store/newsStore';
 
 export interface HeaderProps {
@@ -30,6 +30,8 @@ export const Header: React.FC<HeaderProps> = ({
   leftAction,
   rightAction,
 }) => {
+  const colors = useColors();
+  const styles = useStyles();
   const storeOnline = useMatchmakingStore((state) => state.total_online);
   const { profile, user, setActiveTab, isGuest } = useUserStore();
   const { level, streak } = useGameStats();
@@ -109,18 +111,12 @@ export const Header: React.FC<HeaderProps> = ({
 
   const defaultRightAction = (
     <View style={styles.rightGroup}>
-      <View style={[styles.streakChip, streak.atRisk && styles.streakChipRisk, streak.activeToday && styles.streakChipLit]}>
-        <Animated.View style={{ transform: [{ scale: flamePulse }] }}>
-          <Flame
-            size={16}
-            color={streak.activeToday ? colors.flame : streak.atRisk ? colors.gold : colors.textDim}
-            fill={streak.activeToday ? colors.flame : 'transparent'}
-          />
-        </Animated.View>
-        <Text style={[styles.streakText, !streak.activeToday && !streak.atRisk && { color: colors.textDim }]}>
-          {streak.current}
-        </Text>
-      </View>
+      {!isGuest && displayOnlineCount > 0 && (
+        <View style={styles.onlineDotWrap}>
+          <View style={styles.onlineDot} />
+          <Text style={styles.onlineText}>{displayOnlineCount}</Text>
+        </View>
+      )}
 
       {!isGuest && (
         <TouchableOpacity style={styles.bellBtn} activeOpacity={0.8} onPress={onNewsPress ?? openNews}>
@@ -133,12 +129,7 @@ export const Header: React.FC<HeaderProps> = ({
         </TouchableOpacity>
       )}
 
-      {!isGuest && displayOnlineCount > 0 && (
-        <View style={styles.onlineDotWrap}>
-          <View style={styles.onlineDot} />
-          <Text style={styles.onlineText}>{displayOnlineCount}</Text>
-        </View>
-      )}
+     
     </View>
   );
 
@@ -151,7 +142,8 @@ export const Header: React.FC<HeaderProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors: ThemeColors) =>
+  StyleSheet.create({
   header: {
     height: 72,
     flexDirection: 'row',
@@ -229,4 +221,5 @@ const styles = StyleSheet.create({
   onlineDotWrap: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   onlineDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: colors.success },
   onlineText: { color: colors.success, fontSize: 11, fontWeight: '900' },
-});
+})
+);

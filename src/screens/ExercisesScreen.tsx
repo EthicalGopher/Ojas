@@ -12,6 +12,7 @@ import {
 import { ChevronRight, Dumbbell, Flame, Play, Swords, Zap } from 'lucide-react-native';
 import { Header } from '../components/Header';
 import { ExerciseIcon } from '../components/ExerciseIcon';
+import { makeStyles, ThemeColors, useColors, exerciseCardThemes } from '../theme';
 import {
   DEFAULT_EXERCISES,
   fetchExercisesFromSupabase,
@@ -37,6 +38,8 @@ export const ExercisesScreen: React.FC<ExercisesScreenProps> = ({
   onExerciseSelect,
   onRefreshExercises,
 }) => {
+  const colors = useColors();
+  const styles = useStyles();
   const [exercisesList, setExercisesList] = useState<ExerciseItem[]>(
     propExercises || DEFAULT_EXERCISES
   );
@@ -154,8 +157,8 @@ export const ExercisesScreen: React.FC<ExercisesScreenProps> = ({
         ) : (
           /* 100% DYNAMIC WORKOUT PLAN CARDS FETCHED FROM SUPABASE */
           filteredExercises.map((exercise, index) => {
-            const defaultPalettes = ['#C8B6FF', '#FFD6E0', '#E25822', '#354394', '#FFD6E0'];
-            const cardBg = exercise.bg_theme || defaultPalettes[index % defaultPalettes.length];
+            // Exercise cards alternate between the two shared exercise colors.
+            const cardBg = exerciseCardThemes[index % exerciseCardThemes.length].bg;
             const count = queueCounts[exercise.id] || 0;
             const duration = exercise.duration_mins || (index % 2 === 0 ? 32 : 25);
             const muscles = exercise.muscle_groups || (exercise.category === 'strength' ? 'Glutes / Squats / Core' : 'Cardio • Pace & Form');
@@ -226,10 +229,11 @@ export const ExercisesScreen: React.FC<ExercisesScreenProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors: ThemeColors) =>
+  StyleSheet.create({
   exercisesScreenContainer: {
     flex: 1,
-    backgroundColor: '#1A1C20',
+    backgroundColor: colors.bg,
   },
   mainScrollView: {
     flex: 1,
@@ -246,7 +250,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   sectionTitleText: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 20,
     fontWeight: '900',
     letterSpacing: 0.2,
@@ -264,15 +268,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingVertical: 8,
     borderRadius: 20,
-    backgroundColor: '#161B22',
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderColor: colors.border,
   },
   categoryChipActive: {
     backgroundColor: '#FFFFFF',
   },
   categoryChipText: {
-    color: '#8E95A0',
+    color: colors.textMuted,
     fontSize: 12,
     fontWeight: '700',
   },
@@ -287,7 +291,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   loadingText: {
-    color: '#9CA3AF',
+    color: colors.textMuted,
     fontSize: 13,
     fontWeight: '600',
   },
@@ -295,16 +299,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: 36,
-    backgroundColor: '#161B22',
+    backgroundColor: colors.surface,
     borderRadius: 24,
   },
   emptyTitle: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 15,
     fontWeight: '800',
   },
   emptySubtitle: {
-    color: '#8E95A0',
+    color: colors.textMuted,
     fontSize: 12,
     marginTop: 4,
   },
@@ -350,7 +354,7 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
   durationBadgeUnit: {
-    color: '#4B5563',
+    color: colors.textDim,
     fontSize: 9,
     fontWeight: '700',
     textTransform: 'uppercase',
@@ -438,4 +442,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-});
+})
+);

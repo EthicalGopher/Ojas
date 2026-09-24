@@ -21,7 +21,7 @@ import {
   DailyChallengeSummary,
 } from '../utils/dailyChallengeService';
 import { useDailyChallengeStore } from '../store/dailyChallengeStore';
-import { colors, radius } from '../theme';
+import { makeStyles, radius, ThemeColors, useColors } from '../theme';
 
 interface DailyChallengesSectionProps {
   exercises: ExerciseItem[];
@@ -44,6 +44,8 @@ export const DailyChallengesSection: React.FC<DailyChallengesSectionProps> = ({
   onOpenCamera,
   onExerciseSelect,
 }) => {
+  const colors = useColors();
+  const styles = useStyles();
   const completedChallengeIds = useDailyChallengeStore((state) => state.completedChallengeIds);
   const exerciseProgressToday = useDailyChallengeStore((state) => state.exerciseProgressToday);
 
@@ -260,7 +262,8 @@ export const DailyChallengesSection: React.FC<DailyChallengesSectionProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors: ThemeColors) =>
+  StyleSheet.create({
   container: { marginBottom: 28 },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
   headerLeft: {
@@ -443,4 +446,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-});
+})
+);

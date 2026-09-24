@@ -24,6 +24,7 @@ import { HEALTH_CONDITIONS, HealthConditionMeta } from '../utils/exerciseRecomme
 import { UserProfile, updateUserProfile } from '../utils/profileService';
 import { useUserStore } from '../store/userStore';
 
+import { makeStyles, ThemeColors, useColors } from '../theme';
 interface HealthAssessmentModalProps {
   visible: boolean;
   onClose: () => void;
@@ -35,6 +36,8 @@ export const HealthAssessmentModal: React.FC<HealthAssessmentModalProps> = ({
   onClose,
   onSaved,
 }) => {
+  const colors = useColors();
+  const styles = useStyles();
   const { user, profile, setProfile, isGuest } = useUserStore();
   const [selectedConditions, setSelectedConditions] = useState<Record<string, boolean>>({});
   const [isSaving, setIsSaving] = useState<boolean>(false);
@@ -260,14 +263,15 @@ export const HealthAssessmentModal: React.FC<HealthAssessmentModalProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors: ThemeColors) =>
+  StyleSheet.create({
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.75)',
     justifyContent: 'flex-end',
   },
   modalContainer: {
-    backgroundColor: '#0F172A',
+    backgroundColor: colors.surfaceSunken,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     maxHeight: '90%',
@@ -275,7 +279,7 @@ const styles = StyleSheet.create({
     paddingBottom: 28,
     paddingHorizontal: 18,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: colors.border,
   },
   headerRow: {
     flexDirection: 'row',
@@ -301,30 +305,30 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 18,
     fontWeight: '800',
-    color: '#F8FAFC',
+    color: colors.text,
     letterSpacing: 0.2,
   },
   modalSubtitle: {
     fontSize: 12.5,
-    color: '#94A3B8',
+    color: colors.textMuted,
     marginTop: 2,
   },
   closeButton: {
     padding: 6,
     borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    backgroundColor: colors.surfaceHi,
   },
   scrollList: {
     maxHeight: 440,
     marginBottom: 12,
   },
   conditionCard: {
-    backgroundColor: '#1E293B',
+    backgroundColor: colors.surfaceHi,
     borderRadius: 16,
     padding: 14,
     marginBottom: 12,
     borderWidth: 1.5,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderColor: colors.border,
   },
   conditionTopRow: {
     marginBottom: 8,
@@ -337,7 +341,7 @@ const styles = StyleSheet.create({
   conditionTitle: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#F8FAFC',
+    color: colors.text,
   },
   medicalBadge: {
     paddingHorizontal: 7,
@@ -352,12 +356,12 @@ const styles = StyleSheet.create({
   },
   conditionDesc: {
     fontSize: 12,
-    color: '#94A3B8',
+    color: colors.textMuted,
     marginTop: 2,
   },
   questionText: {
     fontSize: 13,
-    color: '#E2E8F0',
+    color: colors.text,
     marginVertical: 8,
     fontWeight: '500',
     lineHeight: 18,
@@ -377,7 +381,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: 'rgba(15, 23, 42, 0.6)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: colors.border,
     gap: 6,
   },
   yesBtnActive: {
@@ -390,7 +394,7 @@ const styles = StyleSheet.create({
   toggleBtnText: {
     fontSize: 12.5,
     fontWeight: '600',
-    color: '#64748B',
+    color: colors.textDim,
   },
   toggleBtnTextActive: {
     color: '#FFFFFF',
@@ -403,7 +407,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
     paddingTop: 10,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.08)',
+    borderTopColor: colors.border,
   },
   recPreviewLabel: {
     fontSize: 11.5,
@@ -420,12 +424,12 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   recBadgePill: {
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    backgroundColor: colors.surfaceHi,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: colors.border,
   },
   recBadgePillText: {
     fontSize: 11,
@@ -434,7 +438,7 @@ const styles = StyleSheet.create({
   },
   recReasonText: {
     fontSize: 11,
-    color: '#94A3B8',
+    color: colors.textMuted,
     lineHeight: 15,
   },
   footerContainer: {
@@ -446,7 +450,7 @@ const styles = StyleSheet.create({
   },
   footerSummaryText: {
     fontSize: 12,
-    color: '#94A3B8',
+    color: colors.textMuted,
     fontWeight: '500',
   },
   saveButton: {
@@ -468,4 +472,5 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     letterSpacing: 0.2,
   },
-});
+})
+);
