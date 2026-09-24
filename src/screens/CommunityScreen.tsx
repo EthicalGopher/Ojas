@@ -41,7 +41,10 @@ import {
   Play,
   Award,
   Calendar,
+  Crown,
+  Medal,
 } from 'lucide-react-native';
+import { colors, radius } from '../theme';
 import * as ImagePicker from 'expo-image-picker';
 import { Avatar } from '../components/Avatar';
 import { supabase } from '../utils/supabase';
@@ -798,6 +801,20 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
     );
   };
 
+  const CATEGORY_COLORS: Record<string, string> = {
+    School: '#38BDF8',
+    University: '#C8B6FF',
+    Gym: '#E25822',
+    'Sports Club': '#F59E0B',
+    Organization: '#10B981',
+    General: '#8E95A0',
+  };
+  const categoryColor = (category: string) => CATEGORY_COLORS[category] || CATEGORY_COLORS.General;
+  const PODIUM = ['#F59E0B', '#C0C0C0', '#CD7F32'];
+
+  // Communities ranked by squad size (ties keep their original order).
+  const rankedCommunities = [...exploreCommunities].sort((a, b) => (b.member_count || 0) - (a.member_count || 0));
+
   // Helper Icon for Category
   const getCategoryIcon = (category: string) => {
     switch (category) {
@@ -827,7 +844,7 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#11141A" />
+      <StatusBar barStyle="light-content" backgroundColor="#1A1C20" />
 
       {/* Top Header */}
       <View style={styles.header}>
@@ -835,8 +852,8 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
           <ArrowLeft size={20} color="#FFFFFF" />
         </TouchableOpacity>
         <View style={styles.headerTitleBox}>
-          <Text style={styles.headerTitle}>COMMUNITY HUB</Text>
-          <Text style={styles.headerSubtitle}>Schools, Universities & Gyms</Text>
+          <Text style={styles.headerTitle}>SQUAD</Text>
+          <Text style={styles.headerSubtitle}>Train and compete with your crew</Text>
         </View>
         <TouchableOpacity
           style={styles.createHeaderBtn}
@@ -897,7 +914,7 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
                 activeOpacity={0.7}
               >
                 <ArrowLeft size={16} color="#E25822" />
-                <Text style={styles.backToTournsBtnText}>Back to All Communities</Text>
+                <Text style={styles.backToTournsBtnText}>Back to Squads</Text>
               </TouchableOpacity>
 
               {/* Community Hero Banner (Vibrant ExerciseDetail Style) */}
@@ -996,7 +1013,10 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
 
               {/* Members List Section */}
               <View style={styles.sectionHeaderRow}>
-                <Text style={styles.sectionHeaderTitle}>COMMUNITY MEMBERS ({activeMembers.length})</Text>
+                <View style={styles.rankingsHeader}>
+                  <Users size={15} color={colors.accent} />
+                  <Text style={styles.rankingsTitle}>MEMBERS ({activeMembers.length})</Text>
+                </View>
                 {isLeaderOfViewing && (
                   <View style={styles.roleBadgeLeader}>
                     <Text style={styles.roleBadgeLeaderText}>You are Leader</Text>
@@ -1122,10 +1142,78 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
           ) : (
             /* 2. DEFAULT VIEW: EXPLORE COMMUNITIES FIRST, THEN TOURNAMENTS BELOW */
             <>
-              {/* SECTION 1: EXPLORE ALL COMMUNITIES */}
+              {/* YOUR SQUAD HERO */}
+              {userStatus.community ? (
+                (() => {
+                  const mine = userStatus.community!;
+                  const rank = rankedCommunities.findIndex((c) => c.id === mine.id) + 1;
+                  const role = userStatus.membership?.role || 'member';
+                  return (
+                    <TouchableOpacity style={styles.squadHero} activeOpacity={0.9} onPress={() => handleOpenCommunity(mine)}>
+                      <View style={styles.squadHeroTop}>
+                        <Text style={styles.squadHeroEyebrow}>YOUR SQUAD</Text>
+                        {role === 'leader' && (
+                          <View style={styles.leaderChip}>
+                            <Crown size={11} color={colors.textOnLight} />
+                            <Text style={styles.leaderChipText}>LEADER</Text>
+                          </View>
+                        )}
+                      </View>
+                      <View style={styles.squadHeroBody}>
+                        {mine.logo_url ? (
+                          <Image source={{ uri: mine.logo_url }} style={styles.squadHeroLogo} />
+                        ) : (
+                          <View style={[styles.squadHeroLogo, styles.squadHeroLogoFallback]}>{getCategoryIcon(mine.category)}</View>
+                        )}
+                        <View style={{ flex: 1, marginLeft: 14 }}>
+                          <Text style={styles.squadHeroName} numberOfLines={1}>{mine.name}</Text>
+                          <View style={[styles.catChip, { backgroundColor: 'rgba(0,0,0,0.22)', alignSelf: 'flex-start', marginTop: 6 }]}>
+                            <Text style={[styles.catChipText, { color: colors.onAccent }]}>{mine.category.toUpperCase()}</Text>
+                          </View>
+                        </View>
+                        <ChevronRight size={20} color={colors.onAccent} />
+                      </View>
+                      <View style={styles.squadHeroStats}>
+                        <View style={styles.squadHeroStat}>
+                          <Text style={styles.squadHeroStatValue}>{mine.member_count || 1}</Text>
+                          <Text style={styles.squadHeroStatLabel}>ATHLETES</Text>
+                        </View>
+                        <View style={styles.squadHeroDivider} />
+                        <View style={styles.squadHeroStat}>
+                          <Text style={styles.squadHeroStatValue}>{rank > 0 ? `#${rank}` : '-'}</Text>
+                          <Text style={styles.squadHeroStatLabel}>SQUAD RANK</Text>
+                        </View>
+                        <View style={styles.squadHeroDivider} />
+                        <View style={styles.squadHeroStat}>
+                          <Text style={styles.squadHeroStatValue}>{role.charAt(0).toUpperCase() + role.slice(1)}</Text>
+                          <Text style={styles.squadHeroStatLabel}>YOUR ROLE</Text>
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })()
+              ) : !userStatus.pendingRequest ? (
+                <View style={styles.joinCallout}>
+                  <View style={styles.joinCalloutIcon}>
+                    <Users size={22} color={colors.accent} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.joinCalloutTitle}>You're not in a squad yet</Text>
+                    <Text style={styles.joinCalloutText}>Join your school, college or gym below, or start your own.</Text>
+                  </View>
+                  <TouchableOpacity style={styles.joinCalloutBtn} activeOpacity={0.85} onPress={() => setShowCreateModal(true)}>
+                    <Plus size={14} color={colors.onAccent} />
+                    <Text style={styles.joinCalloutBtnText}>Create</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : null}
+
+              {/* SQUAD RANKINGS / EXPLORE */}
               <View style={styles.exploreSection}>
-                <Text style={[styles.sectionHeaderTitle, { marginBottom: 12 }]}>EXPLORE COMMUNITIES</Text>
-                {/* Search Bar */}
+                <View style={styles.rankingsHeader}>
+                  <Trophy size={15} color={colors.accent} />
+                  <Text style={styles.rankingsTitle}>SQUAD RANKINGS</Text>
+                </View>
                 <View style={styles.searchBarWrapper}>
                   <Search size={18} color="#8E95A0" style={styles.searchIcon} />
                   <TextInput
@@ -1143,7 +1231,6 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
                   )}
                 </View>
 
-                {/* Categories Horizontal Scroll */}
                 <ScrollView
                   horizontal
                   showsHorizontalScrollIndicator={false}
@@ -1166,8 +1253,7 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
                   })}
                 </ScrollView>
 
-                {/* Communities Cards List */}
-                {exploreCommunities.length === 0 ? (
+                {rankedCommunities.length === 0 ? (
                   <View style={styles.emptyCard}>
                     <Building2 size={40} color="#8E95A0" />
                     <Text style={styles.emptyTitle}>No Communities Found</Text>
@@ -1182,19 +1268,30 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
                   </View>
                 ) : (
                   <View style={styles.communityGrid}>
-                    {exploreCommunities.map((comm) => {
+                    {rankedCommunities.map((comm, index) => {
                       const isMyCurrent = userStatus.community?.id === comm.id;
                       const isPending = userStatus.pendingRequest?.community?.id === comm.id;
+                      const podium = PODIUM[index];
+                      const tint = categoryColor(comm.category);
 
                       return (
                         <TouchableOpacity
                           key={comm.id}
-                          style={styles.communityCard}
+                          style={[styles.communityCard, isMyCurrent && styles.communityCardMine]}
                           onPress={() => handleOpenCommunity(comm)}
                           activeOpacity={0.85}
                         >
-                          {/* Card Content styled like Exercise queueItemCard */}
                           <View style={styles.cardHeader}>
+                            <View style={styles.rankBadge}>
+                              {podium ? (
+                                <View style={[styles.rankMedal, { backgroundColor: `${podium}22` }]}>
+                                  <Medal size={16} color={podium} />
+                                </View>
+                              ) : (
+                                <Text style={styles.rankNumber}>#{index + 1}</Text>
+                              )}
+                            </View>
+
                             {comm.logo_url ? (
                               <Image source={{ uri: comm.logo_url }} style={styles.cardLogo} />
                             ) : (
@@ -1202,41 +1299,40 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
                                 {getCategoryIcon(comm.category)}
                               </View>
                             )}
+
                             <View style={styles.cardHeaderInfo}>
-                              <View style={styles.cardTitleRow}>
-                                <Text style={styles.cardTitle} numberOfLines={1}>{comm.name}</Text>
-                                <View style={styles.queueBadgePill}>
-                                  <Text style={styles.queueBadgePillText}>{comm.category.toUpperCase()}</Text>
+                              <Text style={styles.cardTitle} numberOfLines={1}>{comm.name}</Text>
+                              <View style={styles.cardMetaRow}>
+                                <View style={[styles.catChip, { backgroundColor: `${tint}22` }]}>
+                                  <Text style={[styles.catChipText, { color: tint }]}>{comm.category.toUpperCase()}</Text>
                                 </View>
+                                <Users size={12} color={colors.textMuted} />
+                                <Text style={styles.cardMemberSubText}>{comm.member_count}</Text>
                               </View>
-                              <Text style={styles.cardDescText} numberOfLines={1}>
-                                {comm.description || `${comm.member_count} ${comm.member_count === 1 ? 'member' : 'members'} enrolled`}
-                              </Text>
-                              <Text style={styles.cardMemberSubText}>
-                                {comm.member_count} {comm.member_count === 1 ? 'Athlete' : 'Athletes'}
-                              </Text>
                             </View>
 
-                            <TouchableOpacity
-                              style={[
-                                styles.cardActionBtn,
-                                isMyCurrent && styles.cardActionBtnCurrent,
-                                isPending && styles.cardActionBtnPending,
-                              ]}
-                              onPress={() => {
-                                if (isPending) {
-                                  handleCancelJoinRequest(comm.id);
-                                } else {
-                                  handleOpenCommunity(comm);
-                                }
-                              }}
-                              activeOpacity={0.8}
-                            >
-                              <Text style={[styles.cardActionBtnText, isPending && styles.cardActionBtnTextPending]}>
-                                {isPending ? 'PENDING' : isMyCurrent ? 'VIEW' : 'OPEN'}
-                              </Text>
-                              {!isPending && <ChevronRight size={13} color="#FFFFFF" />}
-                            </TouchableOpacity>
+                            {isMyCurrent ? (
+                              <View style={styles.yoursChip}>
+                                <Text style={styles.yoursChipText}>YOURS</Text>
+                              </View>
+                            ) : (
+                              <TouchableOpacity
+                                style={[styles.cardActionBtn, isPending && styles.cardActionBtnPending]}
+                                onPress={() => {
+                                  if (isPending) {
+                                    handleCancelJoinRequest(comm.id);
+                                  } else {
+                                    handleOpenCommunity(comm);
+                                  }
+                                }}
+                                activeOpacity={0.8}
+                              >
+                                <Text style={[styles.cardActionBtnText, isPending && styles.cardActionBtnTextPending]}>
+                                  {isPending ? 'PENDING' : 'OPEN'}
+                                </Text>
+                                {!isPending && <ChevronRight size={13} color="#FFFFFF" />}
+                              </TouchableOpacity>
+                            )}
                           </View>
                         </TouchableOpacity>
                       );
@@ -1251,7 +1347,8 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
                   {/* Tournament Section Header */}
                   <View style={styles.tournamentSectionTitleRow}>
                     <View style={styles.tournamentTitleLeft}>
-                      <Text style={styles.sectionHeaderTitle}>COMMUNITY TOURNAMENTS</Text>
+                      <Swords size={15} color={colors.accent} />
+                      <Text style={styles.rankingsTitle}>TOURNAMENTS</Text>
                       <View style={styles.tournLeaderOnlyBadge}>
                         <Text style={styles.tournLeaderOnlyBadgeText}>
                           {isAdmin ? 'Admin' : 'Leader Only'}
@@ -2146,7 +2243,7 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#11141A',
+    backgroundColor: '#1A1C20',
   },
   header: {
     flexDirection: 'row',
@@ -2155,15 +2252,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 14,
     paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.06)',
-    backgroundColor: '#161B22',
+    backgroundColor: '#1A1C20',
   },
   backButton: {
     width: 38,
     height: 38,
     borderRadius: 12,
-    backgroundColor: '#262A32',
+    backgroundColor: '#161B22',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -2444,7 +2539,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   membersListCard: {
-    backgroundColor: '#262A32',
+    backgroundColor: '#161B22',
     borderRadius: 20,
     overflow: 'hidden',
   },
@@ -2568,7 +2663,7 @@ const styles = StyleSheet.create({
   searchBarWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#262A32',
+    backgroundColor: '#161B22',
     borderRadius: 16,
     paddingHorizontal: 14,
     height: 48,
@@ -2590,7 +2685,7 @@ const styles = StyleSheet.create({
     paddingRight: 16,
   },
   categoryPill: {
-    backgroundColor: '#262A32',
+    backgroundColor: '#161B22',
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
@@ -2632,10 +2727,98 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   communityCard: {
-    backgroundColor: '#262A32',
+    backgroundColor: '#161B22',
     borderRadius: 20,
-    padding: 14,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.07)',
   },
+  communityCardMine: {
+    borderColor: 'rgba(226, 88, 34, 0.55)',
+    backgroundColor: 'rgba(226, 88, 34, 0.07)',
+  },
+  rankBadge: { width: 34, alignItems: 'center', marginRight: 8 },
+  rankMedal: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
+  rankNumber: { color: '#8E95A0', fontSize: 13, fontWeight: '900' },
+  cardMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 5 },
+  catChip: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6, marginRight: 4 },
+  catChipText: { fontSize: 9, fontWeight: '900', letterSpacing: 0.5 },
+  yoursChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+    backgroundColor: 'rgba(226, 88, 34, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(226, 88, 34, 0.5)',
+  },
+  yoursChipText: { color: '#E25822', fontSize: 10.5, fontWeight: '900', letterSpacing: 0.6 },
+  rankingsHeader: { flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 12 },
+  rankingsTitle: { color: '#FFFFFF', fontSize: 13, fontWeight: '900', letterSpacing: 0.8 },
+  squadHero: {
+    backgroundColor: colors.accent,
+    borderRadius: radius.xl,
+    padding: 18,
+    marginBottom: 22,
+  },
+  squadHeroTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  squadHeroEyebrow: { color: 'rgba(255,255,255,0.8)', fontSize: 11, fontWeight: '900', letterSpacing: 2 },
+  leaderChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: colors.gold,
+    borderRadius: radius.pill,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  leaderChipText: { color: colors.textOnLight, fontSize: 9.5, fontWeight: '900', letterSpacing: 0.5 },
+  squadHeroBody: { flexDirection: 'row', alignItems: 'center', marginTop: 12 },
+  squadHeroLogo: { width: 64, height: 64, borderRadius: 20, backgroundColor: 'rgba(0,0,0,0.2)' },
+  squadHeroLogoFallback: { alignItems: 'center', justifyContent: 'center' },
+  squadHeroName: { color: colors.onAccent, fontSize: 21, fontWeight: '900' },
+  squadHeroStats: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 16,
+    paddingVertical: 10,
+    borderRadius: radius.md,
+    backgroundColor: 'rgba(0,0,0,0.18)',
+  },
+  squadHeroStat: { flex: 1, alignItems: 'center' },
+  squadHeroStatValue: { color: colors.onAccent, fontSize: 17, fontWeight: '900' },
+  squadHeroStatLabel: { color: 'rgba(255,255,255,0.75)', fontSize: 9, fontWeight: '900', letterSpacing: 0.8, marginTop: 2 },
+  squadHeroDivider: { width: 1, height: 26, backgroundColor: 'rgba(255,255,255,0.22)' },
+  joinCallout: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 14,
+    marginBottom: 22,
+    borderRadius: radius.lg,
+    backgroundColor: 'rgba(226, 88, 34, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(226, 88, 34, 0.3)',
+  },
+  joinCalloutIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    backgroundColor: 'rgba(226, 88, 34, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  joinCalloutTitle: { color: colors.text, fontSize: 14, fontWeight: '900' },
+  joinCalloutText: { color: colors.textMuted, fontSize: 11.5, lineHeight: 16, marginTop: 2 },
+  joinCalloutBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: colors.accent,
+    borderRadius: radius.pill,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  joinCalloutBtnText: { color: colors.onAccent, fontSize: 12, fontWeight: '900' },
   cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2669,7 +2852,6 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 15,
     fontWeight: '900',
-    maxWidth: '70%',
   },
   queueBadgePill: {
     backgroundColor: 'rgba(255, 255, 255, 0.08)',
@@ -2722,7 +2904,7 @@ const styles = StyleSheet.create({
     color: '#FBBF24',
   },
   emptyCard: {
-    backgroundColor: '#262A32',
+    backgroundColor: '#161B22',
     borderRadius: 20,
     padding: 30,
     alignItems: 'center',
@@ -2969,7 +3151,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 32,
     paddingHorizontal: 20,
-    backgroundColor: '#262A32',
+    backgroundColor: '#161B22',
     borderRadius: 24,
   },
   exerciseScreenEmptyTitle: {
@@ -3045,7 +3227,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   tournCardDetail: {
-    backgroundColor: '#262A32',
+    backgroundColor: '#161B22',
     borderRadius: 22,
     padding: 18,
     marginBottom: 18,
@@ -3203,7 +3385,7 @@ const styles = StyleSheet.create({
     fontWeight: '900',
   },
   emptyEntriesBox: {
-    backgroundColor: '#262A32',
+    backgroundColor: '#161B22',
     borderRadius: 20,
     padding: 24,
     alignItems: 'center',
@@ -3223,7 +3405,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   entryCard: {
-    backgroundColor: '#262A32',
+    backgroundColor: '#161B22',
     borderRadius: 18,
     padding: 12,
   },
@@ -3303,7 +3485,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   matchCard: {
-    backgroundColor: '#262A32',
+    backgroundColor: '#161B22',
     borderRadius: 20,
     padding: 14,
   },
@@ -3508,7 +3690,7 @@ const styles = StyleSheet.create({
     width: 5,
     height: 5,
     borderRadius: 2.5,
-    backgroundColor: '#11141A',
+    backgroundColor: '#1A1C20',
     marginRight: 5,
   },
   muscleTagPillText: {
@@ -3550,7 +3732,7 @@ const styles = StyleSheet.create({
     width: 26,
     height: 26,
     borderRadius: 13,
-    backgroundColor: '#11141A',
+    backgroundColor: '#1A1C20',
     alignItems: 'center',
     justifyContent: 'center',
   },
