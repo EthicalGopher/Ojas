@@ -216,9 +216,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     } else {
       onEnterQueue(
         'FINDING OPPONENT',
-        'Matching you with an athlete at your level...',
-        'SEARCHING 0:00',
-        'Looking for athletes near your level',
+        'Finding a worthy rival...',
+        undefined,
+        undefined,
         false
       );
     }
@@ -237,8 +237,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           countdown,
           playerCount
         ),
-      onSearchTick: (elapsed) =>
-        onUpdateQueueStatus?.(undefined, undefined, `SEARCHING 0:${String(elapsed).padStart(2, '0')}`),
       onResult: (outcome) => {
         if (outcome.kind === 'simulated') {
           onOpenMatchCamera(outcome.opponent.username, 'quickjoin', exercise.id, outcome.opponent);

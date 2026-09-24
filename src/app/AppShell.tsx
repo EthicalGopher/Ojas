@@ -245,10 +245,10 @@ export default function AppShell() {
                   setWaitingMessage(
                     isFFA
                       ? 'Gathering athletes (Max 10). Match starts when the timer ends or the lobby fills...'
-                      : 'Matching you with an athlete at your level...'
+                      : 'Finding a worthy rival...'
                   );
-                  setWaitingBadge(isFFA ? 'WAITING: 30s' : 'SEARCHING 0:00');
-                  setWaitingSubInfo(isFFA ? '1 Athlete Joined' : 'Looking for athletes near your level');
+                  setWaitingBadge(isFFA ? 'WAITING: 30s' : undefined);
+                  setWaitingSubInfo(isFFA ? '1 Athlete Joined' : undefined);
                   setIsFFALobby(isFFA);
                   setFfaLobbyCountdown(30);
                   setFfaLobbyPlayerCount(1);
@@ -277,7 +277,6 @@ export default function AppShell() {
                       setFfaLobbyCountdown(countdown);
                       setFfaLobbyPlayerCount(playerCount);
                     },
-                    onSearchTick: (elapsed) => setWaitingBadge(`SEARCHING 0:${String(elapsed).padStart(2, '0')}`),
                     onResult: (outcome) => {
                       if (outcome.kind === 'simulated') {
                         openMatch(outcome.opponent.username, 'quickjoin', outcome.opponent);
