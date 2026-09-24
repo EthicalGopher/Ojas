@@ -50,7 +50,6 @@ import { useMatchmakingStore } from '../../../store/matchmakingStore';
 import { useDailyChallengeStore } from '../../../store/dailyChallengeStore';
 import { sendFriendRequest } from '../../../utils/friendService';
 import { sendCustomBattleInvite } from '../../../utils/customBattleService';
-import { LoadingScreen } from '../../../screens/LoadingScreen';
 import { Avatar } from '../../../components/Avatar';
 import { supabase } from '../../../utils/supabase';
 import {
@@ -61,6 +60,7 @@ import {
   AIBotState,
 } from '../../../utils/aiBotService';
 import { AIOpponentView } from './AIOpponentView';
+import { VersusIntro } from './VersusIntro';
 import { SimulatedOpponent } from '../../../utils/simulatedOpponent';
 import { getAvatarUri } from '../../../components/Avatar';
 
@@ -138,6 +138,8 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
   const isSimulated = !!simulatedOpponent && mode !== 'ai_battle';
   const usesAiSimulation = mode === 'ai_battle' || isSimulated;
   const [simRound, setSimRound] = useState(0);
+  // Versus card replaces the old "syncing players" loading screen and fades out once synced.
+  const [showVersus, setShowVersus] = useState(true);
   const [hasPermission, setHasPermission] = useState<boolean>(false);
   const [hasOpponentStream, setHasOpponentStream] = useState(false);
   const [selfScore, setSelfScore] = useState(0);
@@ -1036,23 +1038,28 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
         </View>
       )}
 
-      {/* OVERLAY 1: Resource Loading Indicator */}
-      {matchPhase === 'loading_resources' && (
-        <LoadingScreen
-          title={mode === 'ffa' ? 'SYNCING ATHLETES' : 'SYNCING PLAYERS'}
-          message={
+      {/* OVERLAY 1: Versus card while players sync (replaces the old loading screen) */}
+      {showVersus && (
+        <VersusIntro
+          mode={mode}
+          opponentUsername={opponentUsername}
+          exerciseId={exerciseId}
+          simulatedOpponent={simulatedOpponent}
+          lobbyPlayerCount={ffaTotalPlayers}
+          ready={matchPhase !== 'loading_resources'}
+          statusText={
             !localReady
-              ? 'Loading AI pose tracking model...'
+              ? 'Loading pose tracker...'
               : mode === 'ffa'
               ? ffaTotalPlayers > 0
-                ? `Syncing players (${ffaReadyCount}/${ffaTotalPlayers} ready)...`
-                : 'Syncing all lobby athletes...'
+                ? `${ffaReadyCount}/${ffaTotalPlayers} athletes ready...`
+                : 'Syncing lobby athletes...'
               : !opponentReady
-              ? 'Waiting for opponent to connect...'
-              : 'All players synchronized! Starting setup...'
+              ? 'Waiting for opponent...'
+              : 'Both players ready!'
           }
-          fullScreen={false}
           onCancel={handleClose}
+          onDone={() => setShowVersus(false)}
         />
       )}
 

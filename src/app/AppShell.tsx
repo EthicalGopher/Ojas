@@ -11,7 +11,6 @@ import { AuthModal } from '../features/auth/components/AuthModal';
 import { CameraScreen } from '../features/camera/components/CameraScreen';
 import { MatchCameraScreen, MatchMode } from '../features/match/components/MatchCameraScreen';
 import { TabBar } from '../components/TabBar';
-import { VersusIntro } from '../features/match/components/VersusIntro';
 
 import { Swords, Video, Zap, Check, X, Flame } from 'lucide-react-native';
 import { Avatar } from '../components/Avatar';
@@ -49,7 +48,6 @@ export default function AppShell() {
   const [matchMode, setMatchMode] = useState<MatchMode>('faceoff');
   const [matchExerciseId, setMatchExerciseId] = useState<string>('1');
   const [simulatedOpponent, setSimulatedOpponent] = useState<SimulatedOpponent | null>(null);
-  const [showVersus, setShowVersus] = useState<boolean>(false);
   const [selectedModel, setSelectedModel] = useState<ModelComplexity>('medium');
   const [showAuthModal, setShowAuthModal] = useState<boolean>(false);
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
@@ -75,11 +73,6 @@ export default function AppShell() {
       cleanup();
     };
   }, [currentUser?.id]);
-
-  // Every match opens with the versus intro while the camera and pose model load underneath.
-  useEffect(() => {
-    setShowVersus(isMatchCamera);
-  }, [isMatchCamera]);
 
   // Auth initialization
   useEffect(() => {
@@ -450,18 +443,6 @@ export default function AppShell() {
             }}
           />
         ) : null}
-
-        {isMatchCamera && showVersus && (
-          <VersusIntro
-            key={`vs-${opponentUsername}-${matchMode}`}
-            mode={matchMode}
-            opponentUsername={opponentUsername}
-            exerciseId={matchExerciseId}
-            simulatedOpponent={simulatedOpponent}
-            lobbyPlayerCount={ffaLobbyPlayerCount}
-            onDone={() => setShowVersus(false)}
-          />
-        )}
 
         {/* Incoming 1v1 Battle Challenge Modal */}
         {incomingInvite && (

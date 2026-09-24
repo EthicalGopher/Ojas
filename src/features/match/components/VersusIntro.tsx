@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
+import { ActivityIndicator, Animated, Easing, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import { Bot, Swords, Users, Zap } from 'lucide-react-native';
 import { Avatar, getAvatarUri } from '../../../components/Avatar';
 import { TierIcon } from '../../../components/TierIcon';
@@ -12,7 +12,9 @@ import { getBotByName } from '../../../utils/aiBotService';
 import type { SimulatedOpponent } from '../../../utils/simulatedOpponent';
 import type { MatchMode } from './MatchCameraScreen';
 
-const INTRO_MS = 3600;
+// Keep the card up at least this long so the entrance animation always plays out.
+const MIN_SHOW_MS = 2400;
+const FIGHT_MS = 700;
 
 const MODE_LABELS: Record<MatchMode, string> = {
   quickjoin: 'QUICK DUEL',
@@ -47,16 +49,24 @@ interface VersusIntroProps {
   exerciseId: string;
   simulatedOpponent?: SimulatedOpponent | null;
   lobbyPlayerCount?: number;
+  /** True once both sides are synced; the card then shows FIGHT! and fades out. */
+  ready: boolean;
+  /** Live sync status shown until `ready` (e.g. "Waiting for opponent..."). */
+  statusText: string;
+  onCancel?: () => void;
   onDone: () => void;
 }
 
-/** Fighting-game style "YOU vs RIVAL" card shown while the match screen loads underneath. */
+/** Fighting-game style "YOU vs RIVAL" card shown while players sync, instead of a loading screen. */
 export const VersusIntro: React.FC<VersusIntroProps> = ({
   mode,
   opponentUsername,
   exerciseId,
   simulatedOpponent,
   lobbyPlayerCount = 0,
+  ready,
+  statusText,
+  onCancel,
   onDone,
 }) => {
   const { width, height } = useWindowDimensions();
@@ -116,7 +126,9 @@ export const VersusIntro: React.FC<VersusIntroProps> = ({
   const vsScale = useRef(new Animated.Value(0)).current;
   const shake = useRef(new Animated.Value(0)).current;
   const fadeOut = useRef(new Animated.Value(1)).current;
-  const [count, setCount] = useState(3);
+  const fightScale = useRef(new Animated.Value(0)).current;
+  const [showFight, setShowFight] = useState(false);
+  const [minTimeReached, setMinTimeReached] = useState(false);
   const doneRef = useRef(false);
 
   const finish = () => {
@@ -139,20 +151,26 @@ export const VersusIntro: React.FC<VersusIntroProps> = ({
       ),
     ]).start();
 
-    const ticks = [1400, 2500].map((ms, i) => setTimeout(() => setCount(2 - i), ms));
-    const end = setTimeout(finish, INTRO_MS);
-    return () => {
-      ticks.forEach(clearTimeout);
-      clearTimeout(end);
-    };
+    const t = setTimeout(() => setMinTimeReached(true), MIN_SHOW_MS);
+    return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Everyone synced (and the entrance has played): FIGHT! then reveal the match.
+  useEffect(() => {
+    if (!ready || !minTimeReached || showFight) return;
+    setShowFight(true);
+    Animated.spring(fightScale, { toValue: 1, friction: 4, tension: 160, useNativeDriver: true }).start();
+    const t = setTimeout(finish, FIGHT_MS);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, minTimeReached]);
 
   const exerciseName = EXERCISE_NAMES[String(exerciseId).replace(/_.*/, '')] || 'Workout';
 
   return (
     <Animated.View style={[StyleSheet.absoluteFill, styles.root, { opacity: fadeOut }]}>
-      <TouchableOpacity activeOpacity={1} style={StyleSheet.absoluteFill} onPress={finish}>
+      <View style={StyleSheet.absoluteFill}>
         {/* Diagonal panels */}
         <Animated.View
           style={[
@@ -261,13 +279,25 @@ export const VersusIntro: React.FC<VersusIntroProps> = ({
           </View>
         </Animated.View>
 
-        {/* Countdown */}
+        {/* Sync status -> FIGHT! */}
         <View style={styles.footer}>
-          <Text style={styles.readyText}>GET READY</Text>
-          <Text style={styles.countText}>{count}</Text>
-          <Text style={styles.skipText}>Tap to skip</Text>
+          {showFight ? (
+            <Animated.Text style={[styles.fightText, { transform: [{ scale: fightScale }] }]}>FIGHT!</Animated.Text>
+          ) : (
+            <>
+              <View style={styles.statusRow}>
+                <ActivityIndicator size="small" color={colors.text} />
+                <Text style={styles.statusText} numberOfLines={1}>{statusText}</Text>
+              </View>
+              {onCancel && (
+                <TouchableOpacity style={styles.cancelBtn} activeOpacity={0.8} onPress={onCancel}>
+                  <Text style={styles.cancelText}>Cancel</Text>
+                </TouchableOpacity>
+              )}
+            </>
+          )}
         </View>
-      </TouchableOpacity>
+      </View>
     </Animated.View>
   );
 };
@@ -352,7 +382,18 @@ const styles = StyleSheet.create({
   vsText: { color: colors.text, fontSize: 40, fontWeight: '900', fontStyle: 'italic', letterSpacing: -1 },
 
   footer: { position: 'absolute', bottom: 44, left: 0, right: 0, alignItems: 'center' },
-  readyText: { color: 'rgba(255,255,255,0.8)', fontSize: 12, fontWeight: '900', letterSpacing: 3 },
-  countText: { color: colors.text, fontSize: 46, fontWeight: '900', lineHeight: 52 },
-  skipText: { color: 'rgba(255,255,255,0.5)', fontSize: 11, fontWeight: '700', marginTop: 2 },
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    maxWidth: '88%',
+  },
+  statusText: { color: colors.text, fontSize: 13, fontWeight: '800', flexShrink: 1 },
+  cancelBtn: { marginTop: 14, paddingHorizontal: 22, paddingVertical: 9, borderRadius: radius.pill, borderWidth: 1, borderColor: 'rgba(255,255,255,0.35)' },
+  cancelText: { color: 'rgba(255,255,255,0.85)', fontSize: 13, fontWeight: '800' },
+  fightText: { color: colors.gold, fontSize: 54, fontWeight: '900', fontStyle: 'italic', letterSpacing: 1 },
 });
