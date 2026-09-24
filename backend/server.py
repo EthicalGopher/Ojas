@@ -672,6 +672,32 @@ matchmaker = MatchmakingManager(conn_manager)
 async def get_online_count():
     return JSONResponse(matchmaker.get_counts())
 
+# ---------- Tree Pose image classifier (cross-checks the MediaPipe geometry) ----------
+import sys
+sys.path.insert(0, os.path.join(BASE_DIR, "Pose", "tree_pose"))
+import classifier as tree_pose_classifier
+from fastapi import Request
+
+@app.get("/api/tree-pose/status")
+async def tree_pose_status():
+    available = await asyncio.to_thread(tree_pose_classifier.is_available)
+    return JSONResponse({"available": available})
+
+@app.post("/api/tree-pose/classify")
+async def tree_pose_classify(request: Request):
+    # Body is JSON {"image": "data:image/jpeg;base64,..."}; sent as text/plain
+    # by the app so the WebView skips the CORS preflight.
+    try:
+        payload = json.loads(await request.body())
+        image = payload.get("image", "")
+        if "," in image:
+            image = image.split(",", 1)[1]
+        jpeg = base64.b64decode(image)
+    except Exception:
+        return JSONResponse({"error": "invalid payload"}, status_code=400)
+    result = await asyncio.to_thread(tree_pose_classifier.classify_jpeg, jpeg)
+    return JSONResponse(result)
+
 @app.websocket("/ws/presence")
 async def presence_websocket(ws: WebSocket):
     await ws.accept()

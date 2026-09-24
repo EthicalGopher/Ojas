@@ -286,6 +286,20 @@ export function generateDailyChallenges(
 
         case 'flat_feet':
           potentialPool.push({
+            exercise: findEx('tree') || findEx('vriksh'),
+            title: 'Single-Leg Arch Balance',
+            shortGoal: 'Hold for 40s',
+            description: 'Balancing on one foot activates the arch, ankle stabilizers & calves.',
+            targetType: 'hold_seconds',
+            targetValue: 40,
+            illnessKey: cond.key,
+            illnessTitle: cond.title,
+            cureBenefit: 'Lifts the medial arch & steadies the ankle',
+            badgeColor: cond.badgeColor,
+            xpReward: 50,
+            calorieReward: 25,
+          });
+          potentialPool.push({
             exercise: findEx('lunge'),
             title: 'Arch & Ankle Kinetic Activation',
             shortGoal: '15 Reps',
@@ -413,6 +427,18 @@ export function generateDailyChallenges(
         badgeColor: '#F59E0B',
         xpReward: 45,
         calorieReward: 30,
+      },
+      {
+        exercise: findEx('tree') || findEx('vriksh'),
+        title: 'Balance & Focus Builder',
+        shortGoal: 'Hold for 30s',
+        description: 'Tree Pose trains single-leg balance, ankle stability and a tall spine.',
+        targetType: 'hold_seconds' as const,
+        targetValue: 30,
+        cureBenefit: 'Balance, ankle strength & posture',
+        badgeColor: '#22C55E',
+        xpReward: 45,
+        calorieReward: 20,
       },
       {
         exercise: findEx('cobra'),

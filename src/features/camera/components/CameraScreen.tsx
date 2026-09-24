@@ -31,6 +31,8 @@ import { useDailyChallengeStore } from '../../../store/dailyChallengeStore';
 import { useUserStore } from '../../../store/userStore';
 import { recordDailyChallengeProgress, recordCaloriesToProfile } from '../../../utils/profileService';
 import { calculateExerciseCalories } from '../../../utils/calorieService';
+import { BACKEND_URL } from '../../../utils/matchmaking';
+import { TREE_POSE_ENGINE_SOURCE } from '../poseEngines/treePoseEngineSource';
 
 export type ModelComplexity = 'light' | 'medium' | 'high';
 
@@ -68,7 +70,13 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
   } else if (norm.includes('child') || norm.includes('balasana') || norm === '8') {
     exerciseMode = 'child_pose';
     exerciseTitle = "Child's Pose";
+  } else if (norm.includes('tree') || norm.includes('vriksh') || norm === '9') {
+    exerciseMode = 'tree_pose';
+    exerciseTitle = 'Tree Pose';
   }
+
+  // Tree Pose runs the dedicated MediaPipe geometry engine (backend/Pose/tree_pose/web).
+  const treePoseEngineScript = exerciseMode === 'tree_pose' ? `<script>${TREE_POSE_ENGINE_SOURCE}</script>` : '';
 
   return `
 <!DOCTYPE html>
@@ -182,8 +190,10 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
     ` : ''}
   </div>
 
+  ${treePoseEngineScript}
   <script>
     const EXERCISE_MODE = '${exerciseMode}';
+    const TREE_CLASSIFY_URL = '${BACKEND_URL}/api/tree-pose/classify';
     const video = document.getElementById('video');
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d');
@@ -238,6 +248,7 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
       hipValues.length = 0;
       visibilityValues.length = 0;
       errorLandmarks.clear();
+      try { if (treeEngine) treeEngine.resetTimers(); } catch (e) {}
     }
 
     function angle(a, b, c) {
@@ -881,6 +892,154 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
       }
     }
 
+    // 9. Tree Pose Engine (Vrikshasana)
+    // MediaPipe geometry (tree_pose_engine.js) decides the stance; a ResNet50 image
+    // classifier on the backend cross-checks it. If the backend is unreachable the
+    // geometry engine alone decides, so the exercise still works offline.
+    const TREE_CLASSIFY_INTERVAL_MS = 1200;
+    const TREE_VERDICT_TTL_MS = 4000;
+    const treeAi = { enabled: true, busy: false, lastAt: 0, failures: 0, verdictAt: 0, wrong: false };
+    let treeEngine = null;
+    let treeClassifyCanvas = null;
+
+    function requestTreeClassification() {
+      const now = Date.now();
+      if (!treeAi.enabled || treeAi.busy || now - treeAi.lastAt < TREE_CLASSIFY_INTERVAL_MS) return;
+      if (!video || !video.videoWidth || !video.videoHeight) return;
+      treeAi.busy = true;
+      treeAi.lastAt = now;
+      const done = () => { treeAi.busy = false; };
+      try {
+        if (!treeClassifyCanvas) treeClassifyCanvas = document.createElement('canvas');
+        const scale = 320 / Math.max(video.videoWidth, video.videoHeight);
+        treeClassifyCanvas.width = Math.round(video.videoWidth * scale);
+        treeClassifyCanvas.height = Math.round(video.videoHeight * scale);
+        treeClassifyCanvas.getContext('2d').drawImage(video, 0, 0, treeClassifyCanvas.width, treeClassifyCanvas.height);
+        const image = treeClassifyCanvas.toDataURL('image/jpeg', 0.8);
+        const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+        const timer = setTimeout(() => { if (ctrl) ctrl.abort(); }, 5000);
+        // text/plain keeps this a "simple" request, so no CORS preflight.
+        fetch(TREE_CLASSIFY_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain' },
+          body: JSON.stringify({ image }),
+          signal: ctrl ? ctrl.signal : undefined
+        })
+          .then((r) => r.json())
+          .then((res) => {
+            if (res && res.available === false) {
+              treeAi.enabled = false;
+            } else if (res && typeof res.wrong === 'number') {
+              treeAi.failures = 0;
+              treeAi.verdictAt = Date.now();
+              treeAi.wrong = !res.is_correct;
+            }
+          })
+          .catch(() => {
+            treeAi.failures += 1;
+            if (treeAi.failures >= 3) treeAi.enabled = false;
+          })
+          .then(() => { clearTimeout(timer); done(); }, () => { clearTimeout(timer); done(); });
+      } catch (e) {
+        done();
+      }
+    }
+
+    function treeHint(text) {
+      const t = String(text || '').toLowerCase();
+      return t.charAt(0).toUpperCase() + t.slice(1);
+    }
+
+    function markTreeErrors(reason, standingSide) {
+      const r = String(reason || '').toUpperCase();
+      const standing = standingSide === 'LEFT' ? [23, 25, 27] : [24, 26, 28];
+      const lifted = standingSide === 'LEFT' ? [24, 26, 28] : [23, 25, 27];
+      let ids = [];
+      if (r.includes('STANDING')) ids = standing;
+      else if (r.includes('LIFTED') || r.includes('FOOT') || r.includes('KNEE')) ids = lifted;
+      else if (r.includes('SPINE')) ids = [11, 12, 23, 24];
+      else if (r.includes('HAND')) ids = [13, 14, 15, 16];
+      else if (r.includes('HEAD')) ids = [0, 11, 12];
+      ids.forEach((i) => errorLandmarks.add(i));
+    }
+
+    function updateTreePoseEngine(pose, worldPose) {
+      errorLandmarks.clear();
+      if (typeof MediaPipeTreePoseEngineJS === 'undefined') return;
+      if (!treeEngine) treeEngine = new MediaPipeTreePoseEngineJS();
+      if (video && video.videoWidth && video.videoHeight) setStreamAspect(video.videoWidth, video.videoHeight);
+
+      // The engine expects selfie-mirrored image landmarks (same as its web app.js).
+      const mirrored = pose.map((pt) => ({ x: 1.0 - pt.x, y: pt.y, z: pt.z, visibility: pt.visibility }));
+      const features = treeEngine.analyzePose(mirrored, worldPose || null);
+      treeEngine.updateTreePoseState(features);
+      const validation = treeEngine.lastValidation || { state: 'READY', issues: [] };
+
+      if (currentSmoothVisibility < 0.40 || validation.state === 'UNCERTAIN') {
+        renderState('LOW_VISIBILITY');
+        correctHoldFrames = 0;
+        return;
+      }
+
+      if (!features.isTreeStance || features.isSitting) {
+        renderState('SETUP');
+        setHint(features.isSitting ? 'Stand up to begin Tree Pose' : 'Stand tall, lift one foot onto your inner thigh & join hands', '#A7F3D0');
+        correctHoldFrames = Math.max(0, correctHoldFrames - 2);
+        return;
+      }
+
+      // Candidate stance: ask the image classifier for a second opinion.
+      requestTreeClassification();
+      const verdictFresh = treeAi.enabled && treeAi.verdictAt > 0 && Date.now() - treeAi.verdictAt < TREE_VERDICT_TTL_MS;
+      const aiRejects = verdictFresh && treeAi.wrong;
+
+      if (validation.state === 'INCORRECT') {
+        renderState('ADJUST');
+        const reason = validation.issues && validation.issues[0];
+        markTreeErrors(reason, features.standingSide);
+        setHint(treeHint(reason || 'Adjust your Tree Pose'), '#FBBF24');
+        correctHoldFrames = Math.max(0, correctHoldFrames - 2);
+        return;
+      }
+
+      if (!treeEngine.inTreePose) {
+        renderState('ADJUST');
+        setHint('Hold steady, confirming Tree Pose…', '#FBBF24');
+        return;
+      }
+
+      if (aiRejects) {
+        renderState('ADJUST');
+        markTreeErrors('LIFTED', features.standingSide);
+        setHint('AI check: pose not quite right, press the foot into the inner thigh & stand tall', '#FBBF24');
+        correctHoldFrames = Math.max(0, correctHoldFrames - 2);
+        return;
+      }
+
+      renderState('PERFECT');
+      correctHoldFrames += 1;
+      const totalHoldSecs = (correctHoldFrames / 25).toFixed(1);
+      setHint((verdictFresh ? 'AI verified! ' : '') + 'Perfect Tree Pose! Hold: ' + totalHoldSecs + 's', '#34D399');
+      if (window.ReactNativeWebView && (correctHoldFrames % 5 === 0 || correctHoldFrames === 1)) {
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'POSE_HOLD_TIME',
+          holdSeconds: parseFloat(totalHoldSecs),
+          poseName: 'Tree Pose'
+        }));
+      }
+      if (correctHoldFrames % 75 === 0) {
+        repCount += 1;
+        if (window.ReactNativeWebView) {
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'SQUAT_REP',
+            repCount: repCount,
+            holdSeconds: Math.floor(correctHoldFrames / 25),
+            poseName: 'Tree Pose'
+          }));
+        }
+      }
+    }
+
     // ---------- Dynamic Script Loading Helper ----------
     async function ensurePoseScriptLoaded() {
       if (typeof window.Pose !== 'undefined') return true;
@@ -1050,6 +1209,8 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
                 updatePushupEngine(landmarks);
               } else if (EXERCISE_MODE === 'child_pose') {
                 updateChildPoseEngine(landmarks);
+              } else if (EXERCISE_MODE === 'tree_pose') {
+                updateTreePoseEngine(landmarks, results.poseWorldLandmarks);
               } else {
                 updateSquatEngine(landmarks);
               }
@@ -1093,6 +1254,7 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
             }
           } else {
             renderVisibility(0);
+            if (treeEngine) treeEngine.handleFrameWithoutPerson();
             if (window.ReactNativeWebView && Date.now() - lastVisMsgTime > 200) {
               lastVisMsgTime = Date.now();
               window.ReactNativeWebView.postMessage(JSON.stringify({
@@ -1298,9 +1460,12 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
     exerciseName.toLowerCase().includes('bhujanga') ||
     exerciseName.toLowerCase().includes('child') ||
     exerciseName.toLowerCase().includes('balasana') ||
+    exerciseName.toLowerCase().includes('tree') ||
+    exerciseName.toLowerCase().includes('vriksh') ||
     exerciseId === '3' ||
     exerciseId === '6' ||
-    exerciseId === '8';
+    exerciseId === '8' ||
+    exerciseId === '9';
 
   const countLabel = isHoldPose ? 'POINTS' : isStepCount ? 'STEPS' : 'REPS';
 

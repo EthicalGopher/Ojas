@@ -5,3 +5,6 @@ opencv-python
 numpy
 python-dotenv
 websockets
+torch
+torchvision
+pillow

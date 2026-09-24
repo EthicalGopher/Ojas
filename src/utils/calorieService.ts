@@ -27,12 +27,15 @@ export function calculateExerciseCalories(
     identifier === '3' ||
     identifier === '6' ||
     identifier === '8' ||
+    identifier === '9' ||
     identifier.includes('triangle') ||
     identifier.includes('trikon') ||
     identifier.includes('cobra') ||
     identifier.includes('bhujanga') ||
     identifier.includes('child') ||
-    identifier.includes('balasana')
+    identifier.includes('balasana') ||
+    identifier.includes('tree') ||
+    identifier.includes('vriksh')
   ) {
     repRate = 0.40;
     holdRate = 0.12;

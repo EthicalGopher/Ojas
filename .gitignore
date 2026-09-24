@@ -34,3 +34,8 @@ android/keystore.properties
 android/app/*.keystore
 !android/app/debug.keystore
 *.jks
+
+# Large ML weights (download/copy separately)
+*.pth
+__pycache__/
+*.pyc

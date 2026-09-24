@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { AIBotProfile, getBotByLevel } from './aiBotService';
 import { SimulatedOpponent, createSimulatedOpponent } from './simulatedOpponent';
 
-const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'https://app.codequestpro.in';
+export const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'https://app.codequestpro.in';
 
 export interface FFALeaderboardPlayer {
   username: string;

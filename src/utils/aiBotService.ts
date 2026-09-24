@@ -152,7 +152,7 @@ export class AIBattleSimulation {
 
   constructor(bot: AIBotProfile, exerciseId?: string) {
     this.bot = bot;
-    this.isHoldExercise = ['3', '6', '8'].includes(exerciseId || '1');
+    this.isHoldExercise = ['3', '6', '8', '9'].includes(exerciseId || '1');
     this.currentRepDuration = this.bot.baseRepSeconds;
     this.currentQuote = this.bot.quotes.greeting[Math.floor(Math.random() * this.bot.quotes.greeting.length)];
   }
@@ -177,7 +177,7 @@ export class AIBattleSimulation {
 
     const effectiveRepDuration = Math.max(0.9, this.bot.baseRepSeconds * speedMultiplier);
 
-    // Handle isometric hold exercises (Cobra Pose, Triangle Pose, Child's Pose)
+    // Handle isometric hold exercises (Cobra Pose, Triangle Pose, Child's Pose, Tree Pose)
     if (this.isHoldExercise) {
       this.totalHoldSeconds += deltaSec;
       if (Math.floor(this.totalHoldSeconds) > this.score) {

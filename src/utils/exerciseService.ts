@@ -150,6 +150,23 @@ export const DEFAULT_EXERCISES: ExerciseItem[] = [
     type: 'Yoga',
     cure_to: ['lower_back_pain', 'rounded_shoulders', 'bow_legs', 'flat_feet', 'knock_knees'],
   },
+  {
+    id: '9',
+    name: 'Tree Pose',
+    category: 'flexibility',
+    icon: '🌳',
+    description: 'AI Real-time Vrikshasana Balance Tracker: MediaPipe geometry cross-checked by an image classifier',
+    bgGradient: '#A7F3D0',
+    isFavorite: true,
+    duration_mins: 15,
+    muscle_groups: 'Ankles / Calves / Thighs / Core / Hip Openers',
+    reps_target: 10,
+    difficulty: 'Beginner',
+    bg_theme: '#A7F3D0',
+    image_url: 'https://locsjrjekkyjbeapgreu.supabase.co/storage/v1/object/public/Images/Excercise/a-female-doing-yoga.svg',
+    type: 'Yoga',
+    cure_to: ['flat_feet', 'knock_knees', 'bow_legs', 'rounded_shoulders'],
+  },
 ];
 
 export async function fetchExercisesFromSupabase(): Promise<ExerciseItem[]> {

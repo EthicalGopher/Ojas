@@ -460,6 +460,8 @@ export const ExerciseDetailScreen: React.FC<ExerciseDetailScreenProps> = ({
       case '6':
       case '8':
         return { perRep: '0.35', met: '4.0', formula: 'Restorative spine decompression & deep hip holds burn ~0.35 kcal per hold milestone.', technique: 'Knees folded on mat with torso folded forward and arms reaching straight.' };
+      case '9':
+        return { perRep: '0.35', met: '3.0', formula: 'Single-leg balance recruits ankles, calves, thighs & core, burning ~0.35 kcal per hold milestone.', technique: 'Standing knee locked, lifted foot on inner thigh or calf (never the knee), hands in prayer or overhead.' };
       case '1':
       default:
         return { perRep: '0.35', met: '5.5', formula: 'Large quadriceps & glute muscle engagement burns ~0.35 kcal per rep.', technique: 'Hip crease drops below knee level (< 90° angle) and returns upright.' };

@@ -32,6 +32,7 @@ const EXERCISE_NAMES: Record<string, string> = {
   '6': 'Cobra Pose',
   '7': 'Push-ups',
   '8': "Child's Pose",
+  '9': 'Tree Pose',
 };
 
 interface OpponentCard {
