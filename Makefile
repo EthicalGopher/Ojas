@@ -14,6 +14,8 @@ KEYSTORE_PROPS:= $(ANDROID_DIR)/keystore.properties
 KEY_ALIAS     := ojas
 # Build only for real phones (arm) by default: much smaller APK. Use ARCHS=all for emulators too.
 ARCHS         ?= arm
+# Phone-only builds are the "release" APK; ARCHS=all gets its own name so it never overwrites it.
+APK_NAME := ojas-v$(VERSION)-$(if $(filter all,$(ARCHS)),universal,release).apk
 ifeq ($(ARCHS),all)
   ARCH_FLAG := -PreactNativeArchitectures=armeabi-v7a,arm64-v8a,x86,x86_64
 else ifeq ($(ARCHS),arm)
@@ -77,8 +79,8 @@ apk: ## Build the production release APK -> build_output/
 	@if [ ! -f "$(KEYSTORE_PROPS)" ]; then echo "WARNING: no release key - APK will be signed with the DEBUG key. Run 'make keystore' first."; fi
 	cd $(ANDROID_DIR) && ./gradlew assembleRelease $(ARCH_FLAG)
 	@mkdir -p $(OUT_DIR)
-	cp $(RELEASE_APK) $(OUT_DIR)/ojas-v$(VERSION)-release.apk
-	@echo "Release APK: $(OUT_DIR)/ojas-v$(VERSION)-release.apk ($$(du -h $(OUT_DIR)/ojas-v$(VERSION)-release.apk | cut -f1))"
+	cp $(RELEASE_APK) $(OUT_DIR)/$(APK_NAME)
+	@echo "Release APK: $(OUT_DIR)/$(APK_NAME) ($$(du -h $(OUT_DIR)/$(APK_NAME) | cut -f1), built $$(date '+%d %b %H:%M'))"
 
 apk-debug: ## Build a debug APK -> build_output/
 	cd $(ANDROID_DIR) && ./gradlew assembleDebug $(ARCH_FLAG)
@@ -87,7 +89,7 @@ apk-debug: ## Build a debug APK -> build_output/
 
 install-apk: ## Install the release APK on the connected device (adb)
 	@scripts/ensure-signature.sh release
-	adb install -r $(OUT_DIR)/ojas-v$(VERSION)-release.apk
+	adb install -r $(OUT_DIR)/$(APK_NAME)
 
 run-apk: install-apk ## Install and launch the release APK
 	adb shell monkey -p $(APP_ID) -c android.intent.category.LAUNCHER 1 >/dev/null
