@@ -529,7 +529,7 @@ export const ExerciseDetailScreen: React.FC<ExerciseDetailScreenProps> = ({
           ].map(({ label, value, Icon }) => (
             <View key={label} style={styles.statTile}>
               <View style={styles.statIcon}>
-                <Icon size={14} color={colors.flame} />
+                <Icon size={19} color={colors.flame} />
               </View>
               <Text style={styles.statValue}>{value}</Text>
               <Text style={styles.statLabel}>{label}</Text>
@@ -943,7 +943,7 @@ export const ExerciseDetailScreen: React.FC<ExerciseDetailScreenProps> = ({
 const useStyles = makeStyles((colors: ThemeColors) =>
   StyleSheet.create({
   sectionTitle: { color: colors.text, fontSize: 19, fontWeight: '900', marginBottom: 2 },
-  statIcon: { width: 28, height: 28, borderRadius: 9, backgroundColor: 'rgba(226, 88, 34, 0.14)', alignItems: 'center', justifyContent: 'center' },
+  statIcon: { height: 22, justifyContent: 'center', alignItems: 'flex-start' },
   heroVisual: { width: 100, alignItems: 'center', justifyContent: 'center', marginLeft: 8 },
   detailScreenContainer: { flex: 1, backgroundColor: colors.bg },
 

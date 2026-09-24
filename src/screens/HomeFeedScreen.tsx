@@ -472,7 +472,7 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
         <View style={styles.activityCol}>
           <View style={styles.statTile}>
             <View style={styles.statIcon}>
-              <CalorieIcon width={17} height={17} color={colors.flame} />
+              <CalorieIcon width={24} height={24} color={colors.flame} />
             </View>
             <Text style={styles.statLabel}>Energy burned</Text>
             <Text style={styles.statValue}>
@@ -481,7 +481,7 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
           </View>
           <View style={styles.statTile}>
             <View style={styles.statIcon}>
-              <Activity size={16} color={colors.flame} />
+              <Activity size={22} color={colors.flame} />
             </View>
             <Text style={styles.statLabel}>Reps · Matches</Text>
             <Text style={styles.statValue}>
@@ -492,7 +492,7 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
 
         <View style={styles.streakTile}>
           <View style={styles.statIcon}>
-            <Flame size={16} color={colors.flame} fill={streak.activeToday ? colors.flame : 'transparent'} />
+            <Flame size={22} color={colors.flame} fill={streak.activeToday ? colors.flame : 'transparent'} />
           </View>
           <Text style={styles.statLabel}>Day streak</Text>
           <Text style={styles.streakValue}>{streak.current}</Text>
@@ -815,14 +815,7 @@ const useStyles = makeStyles((colors: ThemeColors) =>
     borderWidth: 1,
     borderColor: colors.border,
   },
-  statIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    backgroundColor: 'rgba(226, 88, 34, 0.14)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  statIcon: { height: 26, justifyContent: 'center', alignItems: 'flex-start' },
   statLabel: { color: colors.textMuted, fontSize: 11.5, fontWeight: '700', marginTop: 10 },
   statValue: { color: colors.text, fontSize: 24, fontWeight: '900', marginTop: 2 },
   statUnit: { color: colors.textMuted, fontSize: 13, fontWeight: '800' },
