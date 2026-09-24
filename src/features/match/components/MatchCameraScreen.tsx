@@ -1737,29 +1737,34 @@ const ScoreBoard: React.FC<{
               )}
             </Animated.View>
 
-            {/* Live State showcase below timer */}
-            {!ended && poseState && (
-              <View
-                style={[
-                  styles.liveStateBadge,
-                  {
-                    backgroundColor: poseState.bg,
-                    borderColor: poseState.border,
-                  },
-                ]}
-              >
-                <Text style={[styles.liveStateText, { color: poseState.color }]}>
-                  {poseState.text}
-                </Text>
-              </View>
-            )}
           </View>
 
-          <View style={styles.ffaLobbyCountBadge}>
-            <Text style={styles.ffaLobbyCountLabel}>ATHLETES</Text>
-            <Text style={styles.ffaLobbyCountNum}>{activeFfaList.length} / 10</Text>
+          <View style={[styles.playerSide, styles.playerSideRight]}>
+            <View style={styles.ffaLobbyCountBadge}>
+              <Text style={styles.ffaLobbyCountLabel}>ATHLETES</Text>
+              <Text style={styles.ffaLobbyCountNum}>{activeFfaList.length} / 10</Text>
+            </View>
           </View>
         </View>
+
+        {/* Live State showcase below timer */}
+        {!ended && poseState && (
+          <View style={styles.ffaLiveStateRow}>
+            <View
+              style={[
+                styles.liveStateBadge,
+                {
+                  backgroundColor: poseState.bg,
+                  borderColor: poseState.border,
+                },
+              ]}
+            >
+              <Text style={[styles.liveStateText, { color: poseState.color }]} numberOfLines={1} adjustsFontSizeToFit>
+                {poseState.text}
+              </Text>
+            </View>
+          </View>
+        )}
 
         {/* Live Clean FFA Leaderboard: Sorted highest reps on top */}
         <View style={styles.ffaLeaderboardCard}>
@@ -1875,18 +1880,20 @@ const ScoreBoard: React.FC<{
 
         {/* Live State showcase below timer */}
         {!ended && poseState && (
-          <View
-            style={[
-              styles.liveStateBadge,
-              {
-                backgroundColor: poseState.bg,
-                borderColor: poseState.border,
-              },
-            ]}
-          >
-            <Text style={[styles.liveStateText, { color: poseState.color }]}>
-              {poseState.text}
-            </Text>
+          <View style={styles.liveStateHolder}>
+            <View
+              style={[
+                styles.liveStateBadge,
+                {
+                  backgroundColor: poseState.bg,
+                  borderColor: poseState.border,
+                },
+              ]}
+            >
+              <Text style={[styles.liveStateText, { color: poseState.color }]} numberOfLines={1} adjustsFontSizeToFit>
+                {poseState.text}
+              </Text>
+            </View>
           </View>
         )}
       </View>
@@ -1919,32 +1926,41 @@ const PlayerBadge: React.FC<{
   botAvatarIcon?: string;
   isBot?: boolean;
 }> = ({ isSelf = false, label, username, avatarUrl, score, suffix = '', color, leading, scale, isBot }) => {
+  // Narrow phones (< 380dp): smaller avatar & padding so the score always fits.
+  const { width } = useWindowDimensions();
+  const compact = width < 380;
+  const avatarSize = compact ? 28 : 36;
   return (
-    <View style={[styles.playerBadge, !isSelf && styles.playerBadgeReverse, leading && styles.playerBadgeLeading]}>
-      <View style={styles.avatarWrap}>
-        {isBot ? (
-          <View style={[styles.botAvatarCircle, { backgroundColor: '#1E293B', width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center' }]}>
-            <Bot size={18} color="#E25822" />
-          </View>
-        ) : (
-          <Avatar username={username} avatarUrl={avatarUrl} size={36} />
-        )}
-      </View>
-      <View style={isSelf ? styles.playerTextLeft : styles.playerTextRight}>
-        <Text style={styles.playerLabel} numberOfLines={1}>
-          {label}
-        </Text>
-        <Animated.View style={{ transform: [{ scale }] }}>
-          <Text
-            style={[
-              styles.playerScore,
-              { color },
-              styles.playerScoreHighContrast,
-            ]}
-          >
-            {score}{suffix}
+    <View style={[styles.playerSide, !isSelf && styles.playerSideRight]}>
+      <View style={[styles.playerBadge, compact && styles.playerBadgeCompact, !isSelf && styles.playerBadgeReverse, leading && styles.playerBadgeLeading]}>
+        <View style={styles.avatarWrap}>
+          {isBot ? (
+            <View style={[styles.botAvatarCircle, { backgroundColor: '#1E293B', width: avatarSize, height: avatarSize, borderRadius: avatarSize / 2, justifyContent: 'center', alignItems: 'center' }]}>
+              <Bot size={avatarSize / 2} color="#E25822" />
+            </View>
+          ) : (
+            <Avatar username={username} avatarUrl={avatarUrl} size={avatarSize} />
+          )}
+        </View>
+        <View style={[isSelf ? styles.playerTextLeft : styles.playerTextRight, compact && (isSelf ? { marginLeft: 6 } : { marginRight: 6 })]}>
+          <Text style={styles.playerLabel} numberOfLines={1}>
+            {label}
           </Text>
-        </Animated.View>
+          <Animated.View style={{ transform: [{ scale }] }}>
+            <Text
+              style={[
+                styles.playerScore,
+                compact && styles.playerScoreCompact,
+                { color },
+                styles.playerScoreHighContrast,
+              ]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+            >
+              {score}{suffix}
+            </Text>
+          </Animated.View>
+        </View>
       </View>
     </View>
   );
@@ -2165,6 +2181,7 @@ const styles = StyleSheet.create({
     zIndex: 80,
   },
   playerBadge: {
+    maxWidth: '100%',
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(12, 15, 20, 0.88)',
@@ -2185,6 +2202,24 @@ const styles = StyleSheet.create({
   },
   playerBadgeReverse: {
     flexDirection: 'row-reverse',
+  },
+  playerBadgeCompact: {
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+  },
+  playerScoreCompact: {
+    fontSize: 22,
+    lineHeight: 24,
+  },
+  // Each side takes an equal share of the row and the badge shrinks inside it,
+  // so long names / wide scores can't push a badge off narrow screens.
+  playerSide: {
+    flex: 1,
+    minWidth: 0,
+    alignItems: 'flex-start',
+  },
+  playerSideRight: {
+    alignItems: 'flex-end',
   },
   avatarWrap: {
     position: 'relative',
@@ -2210,10 +2245,12 @@ const styles = StyleSheet.create({
   },
   playerTextLeft: {
     marginLeft: 10,
+    flexShrink: 1,
   },
   playerTextRight: {
     marginRight: 10,
     alignItems: 'flex-end',
+    flexShrink: 1,
   },
   playerLabel: {
     color: '#CBD5E1',
@@ -2233,10 +2270,22 @@ const styles = StyleSheet.create({
     fontWeight: '900',
   },
   timerColumn: {
+    width: 64,
+    flexShrink: 0,
     alignItems: 'center',
     justifyContent: 'center',
-    marginHorizontal: 8,
-    gap: 10,
+    marginHorizontal: 6,
+  },
+  ffaLiveStateRow: {
+    alignItems: 'center',
+  },
+  // Hangs centered under the timer without widening the score row.
+  liveStateHolder: {
+    position: 'absolute',
+    top: 72,
+    left: -170,
+    right: -170,
+    alignItems: 'center',
   },
   timerBadge: {
     width: 64,
@@ -2265,6 +2314,7 @@ const styles = StyleSheet.create({
     color: '#8E95A0',
   },
   liveStateBadge: {
+    maxWidth: 300,
     paddingHorizontal: 16,
     paddingVertical: 7,
     borderRadius: 16,
