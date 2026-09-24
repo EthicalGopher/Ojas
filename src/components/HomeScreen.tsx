@@ -38,6 +38,7 @@ import { MatchMode } from '../features/match/components/MatchCameraScreen';
 import { AIBotProfile } from '../utils/aiBotService';
 import { NewsScreen } from '../screens/NewsScreen';
 import { LevelUpCelebration } from './LevelUpCelebration';
+import { StreakSplash } from './StreakSplash';
 import { selectUnreadCount, useNewsStore } from '../store/newsStore';
 import { colors, radius } from '../theme';
 
@@ -411,6 +412,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
       <View style={styles.mainContent}>{mainContent}</View>
 
+      <StreakSplash />
       <LevelUpCelebration />
 
       <HumanVsAIModal
