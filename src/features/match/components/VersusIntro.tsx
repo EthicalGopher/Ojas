@@ -220,9 +220,6 @@ export const VersusIntro: React.FC<VersusIntroProps> = ({
 
         {/* VS */}
         <Animated.View style={[styles.vsWrap, { transform: [{ scale: vsScale }, { translateX: shake }] }]}>
-          <View style={styles.vsBolt}>
-            <Zap size={22} color={colors.gold} fill={colors.gold} />
-          </View>
           <View style={styles.vsCircle}>
             <Text style={styles.vsText}>VS</Text>
           </View>
