@@ -55,3 +55,18 @@ node test/tree_pose_engine.test.js
 ```
 
 Covers the full validation matrix: correct Tree Pose, standing-on-one-leg, foot-on-knee, floating foot, straight lifted leg, bent standing leg, wrong hands, torso lean, head alignment (aligned, slight natural tilt, excessive left/right tilt, poor-quality nose landmark), poor landmark quality, and natural-variation tolerance.
+
+## Ojas app integration
+
+- **Geometry**: `web/tree_pose_engine.js` is embedded into the camera WebView
+  (`make tree-pose-engine` after editing it).
+- **Image classifier, on-device (offline)**: `make tree-pose-onnx` exports
+  `trained_tree_pose_model.pth` to an int8 ONNX model in
+  `android/app/src/main/assets/web/tree_pose/`, run with onnxruntime-web and
+  served offline by `LocalAssetServer` (`http://127.0.0.1:8888/tree_pose/`).
+- **Image classifier, server fallback**: `POST /api/tree-pose/classify`
+  (`classifier.py`), used only while the on-device model loads or if it fails.
+- Like `tree_pose_tracker.py`, the hold timer only starts once the classifier has
+  verified the current attempt, and a `wrong > 0.5` verdict breaks the hold. With no
+  classifier available at all, MediaPipe geometry decides alone.
+- Scoring: longest unbroken hold (seconds).

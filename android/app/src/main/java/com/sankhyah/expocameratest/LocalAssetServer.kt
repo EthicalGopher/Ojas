@@ -159,6 +159,7 @@ object LocalAssetServer {
             path.endsWith(".task") -> "application/octet-stream"
             path.endsWith(".binarypb") -> "application/octet-stream"
             path.endsWith(".tflite") -> "application/octet-stream"
+            path.endsWith(".onnx") -> "application/octet-stream"
             path.endsWith(".html") -> "text/html"
             path.endsWith(".css") -> "text/css"
             path.endsWith(".json") -> "application/json"

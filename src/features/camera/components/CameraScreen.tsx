@@ -893,14 +893,28 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
     }
 
     // 9. Tree Pose Engine (Vrikshasana)
-    // MediaPipe geometry (tree_pose_engine.js) decides the stance; a ResNet50 image
-    // classifier on the backend cross-checks it. If the backend is unreachable the
-    // geometry engine alone decides, so the exercise still works offline.
-    const TREE_CLASSIFY_INTERVAL_MS = 1200;
-    const TREE_VERDICT_TTL_MS = 4000;
-    const treeAi = { enabled: true, busy: false, lastAt: 0, failures: 0, verdictAt: 0, wrong: false };
+    // Same pipeline as backend/Pose/tree_pose/tree_pose_tracker.py: MediaPipe geometry
+    // (tree_pose_engine.js) finds the stance, then the trained ResNet50 image classifier
+    // must verify it before the hold timer runs. The classifier runs ON-DEVICE (int8 ONNX +
+    // onnxruntime-web served offline by LocalAssetServer); the backend is only a fallback
+    // while the local model loads or if it can't run. With neither, geometry alone decides.
+    const TREE_LOCAL_BASE = 'http://127.0.0.1:8888/tree_pose/';
+    const TREE_CLASSIFY_MIN_GAP_MS = 350;   // back-to-back like the zip, with a small breather
+    const TREE_VERDICT_STALE_MS = 5000;     // older verdict mid-hold -> pause & re-verify
+    const TREE_WRONG_THRESHOLD = 0.5;
+    const treeAi = {
+      local: 'idle',        // idle | loading | ready | failed
+      session: null,
+      remote: true,         // backend still usable
+      remoteFailures: 0,
+      busy: false,
+      lastAt: 0,
+      verdict: null         // { wrong, correct, capturedAt, source }
+    };
     let treeEngine = null;
-    let treeClassifyCanvas = null;
+    let treeAttemptStart = 0;
+    let treeInputCanvas = null;
+    let treeUploadCanvas = null;
     // Tree Pose is scored by the LONGEST unbroken hold: the current hold resets
     // whenever balance/form breaks, and the score is the best hold in seconds.
     let treeHoldFrames = 0;
@@ -922,47 +936,120 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
       postTreeHold();
     }
 
-    function requestTreeClassification() {
-      const now = Date.now();
-      if (!treeAi.enabled || treeAi.busy || now - treeAi.lastAt < TREE_CLASSIFY_INTERVAL_MS) return;
-      if (!video || !video.videoWidth || !video.videoHeight) return;
-      treeAi.busy = true;
-      treeAi.lastAt = now;
-      const done = () => { treeAi.busy = false; };
+    function loadScriptTag(src) {
+      return new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = src;
+        s.onload = resolve;
+        s.onerror = () => reject(new Error('failed to load ' + src));
+        document.head.appendChild(s);
+      });
+    }
+
+    async function initLocalTreeClassifier() {
+      if (treeAi.local !== 'idle') return;
+      treeAi.local = 'loading';
       try {
-        if (!treeClassifyCanvas) treeClassifyCanvas = document.createElement('canvas');
-        const scale = 320 / Math.max(video.videoWidth, video.videoHeight);
-        treeClassifyCanvas.width = Math.round(video.videoWidth * scale);
-        treeClassifyCanvas.height = Math.round(video.videoHeight * scale);
-        treeClassifyCanvas.getContext('2d').drawImage(video, 0, 0, treeClassifyCanvas.width, treeClassifyCanvas.height);
-        const image = treeClassifyCanvas.toDataURL('image/jpeg', 0.8);
-        const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
-        const timer = setTimeout(() => { if (ctrl) ctrl.abort(); }, 5000);
+        if (typeof ort === 'undefined') await loadScriptTag(TREE_LOCAL_BASE + 'ort.wasm.min.js');
+        ort.env.wasm.wasmPaths = TREE_LOCAL_BASE;
+        ort.env.wasm.numThreads = 1;
+        // Run inference in a worker so MediaPipe tracking never stutters.
+        ort.env.wasm.proxy = true;
+        treeAi.session = await Promise.race([
+          ort.InferenceSession.create(TREE_LOCAL_BASE + 'tree_pose_classifier.onnx', {
+            executionProviders: ['wasm'],
+            graphOptimizationLevel: 'all'
+          }),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('model load timeout')), 45000))
+        ]);
+        treeAi.local = 'ready';
+      } catch (e) {
+        console.warn('On-device Tree Pose classifier unavailable:', e);
+        treeAi.local = 'failed';
+      }
+    }
+
+    // Resize((224,224)) + ToTensor + ImageNet Normalize, same as training.
+    function treeFrameTensor() {
+      const size = 224;
+      if (!treeInputCanvas) {
+        treeInputCanvas = document.createElement('canvas');
+        treeInputCanvas.width = size;
+        treeInputCanvas.height = size;
+      }
+      const c = treeInputCanvas.getContext('2d', { willReadFrequently: true });
+      c.drawImage(video, 0, 0, size, size);
+      const px = c.getImageData(0, 0, size, size).data;
+      const plane = size * size;
+      const data = new Float32Array(3 * plane);
+      const mean = [0.485, 0.456, 0.406];
+      const std = [0.229, 0.224, 0.225];
+      for (let i = 0; i < plane; i++) {
+        data[i] = (px[i * 4] / 255 - mean[0]) / std[0];
+        data[plane + i] = (px[i * 4 + 1] / 255 - mean[1]) / std[1];
+        data[2 * plane + i] = (px[i * 4 + 2] / 255 - mean[2]) / std[2];
+      }
+      return new ort.Tensor('float32', data, [1, 3, size, size]);
+    }
+
+    async function classifyTreeLocal() {
+      const out = await treeAi.session.run({ input: treeFrameTensor() });
+      const probs = out.probs.data;
+      return { correct: probs[0], wrong: probs[1] }; // classes: [correct_pose, wrong_pose]
+    }
+
+    async function classifyTreeRemote() {
+      if (!treeUploadCanvas) treeUploadCanvas = document.createElement('canvas');
+      const scale = 320 / Math.max(video.videoWidth, video.videoHeight);
+      treeUploadCanvas.width = Math.round(video.videoWidth * scale);
+      treeUploadCanvas.height = Math.round(video.videoHeight * scale);
+      treeUploadCanvas.getContext('2d').drawImage(video, 0, 0, treeUploadCanvas.width, treeUploadCanvas.height);
+      const image = treeUploadCanvas.toDataURL('image/jpeg', 0.8);
+      const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      const timer = setTimeout(() => { if (ctrl) ctrl.abort(); }, 5000);
+      try {
         // text/plain keeps this a "simple" request, so no CORS preflight.
-        fetch(TREE_CLASSIFY_URL, {
+        const res = await fetch(TREE_CLASSIFY_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'text/plain' },
           body: JSON.stringify({ image }),
           signal: ctrl ? ctrl.signal : undefined
-        })
-          .then((r) => r.json())
-          .then((res) => {
-            if (res && res.available === false) {
-              treeAi.enabled = false;
-            } else if (res && typeof res.wrong === 'number') {
-              treeAi.failures = 0;
-              treeAi.verdictAt = Date.now();
-              treeAi.wrong = !res.is_correct;
-            }
-          })
-          .catch(() => {
-            treeAi.failures += 1;
-            if (treeAi.failures >= 3) treeAi.enabled = false;
-          })
-          .then(() => { clearTimeout(timer); done(); }, () => { clearTimeout(timer); done(); });
-      } catch (e) {
-        done();
+        });
+        const json = await res.json();
+        if (json && json.available === false) throw new Error('backend model unavailable');
+        if (!json || typeof json.wrong !== 'number') throw new Error('bad response');
+        return { correct: json.correct, wrong: json.wrong };
+      } finally {
+        clearTimeout(timer);
       }
+    }
+
+    function treeClassifierAvailable() {
+      return treeAi.local === 'ready' || treeAi.local === 'loading' || treeAi.remote;
+    }
+
+    function requestTreeClassification() {
+      const now = Date.now();
+      if (treeAi.busy || now - treeAi.lastAt < TREE_CLASSIFY_MIN_GAP_MS) return;
+      if (!video || !video.videoWidth || !video.videoHeight) return;
+      const useLocal = treeAi.local === 'ready';
+      if (!useLocal && !treeAi.remote) return;
+      treeAi.busy = true;
+      treeAi.lastAt = now;
+      const capturedAt = now;
+      const run = useLocal ? classifyTreeLocal() : classifyTreeRemote();
+      run.then((r) => {
+        treeAi.verdict = { correct: r.correct, wrong: r.wrong, capturedAt, source: useLocal ? 'device' : 'server' };
+        if (!useLocal) treeAi.remoteFailures = 0;
+      }).catch((e) => {
+        if (useLocal) {
+          console.warn('On-device Tree Pose inference failed:', e);
+          treeAi.local = 'failed';
+        } else {
+          treeAi.remoteFailures += 1;
+          if (treeAi.remoteFailures >= 3) treeAi.remote = false;
+        }
+      }).then(() => { treeAi.busy = false; });
     }
 
     function treeHint(text) {
@@ -983,6 +1070,11 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
       ids.forEach((i) => errorLandmarks.add(i));
     }
 
+    function endTreeAttempt() {
+      treeAttemptStart = 0;
+      breakTreeHold();
+    }
+
     function updateTreePoseEngine(pose, worldPose) {
       errorLandmarks.clear();
       if (typeof MediaPipeTreePoseEngineJS === 'undefined') return;
@@ -997,21 +1089,21 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
 
       if (currentSmoothVisibility < 0.40 || validation.state === 'UNCERTAIN') {
         renderState('LOW_VISIBILITY');
-        breakTreeHold();
+        endTreeAttempt();
         return;
       }
 
       if (!features.isTreeStance || features.isSitting) {
         renderState('SETUP');
         setHint(features.isSitting ? 'Stand up to begin Tree Pose' : 'Stand tall, lift one foot onto your inner thigh & join hands', '#A7F3D0');
-        breakTreeHold();
+        endTreeAttempt();
         return;
       }
 
-      // Candidate stance: ask the image classifier for a second opinion.
+      // Candidate stance (like the zip): start an attempt and keep the classifier busy.
+      const now = Date.now();
+      if (!treeAttemptStart) treeAttemptStart = now;
       requestTreeClassification();
-      const verdictFresh = treeAi.enabled && treeAi.verdictAt > 0 && Date.now() - treeAi.verdictAt < TREE_VERDICT_TTL_MS;
-      const aiRejects = verdictFresh && treeAi.wrong;
 
       if (validation.state === 'INCORRECT') {
         renderState('ADJUST');
@@ -1028,12 +1120,28 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
         return;
       }
 
-      if (aiRejects) {
-        renderState('ADJUST');
-        markTreeErrors('LIFTED', features.standingSide);
-        setHint('AI check: pose not quite right, press the foot into the inner thigh & stand tall', '#FBBF24');
-        breakTreeHold();
-        return;
+      // Image-classifier gate. Only a verdict from a frame of THIS attempt counts.
+      const useAi = treeClassifierAvailable();
+      const v = treeAi.verdict;
+      const verdictForAttempt = v && v.capturedAt >= treeAttemptStart ? v : null;
+      if (useAi) {
+        if (!verdictForAttempt) {
+          renderState('ADJUST');
+          setHint('AI verifying your Tree Pose… hold still', '#38BDF8');
+          return; // like the zip: no timer until the model has checked the pose
+        }
+        if (verdictForAttempt.wrong > TREE_WRONG_THRESHOLD) {
+          renderState('ADJUST');
+          markTreeErrors('LIFTED', features.standingSide);
+          setHint('AI check: wrong pose (' + Math.round(verdictForAttempt.wrong * 100) + '%). Place the foot on the inner thigh or calf & stand tall', '#FBBF24');
+          breakTreeHold();
+          return;
+        }
+        if (now - verdictForAttempt.capturedAt > TREE_VERDICT_STALE_MS) {
+          renderState('ADJUST');
+          setHint('AI re-checking your pose… hold steady (' + (treeHoldFrames / 25).toFixed(1) + 's)', '#38BDF8');
+          return; // pause, don't reset: the hold resumes once a fresh verdict arrives
+        }
       }
 
       renderState('PERFECT');
@@ -1042,7 +1150,7 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
       if (treeHoldFrames > treeBestFrames) treeBestFrames = treeHoldFrames;
       const holdSecs = (treeHoldFrames / 25).toFixed(1);
       const isRecord = treeHoldFrames === treeBestFrames && treeBestFrames > 25;
-      setHint((verdictFresh ? 'AI verified! ' : '') + (isRecord ? 'New best! Hold: ' : 'Balance! Hold: ') + holdSecs + 's', '#34D399');
+      setHint((useAi ? 'AI verified! ' : '') + (isRecord ? 'New best! Hold: ' : 'Balance! Hold: ') + holdSecs + 's', '#34D399');
       if (treeHoldFrames % 5 === 0 || treeHoldFrames === 1) postTreeHold();
 
       // Each new whole second of best hold = +1 score, so score == best hold (s).
@@ -1059,6 +1167,8 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
         }
       }
     }
+
+    if (EXERCISE_MODE === 'tree_pose') initLocalTreeClassifier();
 
     // ---------- Dynamic Script Loading Helper ----------
     async function ensurePoseScriptLoaded() {
@@ -1274,7 +1384,7 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
             }
           } else {
             renderVisibility(0);
-            if (treeEngine) { treeEngine.handleFrameWithoutPerson(); breakTreeHold(); }
+            if (treeEngine) { treeEngine.handleFrameWithoutPerson(); endTreeAttempt(); }
             if (window.ReactNativeWebView && Date.now() - lastVisMsgTime > 200) {
               lastVisMsgTime = Date.now();
               window.ReactNativeWebView.postMessage(JSON.stringify({

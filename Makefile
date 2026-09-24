@@ -18,7 +18,7 @@ ARCH_FLAG := -PreactNativeArchitectures=armeabi-v7a,arm64-v8a,x86,x86_64
 
 .PHONY: db-check uninstall help install start android web typecheck doctor check \
         keystore apk apk-debug install-apk run-apk logs clean clean-android \
-        backend backend-install migrate tree-pose-engine tree-pose-test
+        backend backend-install migrate tree-pose-engine tree-pose-test tree-pose-onnx
 
 help: ## Show this help
 	@echo "Ojas v$(VERSION) - available commands:"
@@ -51,6 +51,9 @@ doctor: ## Expo project health check
 
 tree-pose-engine: ## Re-embed the Tree Pose JS engine into the app after editing it
 	node scripts/gen-tree-pose-engine.js
+
+tree-pose-onnx: ## Re-export the Tree Pose classifier (.pth -> int8 ONNX for offline on-device use)
+	python3 backend/Pose/tree_pose/export_onnx.py
 
 tree-pose-test: ## Run the Tree Pose geometry engine tests
 	node backend/Pose/tree_pose/web/test/tree_pose_engine.test.js
