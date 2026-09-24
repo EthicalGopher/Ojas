@@ -21,6 +21,7 @@ import {
   DailyChallengeSummary,
 } from '../utils/dailyChallengeService';
 import { useDailyChallengeStore } from '../store/dailyChallengeStore';
+import { colors, radius } from '../theme';
 
 interface DailyChallengesSectionProps {
   exercises: ExerciseItem[];
@@ -79,8 +80,11 @@ export const DailyChallengesSection: React.FC<DailyChallengesSectionProps> = ({
       {/* 1. SECTION HEADER */}
       <View style={styles.headerRow}>
         <View style={styles.headerLeft}>
-          <Target size={15} color="#E8D5C4" style={{ marginRight: 6 }} />
-          <Text style={styles.headerTitle}>DAILY CHALLENGES</Text>
+          <Target size={15} color={colors.accent} style={{ marginRight: 6 }} />
+          <Text style={styles.headerTitle}>DAILY QUESTS</Text>
+          <View style={styles.xpRewardPill}>
+            <Text style={styles.xpRewardText}>+{totalXp} XP</Text>
+          </View>
         </View>
 
         <View
@@ -130,7 +134,7 @@ export const DailyChallengesSection: React.FC<DailyChallengesSectionProps> = ({
               styles.totalProgressBarFill,
               {
                 width: isAllCompleted ? '100%' : `${Math.max(totalOverallPct > 0 ? 6 : 0, totalOverallPct)}%`,
-                backgroundColor: isAllCompleted ? '#10B981' : '#E8D5C4',
+                backgroundColor: isAllCompleted ? colors.success : colors.accent,
               },
             ]}
           />
@@ -267,18 +271,29 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    marginBottom: 10,
+    marginBottom: 12,
   },
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   headerTitle: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 13,
     fontWeight: '900',
-    letterSpacing: 0.6,
+    letterSpacing: 0.8,
+  },
+  xpRewardPill: {
+    marginLeft: 8,
+    backgroundColor: colors.accent,
+    borderRadius: radius.pill,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  xpRewardText: {
+    color: colors.onAccent,
+    fontSize: 10,
+    fontWeight: '900',
   },
   statusBadge: {
     flexDirection: 'row',
@@ -289,15 +304,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   statusBadgeActive: {
-    backgroundColor: 'rgba(232, 213, 196, 0.12)',
-    borderColor: 'rgba(232, 213, 196, 0.25)',
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
   },
   statusBadgeCompleted: {
     backgroundColor: 'rgba(16, 185, 129, 0.15)',
     borderColor: 'rgba(16, 185, 129, 0.35)',
   },
   statusBadgeText: {
-    color: '#E8D5C4',
+    color: colors.textMuted,
     fontSize: 10.5,
     fontWeight: '800',
   },
@@ -307,13 +322,12 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   totalProgressCard: {
-    marginHorizontal: 16,
-    backgroundColor: '#161F30',
-    borderRadius: 18,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
     padding: 14,
     marginBottom: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: colors.border,
   },
   totalProgressTopRow: {
     flexDirection: 'row',
@@ -337,19 +351,19 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   totalPercentPill: {
-    backgroundColor: 'rgba(232, 213, 196, 0.12)',
+    backgroundColor: 'rgba(226, 88, 34, 0.12)',
     borderRadius: 10,
     paddingHorizontal: 9,
     paddingVertical: 4,
     borderWidth: 1,
-    borderColor: 'rgba(232, 213, 196, 0.25)',
+    borderColor: 'rgba(226, 88, 34, 0.25)',
   },
   totalPercentPillDone: {
     backgroundColor: 'rgba(16, 185, 129, 0.15)',
     borderColor: 'rgba(16, 185, 129, 0.35)',
   },
   totalPercentText: {
-    color: '#E8D5C4',
+    color: colors.accent,
     fontSize: 12,
     fontWeight: '900',
   },
@@ -357,10 +371,10 @@ const styles = StyleSheet.create({
     color: '#10B981',
   },
   totalProgressBarTrack: {
-    height: 6,
+    height: 8,
     width: '100%',
-    backgroundColor: '#0D111A',
-    borderRadius: 3,
+    backgroundColor: colors.surfaceSunken,
+    borderRadius: 4,
     overflow: 'hidden',
   },
   totalProgressBarFill: {
@@ -368,7 +382,6 @@ const styles = StyleSheet.create({
     borderRadius: 3,
   },
   flatListContent: {
-    paddingHorizontal: 16,
     gap: 12,
     paddingBottom: 2,
   },

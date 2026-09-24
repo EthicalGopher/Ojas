@@ -28,3 +28,9 @@ yarn-debug.log*
 yarn-error.log*
 .metro-health-check*
 
+
+# Release signing (never commit these - back them up somewhere safe)
+android/keystore.properties
+android/app/*.keystore
+!android/app/debug.keystore
+*.jks

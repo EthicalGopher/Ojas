@@ -1,6 +1,8 @@
 import React, { useEffect, useRef } from 'react';
-import { Animated, StyleSheet, TouchableOpacity, View, Alert } from 'react-native';
-import { Dumbbell, Home, Activity, Users, User, Lock } from 'lucide-react-native';
+import { Alert, Animated, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Dumbbell, Home, Lock, User, Users } from 'lucide-react-native';
+import { colors, radius, shadow } from '../theme';
 
 export type TabBarItem = 'home' | 'explore' | 'workouts' | 'social' | 'profile';
 
@@ -12,79 +14,52 @@ interface TabBarProps {
   onRequireAuth?: () => void;
 }
 
-const COLORS = {
-  pill: '#FDFDFC',
-  inactiveBg: '#F1F1F0',
-  activeBg: '#C9BEF0',
-  activeIcon: '#211D2E',
-  inactiveIcon: '#80838C',
-  lockedIcon: '#94A3B8',
-  lockedBg: '#E2E8F0',
-};
-
-// Measured off the reference screenshot (then scaled down to real UI size).
-const SLOT = 64;   // distance between tab centers
-const BUMP = 58;   // diameter of the puffed white circle behind each tab
-const BASE_H = 42; // height of the flat strip connecting the bumps
-const ICON = 50;   // diameter of the actual colored, tappable icon circle
-
 const TAB_ITEMS = [
-  { key: 'home' as const, icon: Home, requiresAuth: false },
-  { key: 'explore' as const, icon: Users, requiresAuth: true },
-  { key: 'workouts' as const, icon: Dumbbell, requiresAuth: true },
-  { key: 'profile' as const, icon: User, requiresAuth: true },
+  { key: 'home' as const, label: 'Home', icon: Home, requiresAuth: false },
+  { key: 'explore' as const, label: 'Squad', icon: Users, requiresAuth: true },
+  { key: 'workouts' as const, label: 'Train', icon: Dumbbell, requiresAuth: true },
+  { key: 'profile' as const, label: 'Me', icon: User, requiresAuth: true },
 ];
 
-const CONTAINER_WIDTH = (TAB_ITEMS.length - 1) * SLOT + BUMP;
-
 interface TabButtonProps {
+  label: string;
   isActive: boolean;
   isLocked: boolean;
-  index: number;
   Icon: React.ComponentType<{ size?: number; color?: string; strokeWidth?: number }>;
   onPress: () => void;
 }
 
-const TabButton: React.FC<TabButtonProps> = ({ isActive, isLocked, index, Icon, onPress }) => {
-  const scale = useRef(new Animated.Value(1)).current;
+const TabButton: React.FC<TabButtonProps> = ({ label, isActive, isLocked, Icon, onPress }) => {
+  const anim = useRef(new Animated.Value(isActive ? 1 : 0)).current;
 
   useEffect(() => {
-    Animated.spring(scale, {
-      toValue: isActive ? 1.08 : 1,
-      useNativeDriver: true,
-      friction: 6,
-      tension: 90,
+    Animated.spring(anim, {
+      toValue: isActive ? 1 : 0,
+      useNativeDriver: false,
+      friction: 7,
+      tension: 80,
     }).start();
-  }, [isActive, scale]);
+  }, [isActive, anim]);
+
+  const width = anim.interpolate({ inputRange: [0, 1], outputRange: [48, 104] });
+  const labelOpacity = anim.interpolate({ inputRange: [0.5, 1], outputRange: [0, 1], extrapolate: 'clamp' });
 
   return (
-    <TouchableOpacity
-      activeOpacity={0.75}
-      onPress={onPress}
-      style={[
-        styles.iconTouchable,
-        { left: index * SLOT + (BUMP - ICON) / 2, top: (BUMP - ICON) / 2 },
-      ]}
-    >
-      <Animated.View
-        style={[
-          styles.iconButton,
-          isLocked
-            ? styles.iconButtonLocked
-            : isActive
-            ? styles.iconButtonActive
-            : styles.iconButtonInactive,
-          { transform: [{ scale }] },
-        ]}
-      >
+    <TouchableOpacity activeOpacity={0.8} onPress={onPress}>
+      <Animated.View style={[styles.tab, isActive && styles.tabActive, { width }]}>
         <Icon
           size={20}
-          color={isLocked ? COLORS.lockedIcon : isActive ? COLORS.activeIcon : COLORS.inactiveIcon}
-          strokeWidth={isActive ? 2.5 : 2}
+          color={isLocked ? colors.textDim : isActive ? colors.onAccent : colors.textMuted}
+          strokeWidth={isActive ? 2.6 : 2}
         />
+        {isActive && (
+          <Animated.Text style={[styles.tabLabel, { opacity: labelOpacity }]} numberOfLines={1}>
+            {label}
+          </Animated.Text>
+        )}
         {isLocked && (
           <View style={styles.lockBadge}>
-            <Lock size={10} color="#64748B" strokeWidth={2.5} />
+            <Lock size={8} color={colors.textOnLight} strokeWidth={3} />
           </View>
         )}
       </Animated.View>
@@ -99,13 +74,15 @@ export const TabBar: React.FC<TabBarProps> = ({
   isGuest = false,
   onRequireAuth,
 }) => {
-  const handlePress = (item: typeof TAB_ITEMS[0]) => {
+  const insets = useSafeAreaInsets();
+
+  const handlePress = (item: (typeof TAB_ITEMS)[number]) => {
     if (isGuest && item.requiresAuth) {
       if (onRequireAuth) {
         onRequireAuth();
       } else {
         Alert.alert(
-          '🔒 Account Required',
+          'Account Required',
           'Sign in or create a free athlete account to unlock online community duels, profiles, and ranked leaderboards.',
           [{ text: 'OK' }]
         );
@@ -121,20 +98,14 @@ export const TabBar: React.FC<TabBarProps> = ({
   };
 
   return (
-    <View style={styles.wrapper} pointerEvents="box-none">
-      <View style={styles.pillContainer}>
-        <View style={styles.baseStrip} />
-
-        {TAB_ITEMS.map((_, index) => (
-          <View key={`bump-${index}`} style={[styles.bump, { left: index * SLOT }]} />
-        ))}
-
-        {TAB_ITEMS.map((item, index) => (
+    <View style={[styles.wrapper, { bottom: Math.max(insets.bottom, 12) + 10 }]} pointerEvents="box-none">
+      <View style={styles.dock}>
+        {TAB_ITEMS.map((item) => (
           <TabButton
             key={item.key}
-            isActive={activeTab === item.key}
+            label={item.label}
+            isActive={activeTab === item.key || (item.key === 'profile' && activeTab === 'social')}
             isLocked={isGuest && item.requiresAuth}
-            index={index}
             Icon={item.icon}
             onPress={() => handlePress(item)}
           />
@@ -147,69 +118,48 @@ export const TabBar: React.FC<TabBarProps> = ({
 const styles = StyleSheet.create({
   wrapper: {
     position: 'absolute',
-    bottom: 70,
     left: 0,
     right: 0,
     alignItems: 'center',
-    justifyContent: 'center',
   },
-  pillContainer: {
-    width: CONTAINER_WIDTH,
-    height: BUMP,
+  dock: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    padding: 7,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(22, 27, 34, 0.97)',
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+    ...shadow(14),
   },
-  baseStrip: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: (BUMP - BASE_H) / 2,
-    height: BASE_H,
-    borderRadius: BASE_H / 2,
-    backgroundColor: COLORS.pill,
-  },
-  bump: {
-    position: 'absolute',
-    top: 0,
-    width: BUMP,
-    height: BUMP,
-    borderRadius: BUMP / 2,
-    backgroundColor: COLORS.pill,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 5 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 6,
-  },
-  iconTouchable: {
-    position: 'absolute',
-  },
-  iconButton: {
-    width: ICON,
-    height: ICON,
-    borderRadius: ICON / 2,
+  tab: {
+    height: 48,
+    borderRadius: 24,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 6,
+    overflow: 'hidden',
   },
-  iconButtonInactive: {
-    backgroundColor: COLORS.inactiveBg,
+  tabActive: {
+    backgroundColor: colors.accent,
   },
-  iconButtonActive: {
-    backgroundColor: COLORS.activeBg,
-  },
-  iconButtonLocked: {
-    backgroundColor: COLORS.lockedBg,
-    opacity: 0.65,
+  tabLabel: {
+    color: colors.onAccent,
+    fontSize: 13,
+    fontWeight: '900',
+    letterSpacing: 0.3,
   },
   lockBadge: {
     position: 'absolute',
-    bottom: 4,
-    right: 4,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 8,
-    padding: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
-    elevation: 2,
+    top: 8,
+    right: 9,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: colors.textMuted,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

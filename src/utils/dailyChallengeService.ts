@@ -2,6 +2,7 @@ import { ExerciseItem } from './exerciseService';
 import { UserProfile } from './profileService';
 import { HEALTH_CONDITIONS, HealthConditionMeta } from './exerciseRecommendations';
 import { ExerciseLiveStats } from '../store/dailyChallengeStore';
+import { toDateKey } from './gamification';
 
 export interface DailyChallenge {
   id: string;
@@ -51,7 +52,7 @@ export function generateDailyChallenges(
   completedMap: Record<string, boolean> = {},
   progressMap: Record<string, ExerciseLiveStats> = {}
 ): DailyChallengeSummary {
-  const today = dateStr || new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+  const today = dateStr || toDateKey(new Date()); // YYYY-MM-DD
   if (!allExercises || allExercises.length === 0) {
     return {
       date: today,

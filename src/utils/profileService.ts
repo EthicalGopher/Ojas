@@ -1,6 +1,7 @@
 import { supabase } from './supabase';
 import { AvatarConfig, AvatarStyle } from '../components/Avatar';
 import { generateRandomUsername } from './usernameGenerator';
+import { toDateKey } from './gamification';
 
 export interface DailyCalorieLog {
   date: string; // YYYY-MM-DD
@@ -50,7 +51,14 @@ export async function getOrCreateUserProfile(user: any): Promise<UserProfile> {
     throw new Error('User ID is required');
   }
 
-  const userMeta = user.user_metadata || {};
+  // The session stored on the device can carry stale user_metadata; fetch the current copy.
+  let userMeta = user.user_metadata || {};
+  try {
+    const { data: fresh } = await supabase.auth.getUser();
+    if (fresh?.user && fresh.user.id === user.id) userMeta = fresh.user.user_metadata || userMeta;
+  } catch {
+    // offline: fall back to the stored copy
+  }
   
   // 1. Extract or generate username
   let defaultUsername = userMeta.username || userMeta.preferred_username || userMeta.user_name;
@@ -125,7 +133,7 @@ export async function getOrCreateUserProfile(user: any): Promise<UserProfile> {
       full_name: fullName,
       avatar_config: userMeta.avatar_config || defaultAvatar,
       avatar_url: oauthAvatarUrl,
-      bio: 'Ready to crush daily fitness milestones with Ojas! 🔥',
+      bio: 'Ready to crush daily fitness milestones with Ojas!',
       fitness_goal: 'Strength & Stamina',
       admin: userMeta.admin === true || userMeta.is_admin === true,
       is_admin: userMeta.admin === true || userMeta.is_admin === true,
@@ -143,14 +151,11 @@ export async function getOrCreateUserProfile(user: any): Promise<UserProfile> {
 
     // Try inserting into Supabase profiles table
     try {
-      const { data: insertedData, error: insertError } = await supabase
-        .from('profiles')
-        .insert([initialProfile])
-        .select()
-        .single();
+      const { id: _id, ...insertFields } = initialProfile;
+      const { data: insertedData, error: insertError } = await writeProfileRow('insert', user.id, insertFields);
 
       if (!insertError && insertedData) {
-        return insertedData;
+        return { ...initialProfile, ...insertedData };
       }
     } catch (e) {
       console.warn('Could not insert initial profile to Supabase table:', e);
@@ -166,7 +171,7 @@ export async function getOrCreateUserProfile(user: any): Promise<UserProfile> {
       full_name: '',
       avatar_config: defaultAvatar,
       avatar_url: null,
-      bio: 'Ready to crush daily fitness milestones with Ojas! 🔥',
+      bio: 'Ready to crush daily fitness milestones with Ojas!',
       fitness_goal: 'Strength & Stamina',
     };
   }
@@ -253,6 +258,56 @@ export async function uploadUserProfilePhoto(userId: string, base64Image: string
   }
 }
 
+// Large or fast-growing fields stay out of auth user_metadata: it is embedded in every JWT.
+const METADATA_EXCLUDED_FIELDS = new Set(['daily_calories', 'total_calories', 'daily_challenges', 'updated_at']);
+
+/** Extracts the column name from a PostgREST "unknown column" error, if that is what it is. */
+function missingColumnFrom(error: { code?: string; message?: string } | null): string | null {
+  if (!error) return null;
+  const msg = error.message || '';
+  const match =
+    msg.match(/Could not find the '([^']+)' column/) || msg.match(/column (?:\w+\.)?"?([a-z_]+)"? does not exist/i);
+  return match ? match[1] : null;
+}
+
+/**
+ * Writes to public.profiles, tolerating columns the live database doesn't have yet (pending
+ * migrations): those fields are dropped from the write and returned so the caller can keep them
+ * elsewhere, while every other field still saves.
+ */
+async function writeProfileRow(
+  mode: 'update' | 'insert',
+  userId: string,
+  fields: Record<string, any>
+): Promise<{ data: any; error: string | null; droppedFields: Record<string, any> }> {
+  const pending = { ...fields };
+  const droppedFields: Record<string, any> = {};
+
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const query =
+      mode === 'update'
+        ? supabase.from('profiles').update(pending).eq('id', userId).select().maybeSingle()
+        : supabase.from('profiles').insert([{ ...pending, id: userId }]).select().single();
+    const { data, error } = await query;
+
+    const missing = missingColumnFrom(error);
+    if (missing && missing in pending) {
+      console.warn(`[ProfileService] profiles.${missing} does not exist yet (run pending migrations) - saving the other fields.`);
+      droppedFields[missing] = pending[missing];
+      delete pending[missing];
+      if (Object.keys(pending).length === 0) return { data: null, error: null, droppedFields };
+      continue;
+    }
+    if (error) return { data: null, error: error.message, droppedFields };
+    if (!data && mode === 'update') {
+      // No error but no row: RLS filtered the update (signed out / expired session) or the row is missing.
+      return { data: null, error: 'Profile was not saved - please sign in again.', droppedFields };
+    }
+    return { data, error: null, droppedFields };
+  }
+  return { data: null, error: 'Too many missing profile columns', droppedFields };
+}
+
 /**
  * Update an existing profile row in public.profiles.
  */
@@ -266,26 +321,22 @@ export async function updateUserProfile(
       updated_at: new Date().toISOString(),
     };
 
-    const { data, error } = await supabase
-      .from('profiles')
-      .update(cleanUpdates)
-      .eq('id', userId)
-      .select()
-      .maybeSingle();
+    const { data, error, droppedFields } = await writeProfileRow('update', userId, cleanUpdates);
 
     if (error) {
-      console.warn('[ProfileService] profiles table update warning:', error.message);
-      // Fallback: sync to auth user_metadata
-      await supabase.auth.updateUser({
-        data: cleanUpdates,
-      });
-      return { success: true, data: { id: userId, ...cleanUpdates } as UserProfile };
+      console.warn('[ProfileService] profiles table update failed:', error);
+      return { success: false, error };
     }
 
-    // Also sync with auth metadata
-    await supabase.auth.updateUser({
-      data: cleanUpdates,
-    });
+    // Keep small identity fields in auth metadata (used for match/socket names), plus anything the
+    // database couldn't store yet so it isn't lost.
+    const metadataSync: Record<string, any> = { ...droppedFields };
+    for (const [key, value] of Object.entries(cleanUpdates)) {
+      if (!METADATA_EXCLUDED_FIELDS.has(key)) metadataSync[key] = value;
+    }
+    if (Object.keys(metadataSync).length > 0) {
+      await supabase.auth.updateUser({ data: metadataSync });
+    }
 
     return { success: true, data: data || ({ id: userId, ...cleanUpdates } as UserProfile) };
   } catch (err: any) {
@@ -307,7 +358,7 @@ export async function recordCaloriesToProfile(
   if (!userId || userId === 'guest') return { success: false, error: 'Guest or invalid user' };
 
   try {
-    const today = dateStr || new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    const today = dateStr || toDateKey(new Date()); // YYYY-MM-DD
     
     // Fetch current profile daily_calories
     const { data: profileData } = await supabase
@@ -367,7 +418,7 @@ export async function recordDailyChallengeProgress(
   if (!userId || userId === 'guest') return { success: false, error: 'Guest or invalid user' };
 
   try {
-    const today = dateStr || new Date().toISOString().split('T')[0];
+    const today = dateStr || toDateKey(new Date());
 
     const { data: profileData } = await supabase
       .from('profiles')

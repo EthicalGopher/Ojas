@@ -51,6 +51,9 @@ import {
 } from '../utils/exerciseRecommendations';
 import { DailyChallengesSection } from '../components/DailyChallengesSection';
 import { useDailyChallengeStore } from '../store/dailyChallengeStore';
+import { useGameStats } from '../hooks/useGameStats';
+import { isActiveDay, toDateKey, XP_PER_MATCH } from '../utils/gamification';
+import { colors, radius, shadow } from '../theme';
 
 export type { ExerciseItem };
 
@@ -86,6 +89,7 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
   onOpenAiDuel,
 }) => {
   const { user, profile, setProfile, isGuest } = useUserStore();
+  const { level, streak } = useGameStats();
   const [friends, setFriends] = useState<FriendshipItem[]>([]);
   const [loadingFriends, setLoadingFriends] = useState<boolean>(false);
   const [selectedTutorial, setSelectedTutorial] = useState<TutorialModalData | null>(null);
@@ -169,7 +173,8 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
     ];
     const currentMonthYear = `${monthNames[today.getMonth()]} ${today.getFullYear()}`;
     const todayDateNumber = today.getDate();
-    const todayDateString = today.toISOString().split('T')[0]; // YYYY-MM-DD
+    // Local date, matching the week strip below and how activity is saved.
+    const todayDateString = toDateKey(today);
 
     // Find the Monday of current week
     const dayOfWeek = today.getDay(); // 0 is Sunday, 1 is Monday...
@@ -308,61 +313,96 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
     },
   ];
 
+  const streakMessage = streak.activeToday
+    ? `${streak.current}-day streak secured. Come back tomorrow to keep it going.`
+    : streak.atRisk
+    ? `Your ${streak.current}-day streak ends tonight. One workout keeps it alive.`
+    : 'Finish any workout today to start a streak.';
+
+  const TUTORIAL_CARDS = [
+    { tutorial: TUTORIALS[0], tag: 'AI TRACKER', title: 'How AI Tracking Works', Icon: Bot, tint: colors.lavender },
+    { tutorial: TUTORIALS[1], tag: 'RULES', title: '1v1 Battle Scoring', Icon: Swords, tint: colors.flame },
+    { tutorial: TUTORIALS[2], tag: 'SETUP', title: 'Camera Positioning', Icon: Smartphone, tint: colors.accent },
+  ];
+
+  const SectionHeader = ({
+    Icon,
+    title,
+    right,
+  }: {
+    Icon: React.ComponentType<{ size?: number; color?: string }>;
+    title: string;
+    right?: React.ReactNode;
+  }) => (
+    <View style={styles.sectionHeaderRow}>
+      <View style={styles.headerLeftRow}>
+        <Icon size={15} color={colors.accent} />
+        <Text style={styles.sectionHeaderTitle}>{title}</Text>
+      </View>
+      {right}
+    </View>
+  );
+
   return (
     <ScrollView
       style={styles.feedScrollView}
       contentContainerStyle={styles.feedScrollContent}
       showsVerticalScrollIndicator={false}
     >
-      {/* 1. DYNAMIC CURRENT DATE CALENDAR STRIP & CALORIES BURNED TRACKER */}
+      {/* 1. CALENDAR + STREAK */}
       <View style={styles.calendarCard}>
         <View style={styles.calendarHeaderRow}>
           <Text style={styles.calendarMonthText}>{currentMonthYear}</Text>
-          <View style={styles.calendarNavButtons}>
-            <View style={styles.todayPillBadge}>
-              <View style={styles.neonDot} />
-              <Text style={styles.todayPillText}>
-                {selectedDayItem?.isToday ? 'TODAY' : selectedDateString}
-              </Text>
-            </View>
+          <View style={[styles.streakChip, streak.activeToday && styles.streakChipLit]}>
+            <Flame
+              size={13}
+              color={streak.current > 0 ? colors.flame : colors.textDim}
+              fill={streak.activeToday ? colors.flame : 'transparent'}
+            />
+            <Text style={[styles.streakChipText, streak.current === 0 && { color: colors.textMuted }]}>
+              {streak.current} day streak
+            </Text>
           </View>
         </View>
 
         <View style={styles.daysRow}>
-          {currentWeekDays.map((item, index) => {
+          {currentWeekDays.map((item) => {
             const isSelected = selectedDateString === item.dateString;
-            const dayCalories = dailyCaloriesMap[item.dateString]?.calories || 0;
-            const hasActivity = dayCalories > 0;
+            const active = isActiveDay(profile, item.dateString) || (item.isToday && streak.activeToday);
 
             return (
               <TouchableOpacity
-                key={index}
-                style={[styles.dayItem, isSelected && styles.dayItemActive]}
+                key={item.dateString}
+                style={styles.dayItem}
                 activeOpacity={0.8}
                 onPress={() => setSelectedDateString(item.dateString)}
               >
-                <Text style={[styles.dayLetter, isSelected && styles.dayLetterActive]}>
+                <Text style={[styles.dayLetter, (isSelected || item.isToday) && styles.dayLetterActive]}>
                   {item.day}
                 </Text>
-                <View style={[styles.dateCircle, isSelected && styles.dateCircleActive]}>
-                  <Text style={[styles.dateNumber, isSelected && styles.dateNumberActive]}>
-                    {item.date}
-                  </Text>
+                <View
+                  style={[
+                    styles.dateCircle,
+                    item.isToday && !isSelected && styles.dateCircleToday,
+                    isSelected && styles.dateCircleSelected,
+                  ]}
+                >
+                  <Text style={[styles.dateNumber, isSelected && styles.dateNumberSelected]}>{item.date}</Text>
                 </View>
-                {/* Micro activity indicator dot if calories were burned on this date */}
-                {hasActivity && (
-                  <View style={[styles.calDotBadge, isSelected && styles.calDotBadgeActive]} />
-                )}
+                <View style={styles.dayMarker}>
+                  {active && <Flame size={11} color={colors.flame} fill={colors.flame} />}
+                </View>
               </TouchableOpacity>
             );
           })}
         </View>
 
-        {/* Date-Specific Calories Burn Summary Box */}
+        <Text style={styles.streakMessage}>{streakMessage}</Text>
+
         <View style={styles.calendarCalorieRow}>
           <View style={styles.calendarCalorieLeft}>
             <View style={styles.calFlameIconCircle}>
-              <Activity size={16} color="#FF6B35" />
+              <Activity size={16} color={colors.flame} />
             </View>
             <View>
               <Text style={styles.calBurnNumberText}>
@@ -370,7 +410,7 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
               </Text>
               <Text style={styles.calBurnLabelText}>
                 {selectedDayItem?.isToday
-                  ? "Today's Energy Burned"
+                  ? "Today's energy burned"
                   : `Burned on ${selectedDayItem?.fullDate?.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) || selectedDateString}`}
               </Text>
             </View>
@@ -389,7 +429,26 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
         </View>
       </View>
 
-      {/* DAILY EXERCISE & ILLNESS THERAPY CHALLENGES AT TOP */}
+      {/* 2. LEVEL PROGRESS */}
+      <TouchableOpacity style={styles.levelStrip} activeOpacity={0.85} onPress={() => onNavigateToTab?.('profile')}>
+        <View style={styles.levelStripBadge}>
+          <Text style={styles.levelStripBadgeLabel}>LV</Text>
+          <Text style={styles.levelStripBadgeText}>{level.level}</Text>
+        </View>
+        <View style={{ flex: 1 }}>
+          <View style={styles.levelStripTopRow}>
+            <Text style={styles.levelStripTitle}>{level.title}</Text>
+            <Text style={styles.levelStripXp}>
+              {level.xpForNextLevel - level.xpIntoLevel} XP to level {level.level + 1}
+            </Text>
+          </View>
+          <View style={styles.levelTrack}>
+            <View style={[styles.levelFill, { width: `${Math.max(3, level.progress * 100)}%` }]} />
+          </View>
+        </View>
+      </TouchableOpacity>
+
+      {/* 3. DAILY QUESTS */}
       <DailyChallengesSection
         exercises={exercises}
         profile={profile}
@@ -398,168 +457,127 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
         onExerciseSelect={onExerciseSelect}
       />
 
-      {/* DIRECT QUESTION & YES/NO (NO BOX CONTAINER) */}
+      {/* 4. HEALTH CHECK-IN QUESTION */}
       {!isSurveyCompleted && (() => {
         const currentCond = HEALTH_CONDITIONS[currentQuestionIndex];
         if (!currentCond) return null;
 
         return (
-          <View style={styles.directQuestionWrapper}>
-            <Text style={styles.directQuestionPrompt}>{currentCond.question}</Text>
+          <View style={styles.questionCard}>
+            <View style={styles.questionTopRow}>
+              <View style={styles.questionTag}>
+                <Text style={styles.questionTagText}>BODY CHECK-IN</Text>
+              </View>
+              <Text style={styles.questionCounter}>
+                {currentQuestionIndex + 1}/{HEALTH_CONDITIONS.length}
+              </Text>
+            </View>
+            <Text style={styles.questionPrompt}>{currentCond.question}</Text>
+            <Text style={styles.questionHint}>Your answers tailor tomorrow's quests.</Text>
 
-            <View style={styles.directActionsRow}>
-              <TouchableOpacity
-                style={styles.directYesBtn}
-                activeOpacity={0.85}
-                onPress={() => handleAnswerQuestion(true)}
-              >
-                <Check size={18} color="#FFFFFF" strokeWidth={3} style={{ marginRight: 6 }} />
-                <Text style={styles.directYesBtnText}>Yes</Text>
+            <View style={styles.questionActions}>
+              <TouchableOpacity style={styles.yesBtn} activeOpacity={0.85} onPress={() => handleAnswerQuestion(true)}>
+                <Check size={18} color={colors.onAccent} strokeWidth={3} />
+                <Text style={styles.yesBtnText}>Yes</Text>
               </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.directNoBtn}
-                activeOpacity={0.85}
-                onPress={() => handleAnswerQuestion(false)}
-              >
-                <X size={18} color="#CBD5E1" strokeWidth={2.5} style={{ marginRight: 6 }} />
-                <Text style={styles.directNoBtnText}>No</Text>
+              <TouchableOpacity style={styles.noBtn} activeOpacity={0.85} onPress={() => handleAnswerQuestion(false)}>
+                <X size={18} color={colors.text} strokeWidth={2.5} />
+                <Text style={styles.noBtnText}>No</Text>
               </TouchableOpacity>
             </View>
           </View>
         );
       })()}
 
-      {/* 2. AI BODY POSTURE SCANNER (FEATURED CARD THEME) */}
+      {/* 5. GAME MODES */}
+      <SectionHeader
+        Icon={Swords}
+        title="GAME MODES"
+        right={
+          <View style={styles.onlineBadgePill}>
+            <View style={styles.pulseGreenDot} />
+            <Text style={styles.onlineBadgeText}>{onlineCount} online</Text>
+          </View>
+        }
+      />
+
       <TouchableOpacity
-        style={styles.heroLimeCard}
-        activeOpacity={0.9}
-        onPress={() => setIsDeformityScannerVisible(true)}
+        style={styles.arenaCard}
+        activeOpacity={0.92}
+        onPress={() => {
+          if (isGuest) {
+            Alert.alert(
+              '1v1 Arena Locked',
+              'Sign in or create a free athlete account to duel live players in real-time battles.',
+              [{ text: 'OK' }]
+            );
+            return;
+          }
+          onExerciseSelect(activeExercise);
+        }}
       >
-        <View style={styles.heroLimeBody}>
-          <View style={styles.heroLimeLeft}>
-            <View style={styles.progressTopRow}>
-              <Text style={styles.heroProgressTag}>AI Scanner</Text>
+        <View style={{ flex: 1 }}>
+          <View style={styles.modeTagRow}>
+            <View style={styles.modeTag}>
+              <Text style={styles.modeTagText}>RANKED</Text>
             </View>
-
-            <Text style={styles.heroMainTitle}>Body Posture Check</Text>
-            <Text style={styles.heroSubTitle}>
-              Check if your knees, shoulders and back are straight
-            </Text>
-
-            <View style={[styles.caloriesBadgePill, { backgroundColor: '#11141A', marginTop: 14 }]}>
-              <Scan size={13} color="#FFFFFF" style={{ marginRight: 6 }} />
-              <Text style={[styles.caloriesBadgeText, { color: '#FFFFFF' }]}>3-Sec Camera Check</Text>
+            <View style={styles.rewardTag}>
+              <Text style={styles.rewardTagText}>+{XP_PER_MATCH} XP</Text>
             </View>
           </View>
-
-          <View style={styles.heroLimeRight}>
-            <View style={[styles.athleteVisualCircle, { backgroundColor: 'rgba(255, 255, 255, 0.18)' }]}>
-              <Scan size={38} color="#FFFFFF" />
-            </View>
+          <Text style={styles.arenaTitle}>{activeExercise.name} 1v1 Arena</Text>
+          <Text style={styles.arenaSub} numberOfLines={2}>
+            Live camera battle. Most clean reps wins.
+          </Text>
+          <View style={styles.playBtn}>
+            {isGuest ? <Lock size={13} color={colors.text} /> : <Play size={13} color={colors.text} fill={colors.text} />}
+            <Text style={styles.playBtnText}>{isGuest ? 'Sign in to play' : 'Play now'}</Text>
           </View>
         </View>
-      </TouchableOpacity>
-      <TouchableOpacity
-        style={styles.heroLimeCard}
-        activeOpacity={0.9}
-        onPress={() => onExerciseSelect(activeExercise)}
-      >
-        <View style={styles.heroLimeBody}>
-          <View style={styles.heroLimeLeft}>
-            <View style={styles.progressTopRow}>
-              <Text style={styles.heroProgressTag}>Featured Workout</Text>
-            </View>
-
-            <Text style={styles.heroMainTitle}>{activeExercise.name} 1v1 Arena</Text>
-            <Text style={styles.heroSubTitle}>
-              {activeExercise.description || 'Real-time MediaPipe AI Pose Tracker'}
-            </Text>
-
-            <TouchableOpacity
-              style={[styles.caloriesBadgePill, isGuest && { backgroundColor: '#1E293B', opacity: 0.85 }]}
-              activeOpacity={0.8}
-              onPress={(e) => {
-                if (isGuest) {
-                  e.stopPropagation();
-                  Alert.alert(
-                    '🔒 1v1 Arena Locked',
-                    'Sign in or create a free athlete account to duel live players in real-time battles.',
-                    [{ text: 'OK' }]
-                  );
-                } else {
-                  onExerciseSelect(activeExercise);
-                }
-              }}
-            >
-              {isGuest ? (
-                <>
-                  <Lock size={12} color="#94A3B8" style={{ marginRight: 5 }} />
-                  <Text style={[styles.caloriesBadgeText, { color: '#94A3B8' }]}>1v1 Arena (Sign In to Unlock)</Text>
-                </>
-              ) : (
-                <>
-                  <Swords size={13} color="#FFFFFF" style={{ marginRight: 4 }} />
-                  <Text style={styles.caloriesBadgeText}>Enter 1v1 Battle</Text>
-                </>
-              )}
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.heroLimeRight}>
-            <View style={styles.athleteVisualCircle}>
-              <ExerciseIcon
-                imageUrl={activeExercise.image_url}
-                icon={activeExercise.icon || '🏋️‍♂️'}
-                size={54}
-                fontSize={32}
-              />
-            </View>
-          </View>
-        </View>
+        <ExerciseIcon
+          imageUrl={activeExercise.image_url}
+          icon={activeExercise.icon || '🏋️‍♂️'}
+          size={72}
+          fontSize={40}
+        />
       </TouchableOpacity>
 
-      {/* HUMAN VS AI DUEL CARD */}
-      <TouchableOpacity
-        style={styles.heroLimeCard}
-        activeOpacity={0.9}
-        onPress={() => onOpenAiDuel?.(activeExercise.id)}
-      >
-        <View style={styles.heroLimeBody}>
-          <View style={styles.heroLimeLeft}>
-            <View style={styles.progressTopRow}>
-              <Text style={styles.heroProgressTag}>AI Duel</Text>
-            </View>
-
-            <Text style={styles.heroMainTitle}>Human vs AI</Text>
-            <Text style={styles.heroSubTitle}>
-              2-minute calorie burn & rep match vs AI difficulty
-            </Text>
-
-            <View style={[styles.caloriesBadgePill, { backgroundColor: '#11141A', marginTop: 14 }]}>
-              <Flame size={13} color="#FFFFFF" style={{ marginRight: 6 }} />
-              <Text style={[styles.caloriesBadgeText, { color: '#FFFFFF', fontWeight: '900' }]}>
-                START DUEL
-              </Text>
-            </View>
+      <View style={styles.modeRow}>
+        <TouchableOpacity
+          style={[styles.modeCard, { backgroundColor: colors.lavender }]}
+          activeOpacity={0.9}
+          onPress={() => onOpenAiDuel?.(activeExercise.id)}
+        >
+          <View style={styles.modeIconCircle}>
+            <Bot size={20} color={colors.textOnLight} />
           </View>
-
-          <View style={styles.heroLimeRight}>
-            <View style={[styles.athleteVisualCircle, { backgroundColor: 'rgba(255, 255, 255, 0.18)' }]}>
-              <Swords size={36} color="#FFFFFF" />
-            </View>
+          <Text style={styles.modeTitle}>Human vs AI</Text>
+          <Text style={styles.modeSub}>Beat 4 bot levels</Text>
+          <View style={styles.modeFooter}>
+            <Text style={styles.modeFooterText}>2 MIN DUEL</Text>
+            <ChevronRight size={16} color={colors.textOnLight} />
           </View>
-        </View>
-      </TouchableOpacity>
+        </TouchableOpacity>
 
-      {/* 3. AI TUTOR SECTION FOR ALL EXERCISES (Small, Rounded Square Horizontal FlatList) */}
-      <View style={styles.sectionHeaderRow}>
-        <View style={styles.headerLeftRow}>
-          <Bot size={16} color="#E25822" style={{ marginRight: 6 }} />
-          <Text style={styles.sectionHeaderTitle}>AI TUTOR</Text>
-        </View>
-        <Text style={styles.sectionSubHint}>Live Pose Coach</Text>
+        <TouchableOpacity
+          style={[styles.modeCard, { backgroundColor: colors.pink }]}
+          activeOpacity={0.9}
+          onPress={() => setIsDeformityScannerVisible(true)}
+        >
+          <View style={styles.modeIconCircle}>
+            <Scan size={20} color={colors.textOnLight} />
+          </View>
+          <Text style={styles.modeTitle}>Posture Scan</Text>
+          <Text style={styles.modeSub}>Knees, spine & shoulders</Text>
+          <View style={styles.modeFooter}>
+            <Text style={styles.modeFooterText}>3 SEC SCAN</Text>
+            <ChevronRight size={16} color={colors.textOnLight} />
+          </View>
+        </TouchableOpacity>
       </View>
+
+      {/* 6. AI COACH */}
+      <SectionHeader Icon={Bot} title="AI COACH" right={<Text style={styles.sectionSubHint}>Voice + pose feedback</Text>} />
 
       <FlatList
         data={exercises}
@@ -568,54 +586,39 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.tutorFlatListContent}
         renderItem={({ item, index }) => {
-          const defaultPalettes = ['#C8B6FF', '#FFD6E0', '#E25822', '#354394'];
+          const defaultPalettes = [colors.lavender, colors.pink, colors.flame, colors.navy];
           const cardBg = item.bg_theme || defaultPalettes[index % defaultPalettes.length];
-          const isDarkCard = cardBg === '#354394' || cardBg === '#E25822';
-          const textColor = isDarkCard ? '#FFFFFF' : '#11141A';
+          const isDarkCard = cardBg === colors.navy || cardBg === colors.flame;
+          const textColor = isDarkCard ? colors.text : colors.textOnLight;
           const subTextColor = isDarkCard ? '#E2E8F0' : '#4B5563';
           const duration = item.duration_mins || (index % 2 === 0 ? 32 : 25);
 
           return (
             <TouchableOpacity
-              style={[styles.tutorSquareCard, { backgroundColor: cardBg }]}
+              style={[styles.tutorCard, { backgroundColor: cardBg }]}
               activeOpacity={0.88}
               onPress={() => onOpenCamera(item.id, item.name, true)}
             >
-              {/* Top Row: Category Pill & Duration Badge */}
-              <View style={styles.tutorSquareTopRow}>
-                <View style={[styles.tutorSquareCategoryPill, isDarkCard && { backgroundColor: 'rgba(255, 255, 255, 0.2)' }]}>
-                  <Text style={[styles.tutorSquareCategoryText, { color: textColor }]}>
+              <View style={styles.tutorTopRow}>
+                <View style={[styles.tutorCategoryPill, isDarkCard && { backgroundColor: 'rgba(255, 255, 255, 0.2)' }]}>
+                  <Text style={[styles.tutorCategory, { color: textColor }]}>
                     {item.category?.toUpperCase() || 'FITNESS'}
                   </Text>
                 </View>
-                <View style={styles.tutorSquareDurationBadge}>
-                  <Text style={styles.tutorSquareDurationText}>{duration}m</Text>
+                <View style={styles.tutorDurationBadge}>
+                  <Text style={styles.tutorDuration}>{duration}m</Text>
                 </View>
               </View>
-
-              {/* Center: Athletic Visual Icon */}
-              <View style={styles.tutorSquareIconWrap}>
-                <ExerciseIcon
-                  imageUrl={item.image_url}
-                  icon={item.icon}
-                  size={46}
-                  fontSize={26}
-                />
+              <View style={styles.tutorIconWrap}>
+                <ExerciseIcon imageUrl={item.image_url} icon={item.icon} size={48} fontSize={28} />
               </View>
-
-              {/* Bottom: Name & Mini Play Action */}
-              <View style={styles.tutorSquareBottomRow}>
+              <View style={styles.tutorBottomRow}>
                 <View style={{ flex: 1, marginRight: 6 }}>
-                  <Text style={[styles.tutorSquareTitle, { color: textColor }]} numberOfLines={1}>
-                    {item.name}
-                  </Text>
-                  <Text style={[styles.tutorSquareSub, { color: subTextColor }]} numberOfLines={1}>
-                    Voice & Pose
-                  </Text>
+                  <Text style={[styles.tutorTitle, { color: textColor }]} numberOfLines={1}>{item.name}</Text>
+                  <Text style={[styles.tutorSub, { color: subTextColor }]} numberOfLines={1}>Voice & Pose</Text>
                 </View>
-
-                <View style={[styles.tutorSquarePlayCircle, isDarkCard && { backgroundColor: '#FFFFFF' }]}>
-                  <Play size={10} color={isDarkCard ? '#11141A' : '#FFFFFF'} fill={isDarkCard ? '#11141A' : '#FFFFFF'} />
+                <View style={[styles.tutorPlay, isDarkCard && { backgroundColor: colors.text }]}>
+                  <Play size={10} color={isDarkCard ? colors.textOnLight : colors.text} fill={isDarkCard ? colors.textOnLight : colors.text} />
                 </View>
               </View>
             </TouchableOpacity>
@@ -623,122 +626,37 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
         }}
       />
 
-      {/* 4. DYNAMIC TUTORIALS & GUIDES SECTION */}
-      <View style={styles.sectionHeaderRow}>
-        <View style={styles.headerLeftRow}>
-          <Lightbulb size={14} color="#E8D5C4" style={{ marginRight: 6 }} />
-          <Text style={styles.sectionHeaderTitle}>TUTORIALS & GUIDES</Text>
-        </View>
-        <Text style={styles.sectionSubHint}>Tap cards for guide</Text>
-      </View>
-
-      {/* 2-Column Dynamic Tutorial Cards */}
-      <View style={styles.tutorialGridRow}>
-        {/* Tutorial 1: AI Pose Tracking (Pastel Lavender) */}
-        <TouchableOpacity
-          style={[styles.tutorialCard, styles.tutorialCardLavender]}
-          activeOpacity={0.88}
-          onPress={() => setSelectedTutorial(TUTORIALS[0])}
-        >
-          <View style={styles.tutorialCardTop}>
-            <View style={styles.tutorialBadgeDark}>
-              <Text style={styles.tutorialBadgeDarkText}>AI TRACKER</Text>
+      {/* 7. GUIDES */}
+      <SectionHeader Icon={Lightbulb} title="GUIDES" right={<Text style={styles.sectionSubHint}>Tap for guide</Text>} />
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.guideRow}>
+        {TUTORIAL_CARDS.map(({ tutorial, tag, title, Icon, tint }) => (
+          <TouchableOpacity
+            key={tag}
+            style={styles.guideCard}
+            activeOpacity={0.88}
+            onPress={() => setSelectedTutorial(tutorial)}
+          >
+            <View style={[styles.guideIcon, { backgroundColor: `${tint}22` }]}>
+              <Icon size={18} color={tint} />
             </View>
-            <Bot size={18} color="#11141A" />
-          </View>
-          <Text style={styles.tutorialCardTitleDark}>How AI Tracking Works</Text>
-          <Text style={styles.tutorialCardDescDark} numberOfLines={2}>
-            MediaPipe 33-point skeletal angle tracking for parallel depth.
-          </Text>
-          <View style={styles.readGuideRow}>
-            <Text style={styles.readGuideTextDark}>View Guide</Text>
-            <ChevronRight size={12} color="#11141A" />
-          </View>
-        </TouchableOpacity>
+            <Text style={[styles.guideTag, { color: tint }]}>{tag}</Text>
+            <Text style={styles.guideTitle}>{title}</Text>
+            <Text style={styles.guideDesc} numberOfLines={2}>{tutorial.subtitle}</Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
 
-        {/* Tutorial 2: Battle Rules (Pastel Rose) */}
-        <TouchableOpacity
-          style={[styles.tutorialCard, styles.tutorialCardRose]}
-          activeOpacity={0.88}
-          onPress={() => setSelectedTutorial(TUTORIALS[1])}
-        >
-          <View style={styles.tutorialCardTop}>
-            <View style={styles.tutorialBadgeDark}>
-              <Text style={styles.tutorialBadgeDarkText}>RULES</Text>
-            </View>
-            <Swords size={18} color="#11141A" />
-          </View>
-          <Text style={styles.tutorialCardTitleDark}>1v1 Battle Scoring</Text>
-          <Text style={styles.tutorialCardDescDark} numberOfLines={2}>
-            +10 Win • +5 Draw • -10 Loss rules and level tier progression.
-          </Text>
-          <View style={styles.readGuideRow}>
-            <Text style={styles.readGuideTextDark}>View Guide</Text>
-            <ChevronRight size={12} color="#11141A" />
-          </View>
-        </TouchableOpacity>
-      </View>
+      {/* 8. SQUAD */}
+      <SectionHeader Icon={Users} title="YOUR SQUAD" right={<Text style={styles.sectionSubHint}>{friends.length} friends</Text>} />
 
-      {/* Tutorial 3: Camera Positioning (Dark Card with Warm Accents) */}
-      <TouchableOpacity
-        style={styles.tutorialFullCard}
-        activeOpacity={0.88}
-        onPress={() => setSelectedTutorial(TUTORIALS[2])}
-      >
-        <View style={styles.tutorialFullBody}>
-          <View style={styles.tutorialIconBox}>
-            <Smartphone size={22} color="#E8D5C4" />
-          </View>
-          <View style={{ flex: 1, marginLeft: 14 }}>
-            <View style={styles.fullCardBadgeRow}>
-              <Text style={styles.fullCardBadgeText}>SETUP GUIDE</Text>
-            </View>
-            <Text style={styles.fullCardTitle}>Camera Positioning & Distance</Text>
-            <Text style={styles.fullCardDesc} numberOfLines={2}>
-              Place phone 5-7 ft away in landscape orientation with full body visible.
-            </Text>
-          </View>
-          <View style={styles.fullCardArrowCircle}>
-            <ChevronRight size={16} color="#11141A" />
-          </View>
-        </View>
-      </TouchableOpacity>
-
-      {/* 4. ONLINE FRIENDS SECTION */}
-      <View style={styles.sectionHeaderRow}>
-        <View style={styles.headerLeftRow}>
-          <Users size={14} color="#E8D5C4" style={{ marginRight: 6 }} />
-          <Text style={styles.sectionHeaderTitle}>ONLINE ATHLETES</Text>
-        </View>
-        <View style={styles.onlineBadgePill}>
-          <View style={styles.pulseGreenDot} />
-          <Text style={styles.onlineBadgeText}>{onlineCount} Online</Text>
-        </View>
-      </View>
-
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.horizontalAvatarRow}
-      >
-        {/* Add Friend Button */}
-        <TouchableOpacity
-          style={styles.avatarItem}
-          activeOpacity={0.8}
-          onPress={() => onNavigateToTab?.('profile')}
-        >
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalAvatarRow}>
+        <TouchableOpacity style={styles.avatarItem} activeOpacity={0.8} onPress={() => onNavigateToTab?.('profile')}>
           <View style={styles.addFriendCircle}>
-            <UserPlus size={22} color="#E8D5C4" />
-            <View style={styles.plusIconBadge}>
-              <Plus size={10} color="#11141A" strokeWidth={3} />
-            </View>
+            <UserPlus size={22} color={colors.accent} />
           </View>
-          <Text style={styles.avatarLabel} numberOfLines={1}>
-            Add Friend
-          </Text>
+          <Text style={styles.avatarLabel} numberOfLines={1}>Invite</Text>
         </TouchableOpacity>
 
-        {/* Real Friends List */}
         {friends.map((item) => (
           <TouchableOpacity
             key={item.friendship_id}
@@ -754,25 +672,15 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
                 avatarUrl={item.friend.avatar_url}
               />
             </View>
-            <Text style={styles.avatarLabel} numberOfLines={1}>
-              {item.friend.username}
-            </Text>
+            <Text style={styles.avatarLabel} numberOfLines={1}>{item.friend.username}</Text>
           </TouchableOpacity>
         ))}
 
         {friends.length === 0 && !loadingFriends && (
-          <TouchableOpacity
-            style={styles.avatarItem}
-            activeOpacity={0.8}
-            onPress={() => onNavigateToTab?.('profile')}
-          >
-            <View style={[styles.avatarWrapper, styles.placeholderFriendCircle]}>
-              <Avatar username="ojas_bot" size={54} />
-            </View>
-            <Text style={styles.avatarLabel} numberOfLines={1}>
-              OjasBot
-            </Text>
-          </TouchableOpacity>
+          <View style={styles.squadEmpty}>
+            <Text style={styles.squadEmptyTitle}>Train together, win together</Text>
+            <Text style={styles.squadEmptySub}>Add friends to send 1-tap battle invites.</Text>
+          </View>
         )}
       </ScrollView>
 
@@ -789,12 +697,8 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
               <View style={styles.modalBadgePill}>
                 <Text style={styles.modalBadgeText}>{selectedTutorial?.badge}</Text>
               </View>
-              <TouchableOpacity
-                style={styles.modalCloseBtn}
-                activeOpacity={0.8}
-                onPress={() => setSelectedTutorial(null)}
-              >
-                <X size={18} color="#FFFFFF" />
+              <TouchableOpacity style={styles.modalCloseBtn} activeOpacity={0.8} onPress={() => setSelectedTutorial(null)}>
+                <X size={18} color={colors.text} />
               </TouchableOpacity>
             </View>
 
@@ -805,7 +709,7 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
               {selectedTutorial?.steps.map((step, idx) => (
                 <View key={idx} style={styles.modalStepRow}>
                   <View style={styles.stepNumberBadge}>
-                    <CheckCircle2 size={16} color="#E8D5C4" />
+                    <Text style={styles.stepNumberText}>{idx + 1}</Text>
                   </View>
                   <View style={{ flex: 1, marginLeft: 12 }}>
                     <Text style={styles.stepTitle}>{step.title}</Text>
@@ -815,24 +719,15 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
               ))}
             </ScrollView>
 
-            <TouchableOpacity
-              style={styles.gotItButton}
-              activeOpacity={0.85}
-              onPress={() => setSelectedTutorial(null)}
-            >
-              <Text style={styles.gotItButtonText}>Got It!</Text>
+            <TouchableOpacity style={styles.gotItButton} activeOpacity={0.85} onPress={() => setSelectedTutorial(null)}>
+              <Text style={styles.gotItButtonText}>Got it!</Text>
             </TouchableOpacity>
           </View>
         </View>
       </Modal>
 
-      {/* HEALTH & POSTURE ASSESSMENT MODAL */}
-      <HealthAssessmentModal
-        visible={showHealthModal}
-        onClose={() => setShowHealthModal(false)}
-      />
+      <HealthAssessmentModal visible={showHealthModal} onClose={() => setShowHealthModal(false)} />
 
-      {/* AI POSTURE & DEFORMITY SCANNER MODAL */}
       <DeformityScannerModal
         visible={isDeformityScannerVisible}
         onClose={() => setIsDeformityScannerVisible(false)}
@@ -842,153 +737,67 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
 };
 
 const styles = StyleSheet.create({
-  feedScrollView: {
-    flex: 1,
-    backgroundColor: '#1A1C20',
-  },
-  feedScrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 130,
-  },
+  feedScrollView: { flex: 1, backgroundColor: colors.bg },
+  feedScrollContent: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 140 },
+
+  // Calendar + streak
   calendarCard: {
-    backgroundColor: '#161B22',
-    borderRadius: 24,
-    padding: 18,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-  },
-  calendarHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    padding: 16,
     marginBottom: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  calendarMonthText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '800',
-  },
-  calendarNavButtons: {
-    flexDirection: 'row',
-  },
-  todayPillBadge: {
+  calendarHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  calendarMonthText: { color: colors.text, fontSize: 16, fontWeight: '800' },
+  streakChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#262A32',
-    borderRadius: 12,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    gap: 4,
+    gap: 5,
+    backgroundColor: colors.surfaceHi,
+    borderRadius: radius.pill,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
   },
-  neonDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#E25822',
-  },
-  todayPillText: {
-    color: '#E25822',
-    fontSize: 10,
-    fontWeight: '900',
-  },
-  daysRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  dayItem: {
-    alignItems: 'center',
-    paddingVertical: 6,
-    paddingHorizontal: 6,
-  },
-  dayItemActive: {},
-  dayLetter: {
-    color: '#8E95A0',
-    fontSize: 11,
-    fontWeight: '700',
-    marginBottom: 6,
-  },
-  dayLetterActive: {
-    color: '#E25822',
-  },
-  dateCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'transparent',
-  },
-  dateCircleActive: {
-    backgroundColor: '#E25822',
-  },
-  dateNumber: {
-    color: '#CBD5E1',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  dateNumberActive: {
-    color: '#FFFFFF',
-    fontWeight: '900',
-  },
-  calDotBadge: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: '#FF6B35',
-    marginTop: 4,
-  },
-  calDotBadgeActive: {
-    backgroundColor: '#FFFFFF',
-  },
+  streakChipLit: { backgroundColor: 'rgba(226, 88, 34, 0.15)' },
+  streakChipText: { color: colors.flame, fontSize: 11, fontWeight: '900' },
+  daysRow: { flexDirection: 'row', justifyContent: 'space-between' },
+  dayItem: { alignItems: 'center', width: 38 },
+  dayLetter: { color: colors.textMuted, fontSize: 11, fontWeight: '700', marginBottom: 6 },
+  dayLetterActive: { color: colors.flame },
+  dateCircle: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
+  dateCircleToday: { borderWidth: 1.5, borderColor: colors.flame },
+  dateCircleSelected: { backgroundColor: colors.flame },
+  dateNumber: { color: '#CBD5E1', fontSize: 13, fontWeight: '700' },
+  dateNumberSelected: { color: colors.text, fontWeight: '900' },
+  dayMarker: { height: 14, marginTop: 4, alignItems: 'center', justifyContent: 'center' },
+  streakMessage: { color: colors.textMuted, fontSize: 12, fontWeight: '600', marginTop: 8, lineHeight: 17 },
   calendarCalorieRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: 'rgba(255, 255, 255, 0.04)',
-    borderRadius: 16,
+    borderRadius: radius.md,
     paddingVertical: 12,
     paddingHorizontal: 14,
-    marginTop: 14,
+    marginTop: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderColor: colors.border,
   },
-  calendarCalorieLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
+  calendarCalorieLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flexShrink: 1 },
   calFlameIconCircle: {
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: 'rgba(255, 107, 53, 0.15)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 107, 53, 0.3)',
+    backgroundColor: 'rgba(226, 88, 34, 0.15)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  calBurnNumberText: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: '900',
-  },
-  calBurnUnitText: {
-    color: '#FF6B35',
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  calBurnLabelText: {
-    color: '#8E95A0',
-    fontSize: 10,
-    fontWeight: '700',
-    marginTop: 1,
-  },
-  calendarCalorieStatsRight: {
-    flexDirection: 'row',
-    gap: 8,
-  },
+  calBurnNumberText: { color: colors.text, fontSize: 18, fontWeight: '900' },
+  calBurnUnitText: { color: colors.flame, fontSize: 12, fontWeight: '800' },
+  calBurnLabelText: { color: colors.textMuted, fontSize: 10, fontWeight: '700', marginTop: 1 },
+  calendarCalorieStatsRight: { flexDirection: 'row', gap: 8 },
   calMiniStatPill: {
     backgroundColor: 'rgba(255, 255, 255, 0.06)',
     borderRadius: 10,
@@ -997,294 +806,162 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     minWidth: 46,
   },
-  calMiniStatVal: {
-    color: '#CBD5E1',
-    fontSize: 12,
-    fontWeight: '800',
+  calMiniStatVal: { color: '#CBD5E1', fontSize: 12, fontWeight: '800' },
+  calMiniStatLbl: { color: colors.textDim, fontSize: 8, fontWeight: '800', letterSpacing: 0.5 },
+
+  // Level strip
+  levelStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 14,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginBottom: 20,
   },
-  calMiniStatLbl: {
-    color: '#64748B',
-    fontSize: 8,
-    fontWeight: '800',
-    letterSpacing: 0.5,
+  levelStripBadge: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: 'rgba(226, 88, 34, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(226, 88, 34, 0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  workoutPlanCard: {
-    borderRadius: 28,
+  levelStripBadgeLabel: { color: colors.textMuted, fontSize: 9, fontWeight: '900', letterSpacing: 0.5 },
+  levelStripBadgeText: { color: colors.accent, fontSize: 18, fontWeight: '900', lineHeight: 20 },
+  levelStripTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 },
+  levelStripTitle: { color: colors.text, fontSize: 15, fontWeight: '900' },
+  levelStripXp: { color: colors.textMuted, fontSize: 11, fontWeight: '700' },
+  levelTrack: { height: 8, borderRadius: 4, backgroundColor: colors.surfaceSunken, overflow: 'hidden' },
+  levelFill: { height: '100%', borderRadius: 4, backgroundColor: colors.accent },
+
+  // Health question
+  questionCard: {
     padding: 18,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.15,
-    shadowRadius: 10,
-    elevation: 4,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginBottom: 20,
   },
-  cardTopRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 12,
-  },
-  cardWorkoutTitle: {
-    color: '#11141A',
-    fontSize: 18,
-    fontWeight: '900',
+  questionTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  questionTag: { backgroundColor: 'rgba(200, 182, 255, 0.15)', borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 5 },
+  questionTagText: { color: colors.lavender, fontSize: 10, fontWeight: '900', letterSpacing: 0.6 },
+  questionCounter: { color: colors.textDim, fontSize: 11, fontWeight: '900' },
+  questionPrompt: { color: colors.text, fontSize: 17, fontWeight: '900', lineHeight: 23, marginTop: 12 },
+  questionHint: { color: colors.textMuted, fontSize: 12, marginTop: 4 },
+  questionActions: { flexDirection: 'row', gap: 10, marginTop: 16 },
+  yesBtn: {
     flex: 1,
-    marginRight: 10,
-  },
-  durationBadge: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-  },
-  durationBadgeNumber: {
-    color: '#11141A',
-    fontSize: 14,
-    fontWeight: '900',
-    lineHeight: 16,
-  },
-  durationBadgeUnit: {
-    color: '#4B5563',
-    fontSize: 9,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-  },
-  cardBodyRow: {
+    height: 48,
+    borderRadius: radius.pill,
+    backgroundColor: colors.accent,
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 14,
-  },
-  postureVisualCircle: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: 'rgba(17, 20, 26, 0.15)',
-    alignItems: 'center',
     justifyContent: 'center',
-  },
-  cardTagsWrapper: {
-    flex: 1,
-    marginLeft: 14,
     gap: 6,
   },
-  muscleTagPill: {
+  yesBtnText: { color: colors.onAccent, fontSize: 15, fontWeight: '900' },
+  noBtn: {
+    flex: 1,
+    height: 48,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surfaceHi,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(17, 20, 26, 0.1)',
-    borderRadius: 12,
+    justifyContent: 'center',
+    gap: 6,
+  },
+  noBtnText: { color: colors.text, fontSize: 15, fontWeight: '900' },
+
+  // Section headers
+  sectionHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, marginBottom: 12 },
+  headerLeftRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  sectionHeaderTitle: { color: colors.text, fontSize: 13, fontWeight: '900', letterSpacing: 0.8 },
+  sectionSubHint: { color: colors.textDim, fontSize: 11.5, fontWeight: '700' },
+  onlineBadgePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(16, 185, 129, 0.12)',
+    borderRadius: radius.pill,
     paddingHorizontal: 10,
     paddingVertical: 4,
-    alignSelf: 'flex-start',
+    gap: 6,
   },
-  darkDot: {
-    width: 5,
-    height: 5,
-    borderRadius: 2.5,
-    backgroundColor: '#11141A',
-    marginRight: 6,
-  },
-  muscleTagPillText: {
-    color: '#11141A',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  activePlayersPill: {
+  pulseGreenDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: colors.success },
+  onlineBadgeText: { color: colors.success, fontSize: 11, fontWeight: '900' },
+
+  // Game modes
+  arenaCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    alignSelf: 'flex-start',
-  },
-  activePlayersText: {
-    color: '#11141A',
-    fontSize: 11,
-    fontWeight: '800',
-  },
-  cardBottomRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(17, 20, 26, 0.08)',
-  },
-  aiTagPill: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginRight: 10,
-  },
-  aiTagText: {
-    color: '#11141A',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  playArrowCircle: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#11141A',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  heroLimeCard: {
-    backgroundColor: '#E25822',
-    borderRadius: 26,
-    padding: 22,
-    marginBottom: 24,
-    shadowColor: '#E25822',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
-    elevation: 6,
-  },
-  heroLimeBody: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  heroLimeLeft: {
-    flex: 1,
-  },
-  progressTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 6,
-  },
-  heroProgressTag: {
-    color: 'rgba(255, 255, 255, 0.85)',
-    fontSize: 11,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-  },
-  circularGaugePill: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  heroMainTitle: {
-    color: '#FFFFFF',
-    fontSize: 22,
-    fontWeight: '900',
-    marginTop: 4,
-  },
-  heroSubTitle: {
-    color: 'rgba(255, 255, 255, 0.85)',
-    fontSize: 12,
-    fontWeight: '600',
-    marginTop: 4,
-  },
-  caloriesBadgePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#11141A',
-    borderRadius: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    alignSelf: 'flex-start',
-    marginTop: 16,
-  },
-  caloriesBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '900',
-  },
-  heroLimeRight: {
-    marginLeft: 14,
-  },
-  athleteVisualCircle: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: 'transparent',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  athleteEmoji: {
-    fontSize: 38,
-  },
-  sectionHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 10,
-    marginBottom: 14,
-  },
-  ttsRateLimitBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#E25822',
-    borderRadius: 12,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  ttsRateLimitText: {
-    color: '#FFFFFF',
-    fontSize: 10,
-    fontWeight: '900',
-  },
-  tutorFlatListContent: {
     gap: 12,
-    paddingBottom: 8,
-    marginBottom: 16,
+    backgroundColor: colors.flame,
+    borderRadius: radius.xl,
+    padding: 20,
+    marginBottom: 12,
+    ...shadow(6),
   },
-  tutorSquareCard: {
+  modeTagRow: { flexDirection: 'row', gap: 6 },
+  modeTag: { backgroundColor: 'rgba(17, 20, 26, 0.22)', borderRadius: radius.pill, paddingHorizontal: 9, paddingVertical: 4 },
+  modeTagText: { color: colors.text, fontSize: 10, fontWeight: '900', letterSpacing: 0.6 },
+  rewardTag: { backgroundColor: colors.text, borderRadius: radius.pill, paddingHorizontal: 9, paddingVertical: 4 },
+  rewardTagText: { color: colors.textOnLight, fontSize: 10, fontWeight: '900', letterSpacing: 0.4 },
+  arenaTitle: { color: colors.text, fontSize: 22, fontWeight: '900', marginTop: 10 },
+  arenaSub: { color: 'rgba(255, 255, 255, 0.85)', fontSize: 12, fontWeight: '600', marginTop: 4 },
+  playBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    alignSelf: 'flex-start',
+    backgroundColor: colors.textOnLight,
+    borderRadius: radius.pill,
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    marginTop: 14,
+  },
+  playBtnText: { color: colors.text, fontSize: 12.5, fontWeight: '900' },
+  modeRow: { flexDirection: 'row', gap: 12, marginBottom: 20 },
+  modeCard: { flex: 1, borderRadius: radius.lg, padding: 16, minHeight: 165 },
+  modeIconCircle: {
+    width: 42,
+    height: 42,
+    borderRadius: 13,
+    backgroundColor: 'rgba(17, 20, 26, 0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modeTitle: { color: colors.textOnLight, fontSize: 16, fontWeight: '900', marginTop: 14 },
+  modeSub: { color: '#374151', fontSize: 11.5, fontWeight: '600', marginTop: 3 },
+  modeFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 'auto',
+    paddingTop: 12,
+  },
+  modeFooterText: { color: colors.textOnLight, fontSize: 10, fontWeight: '900', letterSpacing: 0.8 },
+
+  // AI coach
+  tutorFlatListContent: { gap: 12, paddingBottom: 8, marginBottom: 16 },
+  tutorCard: {
     width: 142,
     height: 142,
-    borderRadius: 22,
+    borderRadius: radius.lg,
     padding: 12,
     justifyContent: 'space-between',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 3,
   },
-  tutorSquareTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  tutorSquareCategoryPill: {
-    backgroundColor: 'rgba(17, 20, 26, 0.08)',
-    borderRadius: 8,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-  },
-  tutorSquareCategoryText: {
-    fontSize: 8.5,
-    fontWeight: '800',
-    letterSpacing: 0.4,
-  },
-  tutorSquareDurationBadge: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 8,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-  },
-  tutorSquareDurationText: {
-    color: '#11141A',
-    fontSize: 9,
-    fontWeight: '900',
-  },
-  tutorSquareIconWrap: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginVertical: 2,
-  },
-  tutorSquareBottomRow: {
+  tutorTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  tutorCategoryPill: { backgroundColor: 'rgba(17, 20, 26, 0.08)', borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2 },
+  tutorCategory: { fontSize: 8.5, fontWeight: '800', letterSpacing: 0.4 },
+  tutorDurationBadge: { backgroundColor: colors.text, borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2 },
+  tutorDuration: { color: colors.textOnLight, fontSize: 9, fontWeight: '900' },
+  tutorIconWrap: { alignItems: 'center', justifyContent: 'center' },
+  tutorBottomRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -1292,581 +969,69 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: 'rgba(17, 20, 26, 0.08)',
   },
-  tutorSquareTitle: {
-    fontSize: 13,
-    fontWeight: '900',
-  },
-  tutorSquareSub: {
-    fontSize: 9,
-    fontWeight: '700',
-    marginTop: 1,
-  },
-  tutorSquarePlayCircle: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: '#11141A',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerLeftRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  sectionHeaderTitle: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '900',
-    letterSpacing: 0.5,
-  },
-  sectionSubHint: {
-    color: '#8E95A0',
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  tutorialGridRow: {
-    flexDirection: 'row',
-    gap: 14,
-    marginBottom: 16,
-  },
-  tutorialCard: {
-    flex: 1,
-    borderRadius: 24,
-    padding: 18,
-    justifyContent: 'space-between',
-    minHeight: 164,
-  },
-  tutorialCardLavender: {
-    backgroundColor: '#C8B6FF', // Soft pastel lavender
-  },
-  tutorialCardRose: {
-    backgroundColor: '#FFD6E0', // Soft pastel rose
-  },
-  tutorialCardTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  tutorialBadgeDark: {
-    backgroundColor: 'rgba(17, 20, 26, 0.1)',
-    borderRadius: 10,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  tutorialBadgeDarkText: {
-    color: '#11141A',
-    fontSize: 9,
-    fontWeight: '900',
-  },
-  tutorialCardTitleDark: {
-    color: '#11141A',
-    fontSize: 15,
-    fontWeight: '900',
-    marginTop: 4,
-  },
-  tutorialCardDescDark: {
-    color: '#374151',
-    fontSize: 11,
-    lineHeight: 16,
-    fontWeight: '600',
-    marginTop: 4,
-  },
-  readGuideRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 12,
-  },
-  readGuideTextDark: {
-    color: '#11141A',
-    fontSize: 11,
-    fontWeight: '800',
-    marginRight: 2,
-  },
-  tutorialFullCard: {
-    backgroundColor: '#262A32',
-    borderRadius: 24,
-    padding: 18,
-    marginBottom: 26,
-  },
-  tutorialFullBody: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  tutorialIconBox: {
-    width: 48,
-    height: 48,
-    borderRadius: 16,
-    backgroundColor: '#323742',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  fullCardBadgeRow: {
-    backgroundColor: 'rgba(226, 88, 34, 0.15)',
-    borderRadius: 8,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    alignSelf: 'flex-start',
-    marginBottom: 4,
-  },
-  fullCardBadgeText: {
-    color: '#E25822',
-    fontSize: 9,
-    fontWeight: '900',
-  },
-  fullCardTitle: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  fullCardDesc: {
-    color: '#9CA3AF',
-    fontSize: 11,
-    marginTop: 2,
-    lineHeight: 16,
-  },
-  fullCardArrowCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#E25822',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 8,
-  },
-  onlineBadgePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(226, 88, 34, 0.15)',
+  tutorTitle: { fontSize: 13, fontWeight: '900' },
+  tutorSub: { fontSize: 9, fontWeight: '700', marginTop: 1 },
+  tutorPlay: { width: 22, height: 22, borderRadius: 11, backgroundColor: colors.textOnLight, alignItems: 'center', justifyContent: 'center' },
+
+  // Guides
+  guideRow: { gap: 12, paddingBottom: 8, marginBottom: 16 },
+  guideCard: {
+    width: 200,
+    padding: 14,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: '#E25822',
-    borderRadius: 14,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    gap: 5,
+    borderColor: colors.border,
   },
-  pulseGreenDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#E25822',
-  },
-  onlineBadgeText: {
-    color: '#E25822',
-    fontSize: 11,
-    fontWeight: '800',
-  },
-  horizontalAvatarRow: {
-    gap: 16,
-    paddingVertical: 4,
-    marginBottom: 24,
-  },
-  avatarItem: {
-    alignItems: 'center',
-    width: 64,
-  },
-  avatarWrapper: {
-    position: 'relative',
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  placeholderFriendCircle: {
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 28,
-  },
-  onlinePresenceDot: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: '#E25822',
-    borderWidth: 2,
-    borderColor: '#1A1C20',
-  },
+  guideIcon: { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  guideTag: { fontSize: 9.5, fontWeight: '900', letterSpacing: 0.8, marginTop: 12 },
+  guideTitle: { color: colors.text, fontSize: 14.5, fontWeight: '900', marginTop: 3 },
+  guideDesc: { color: colors.textMuted, fontSize: 11.5, lineHeight: 16, marginTop: 4 },
+
+  // Squad
+  horizontalAvatarRow: { gap: 14, paddingBottom: 8, alignItems: 'flex-start' },
+  avatarItem: { alignItems: 'center', width: 64 },
+  avatarWrapper: { padding: 2, borderRadius: 32, borderWidth: 2, borderColor: colors.lavender },
   addFriendCircle: {
-    position: 'relative',
-    width: 54,
-    height: 54,
-    borderRadius: 27,
-    backgroundColor: '#262A32',
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    alignItems: 'center',
+    justifyContent: 'center',
     borderWidth: 1.5,
-    borderColor: '#E25822',
     borderStyle: 'dashed',
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderColor: 'rgba(226, 88, 34, 0.5)',
+    backgroundColor: 'rgba(226, 88, 34, 0.08)',
   },
-  plusIconBadge: {
-    position: 'absolute',
-    right: -2,
-    bottom: -2,
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: '#E25822',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarLabel: {
-    color: '#CBD5E1',
-    fontSize: 11,
-    fontWeight: '600',
-    marginTop: 6,
-    textAlign: 'center',
-  },
-  aiTrackerCard: {
-    backgroundColor: '#262A32',
-    borderRadius: 24,
-    padding: 16,
-  },
-  aiCardBody: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  aiIconCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 16,
-    backgroundColor: '#E25822',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  aiCardTitle: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '800',
-  },
-  aiCardSubtitle: {
-    color: '#9CA3AF',
-    fontSize: 11,
-    marginTop: 3,
-    lineHeight: 16,
-  },
-  aiCardFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 14,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.06)',
-  },
-  settingsPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#323742',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-  },
-  settingsPillText: {
-    color: '#E2E8F0',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  launchPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#E25822',
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-  },
-  launchPillText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '900',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.85)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
+  avatarLabel: { color: colors.textMuted, fontSize: 11, fontWeight: '700', marginTop: 6 },
+  squadEmpty: { justifyContent: 'center', height: 58, maxWidth: 220 },
+  squadEmptyTitle: { color: colors.text, fontSize: 13, fontWeight: '900' },
+  squadEmptySub: { color: colors.textMuted, fontSize: 11.5, marginTop: 2 },
+
+  // Tutorial modal
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(5, 8, 14, 0.82)', justifyContent: 'flex-end' },
   tutorialModalCard: {
-    backgroundColor: '#262A32',
-    borderRadius: 28,
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
     padding: 22,
-    width: '100%',
-    maxWidth: 380,
-    borderWidth: 1.5,
-    borderColor: '#E25822',
-  },
-  modalHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  modalBadgePill: {
-    backgroundColor: 'rgba(226, 88, 34, 0.15)',
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingBottom: 32,
+    maxHeight: '80%',
     borderWidth: 1,
-    borderColor: 'rgba(226, 88, 34, 0.3)',
+    borderColor: colors.border,
   },
-  modalBadgeText: {
-    color: '#E25822',
-    fontSize: 10,
-    fontWeight: '900',
-    letterSpacing: 0.5,
-  },
-  modalCloseBtn: {
-    padding: 6,
-    borderRadius: 12,
-    backgroundColor: '#323742',
-  },
-  modalTitle: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: '900',
-  },
-  modalSubtitle: {
-    color: '#9CA3AF',
-    fontSize: 12,
-    marginTop: 4,
-    lineHeight: 16,
-    marginBottom: 14,
-  },
-  modalStepsScroll: {
-    maxHeight: 260,
-  },
-  modalStepRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    backgroundColor: '#323742',
-    borderRadius: 16,
-    padding: 12,
-    marginBottom: 10,
-  },
-  stepNumberBadge: {
-    marginTop: 2,
-  },
-  stepTitle: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  stepDesc: {
-    color: '#CBD5E1',
-    fontSize: 11,
-    marginTop: 2,
-    lineHeight: 15,
-  },
-  gotItButton: {
-    backgroundColor: '#E25822',
-    borderRadius: 18,
-    paddingVertical: 12,
-    alignItems: 'center',
-    marginTop: 14,
-  },
-  gotItButtonText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '900',
-  },
-  /* Direct Minimal Question (No Box Container) */
-  directQuestionWrapper: {
-    marginTop: 14,
-    marginBottom: 32,
-    paddingHorizontal: 2,
-  },
-  directQuestionPrompt: {
-    fontSize: 16,
-    color: '#F8FAFC',
-    lineHeight: 23,
-    fontWeight: '700',
-    marginBottom: 18,
-  },
-  directActionsRow: {
-    flexDirection: 'row',
-    gap: 14,
-  },
-  directYesBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#E25822',
-    paddingVertical: 15,
-    borderRadius: 16,
-  },
-  directYesBtnText: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#FFFFFF',
-  },
-  directNoBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#1E293B',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.12)',
-    paddingVertical: 15,
-    borderRadius: 16,
-  },
-  directNoBtnText: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#E2E8F0',
-  },
-  /* Tailored Recommended Carousel - ExercisesScreen UI Style */
-  recSectionHeader: {
-    flexDirection: 'column',
-    marginBottom: 14,
-    marginTop: 8,
-  },
-  recSectionSubHint: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#E25822',
-    marginTop: 4,
-    letterSpacing: 0.2,
-  },
-  recFlatList: {
-    marginBottom: 24,
-  },
-  recExercisesScrollContent: {
-    paddingRight: 24,
-    gap: 16,
-    paddingBottom: 6,
-    paddingTop: 2,
-  },
-  recWorkoutCard: {
-    width: 260,
-    borderRadius: 24,
-    padding: 18,
-    justifyContent: 'space-between',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  recCardTopRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 14,
-  },
-  recCardTitle: {
-    fontSize: 16.5,
-    fontWeight: '900',
-    flex: 1,
-    marginRight: 8,
-    lineHeight: 21,
-  },
-  recDurationBadge: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  recDurationBadgeNumber: {
-    color: '#11141A',
-    fontSize: 12.5,
-    fontWeight: '900',
-    lineHeight: 14,
-  },
-  recDurationBadgeUnit: {
-    color: '#4B5563',
-    fontSize: 8.5,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-  },
-  recCardBodyRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 14,
-  },
-  recAthleteVisualCircle: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: 'transparent',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  recCardTagsWrapper: {
-    flex: 1,
-    marginLeft: 12,
-    gap: 6,
-  },
-  recTagPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(17, 20, 26, 0.08)',
-    borderRadius: 10,
-    paddingHorizontal: 9,
-    paddingVertical: 4.5,
-    alignSelf: 'flex-start',
-  },
-  recDarkDot: {
-    width: 4.5,
-    height: 4.5,
-    borderRadius: 2.25,
-    backgroundColor: '#11141A',
-    marginRight: 6,
-  },
-  recTagPillText: {
-    fontSize: 10.5,
-    fontWeight: '700',
-  },
-  recLevelPill: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 10,
-    paddingHorizontal: 9,
-    paddingVertical: 4.5,
-    alignSelf: 'flex-start',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-  },
-  recLevelPillText: {
-    fontSize: 10.5,
-    fontWeight: '800',
-  },
-  recCardBottomRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(17, 20, 26, 0.08)',
-  },
-  recAiTagPill: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginRight: 10,
-  },
-  recAiTagText: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  recPlayArrowCircle: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#11141A',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  modalHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  modalBadgePill: { backgroundColor: 'rgba(226, 88, 34, 0.15)', borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 5 },
+  modalBadgeText: { color: colors.accent, fontSize: 10.5, fontWeight: '900', letterSpacing: 0.8 },
+  modalCloseBtn: { width: 34, height: 34, borderRadius: 17, backgroundColor: colors.surfaceHi, alignItems: 'center', justifyContent: 'center' },
+  modalTitle: { color: colors.text, fontSize: 22, fontWeight: '900', marginTop: 14 },
+  modalSubtitle: { color: colors.textMuted, fontSize: 13, lineHeight: 19, marginTop: 6 },
+  modalStepsScroll: { marginTop: 16 },
+  modalStepRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 14 },
+  stepNumberBadge: { width: 28, height: 28, borderRadius: 14, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
+  stepNumberText: { color: colors.onAccent, fontSize: 13, fontWeight: '900' },
+  stepTitle: { color: colors.text, fontSize: 14.5, fontWeight: '900' },
+  stepDesc: { color: colors.textMuted, fontSize: 12.5, lineHeight: 18, marginTop: 3 },
+  gotItButton: { marginTop: 10, height: 52, borderRadius: radius.pill, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
+  gotItButtonText: { color: colors.onAccent, fontSize: 15, fontWeight: '900' },
 });

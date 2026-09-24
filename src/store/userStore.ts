@@ -4,6 +4,7 @@ import { UserProfile, getOrCreateUserProfile } from '../utils/profileService';
 import { useDailyChallengeStore } from './dailyChallengeStore';
 
 export type MainTab = 'home' | 'explore' | 'workouts' | 'social' | 'profile';
+export type HomeSubTab = 'feed' | 'news';
 
 export interface MatchSummaryStats {
   exerciseId: string;
@@ -23,12 +24,16 @@ interface UserState {
   user: any | null;
   profile: UserProfile | null;
   activeTab: MainTab;
+  homeSubTab: HomeSubTab;
   selectedExerciseId: string | null;
   isGuest: boolean;
   lastMatchSummary: MatchSummaryStats | null;
   setUser: (user: any | null) => void;
   setProfile: (profile: UserProfile | null) => void;
   setActiveTab: (tab: MainTab) => void;
+  setHomeSubTab: (tab: HomeSubTab) => void;
+  /** Jump to the News feed from anywhere in the app. */
+  openNews: () => void;
   setSelectedExerciseId: (id: string | null) => void;
   setIsGuest: (isGuest: boolean) => void;
   setLastMatchSummary: (summary: MatchSummaryStats | null) => void;
@@ -39,6 +44,7 @@ export const useUserStore = create<UserState>((set, get) => ({
   user: null,
   profile: null,
   activeTab: 'home',
+  homeSubTab: 'feed',
   selectedExerciseId: null,
   isGuest: false,
   lastMatchSummary: null,
@@ -74,6 +80,8 @@ export const useUserStore = create<UserState>((set, get) => ({
     }
   },
   setActiveTab: (activeTab) => set({ activeTab }),
+  setHomeSubTab: (homeSubTab) => set({ homeSubTab }),
+  openNews: () => set({ activeTab: 'home', homeSubTab: 'news', selectedExerciseId: null }),
   setSelectedExerciseId: (selectedExerciseId) => set({ selectedExerciseId }),
   setIsGuest: (isGuest) => set({ isGuest }),
   setLastMatchSummary: (lastMatchSummary) => set({ lastMatchSummary }),

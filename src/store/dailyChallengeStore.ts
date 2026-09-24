@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { calculateExerciseCalories } from '../utils/calorieService';
+import { toDateKey } from '../utils/gamification';
 
 export interface ExerciseLiveStats {
   reps: number;
@@ -120,7 +121,7 @@ export const useDailyChallengeStore = create<DailyChallengeState>((set, get) => 
 
   hydrateFromProfile: (dailyChallengesMap?: Record<string, any>, dateStr?: string) => {
     if (!dailyChallengesMap || typeof dailyChallengesMap !== 'object') return;
-    const today = dateStr || new Date().toISOString().split('T')[0];
+    const today = dateStr || toDateKey(new Date());
     const todayEntry = dailyChallengesMap[today];
     if (!todayEntry) return;
 

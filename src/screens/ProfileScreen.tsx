@@ -10,32 +10,45 @@ import {
   Alert,
   StatusBar,
   RefreshControl,
-  Image,
 } from 'react-native';
 import {
-  User,
-  Users,
-  UserPlus,
-  UserCheck,
-  Check,
-  X,
-  Search,
-  Trash2,
-  Clock,
-  RotateCcw,
-  ShieldCheck,
-  LogOut,
-  Edit3,
-  Save,
-  Phone,
-  Mail,
-  Info,
-  Dumbbell,
+  Activity,
   ArrowLeft,
-  Flame,
+  AtSign,
+  Award,
+  Bell,
   Camera as CameraIcon,
-  Upload,
+  Check,
+  Clock,
+  Dumbbell,
+  Edit3,
+  Flame,
+  HeartPulse,
+  Info,
+  Lock,
+  LogOut,
+  Phone,
+  Save,
+  Search,
+  Send,
+  ShieldCheck,
+  Shuffle,
+  Star,
+  Swords,
+  Target,
+  Trash2,
+  Trophy,
+  User,
+  UserPlus,
+  Users,
+  X,
+  Zap,
 } from 'lucide-react-native';
+import { ProgressRing } from '../components/ui/ProgressRing';
+import { useGameStats } from '../hooks/useGameStats';
+import { colors, radius } from '../theme';
+
+type IconType = React.ComponentType<{ size?: number; color?: string; strokeWidth?: number }>;
 import { Avatar } from '../components/Avatar';
 import {
   UserProfile,
@@ -102,6 +115,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const [searchUsername, setSearchUsername] = useState<string>('');
   const [isSendingRequest, setIsSendingRequest] = useState<boolean>(false);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
+  const { level, streak } = useGameStats();
 
   const loadProfileData = useCallback(async () => {
     if (!currentUser) return;
@@ -180,7 +194,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
       if (!ImagePickerModule || !ImagePickerModule.launchImageLibraryAsync) {
         Alert.alert(
-          'Rebuild Required ⚠️',
+          'Rebuild Required',
           'A new native library (expo-image-picker) was added. Please rebuild your app binary (e.g. `npx expo run:android` or restart your development build).'
         );
         return;
@@ -218,7 +232,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
         setAvatarUrl(uploadRes.url);
         setProfile((prev) => (prev ? { ...prev, avatar_url: uploadRes.url } : null));
         useUserStore.getState().refreshProfile();
-        Alert.alert('Photo Updated! 📸', 'Your new profile picture has been saved successfully.');
+        Alert.alert('Photo Updated', 'Your new profile picture has been saved successfully.');
       } else {
         Alert.alert('Upload Failed', uploadRes.error || 'Could not upload photo to storage.');
       }
@@ -300,7 +314,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
     try {
       const result = await sendFriendRequest(currentUser.id, searchUsername.trim());
       if (result.success) {
-        Alert.alert('Success 🎉', result.message || 'Friend request sent!');
+        Alert.alert('Request Sent', result.message || 'Friend request sent!');
         setSearchUsername('');
         await loadFriendsData();
       } else {
@@ -364,99 +378,119 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#E8D5C4" />
+        <ActivityIndicator size="large" color={colors.accent} />
         <Text style={styles.loadingText}>Loading athlete profile...</Text>
       </View>
     );
   }
 
   const totalRequests = incomingRequests.length;
+  const totalCalories = Math.round(profile?.total_calories || 0);
+  const activeConditions = HEALTH_CONDITIONS.filter((c) => healthConditions[c.key]);
+
+  const ACHIEVEMENTS: { key: string; title: string; hint: string; Icon: IconType; unlocked: boolean }[] = [
+    { key: 'first', title: 'First Rep', hint: 'Finish a workout', Icon: Dumbbell, unlocked: streak.best >= 1 || level.totalXp > 0 },
+    { key: 'streak3', title: 'On Fire', hint: '3-day streak', Icon: Flame, unlocked: streak.best >= 3 },
+    { key: 'streak7', title: 'Unstoppable', hint: '7-day streak', Icon: Zap, unlocked: streak.best >= 7 },
+    { key: 'social', title: 'Squad Up', hint: 'Add a friend', Icon: Users, unlocked: friends.length >= 1 },
+    { key: 'level5', title: 'Rising Star', hint: 'Reach level 5', Icon: Star, unlocked: level.level >= 5 },
+    { key: 'kcal', title: 'Furnace', hint: 'Burn 1,000 kcal', Icon: Trophy, unlocked: totalCalories >= 1000 },
+  ];
+  const unlockedCount = ACHIEVEMENTS.filter((a) => a.unlocked).length;
+
+  const PROFILE_TABS: { key: ProfileTab; label: string; Icon: IconType; badge?: number }[] = [
+    { key: 'profile', label: 'Profile', Icon: User },
+    { key: 'friends', label: `Friends`, Icon: Users },
+    { key: 'requests', label: 'Requests', Icon: Bell, badge: totalRequests },
+    { key: 'add_friend', label: 'Add', Icon: UserPlus },
+  ];
+
+  // Called as a function (not as <Component />) so inputs keep focus while typing.
+  const renderDetailField = ({
+    Icon,
+    label,
+    value,
+    onChangeText,
+    placeholder,
+    multiline,
+    keyboardType,
+    autoCapitalize,
+    right,
+  }: {
+    Icon: IconType;
+    label: string;
+    value: string;
+    onChangeText: (t: string) => void;
+    placeholder: string;
+    multiline?: boolean;
+    keyboardType?: 'phone-pad' | 'default';
+    autoCapitalize?: 'none' | 'sentences';
+    right?: React.ReactNode;
+  }) => (
+    <View key={label} style={styles.detailRow}>
+      <View style={styles.detailIcon}>
+        <Icon size={15} color={colors.accent} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <View style={styles.detailLabelRow}>
+          <Text style={styles.detailLabel}>{label}</Text>
+          {right}
+        </View>
+        {isEditing ? (
+          <TextInput
+            style={[styles.input, multiline && styles.textArea]}
+            value={value}
+            onChangeText={onChangeText}
+            placeholder={placeholder}
+            placeholderTextColor={colors.textDim}
+            multiline={multiline}
+            keyboardType={keyboardType}
+            autoCapitalize={autoCapitalize}
+          />
+        ) : (
+          <Text style={[styles.detailValue, !value && { color: colors.textDim }]}>{value || 'Not set'}</Text>
+        )}
+      </View>
+    </View>
+  );
+
+  const EmptyState = ({ Icon, title, text, action }: { Icon: IconType; title: string; text: string; action?: React.ReactNode }) => (
+    <View style={styles.emptyCard}>
+      <View style={styles.emptyIconCircle}>
+        <Icon size={24} color={colors.accent} />
+      </View>
+      <Text style={styles.emptyCardTitle}>{title}</Text>
+      <Text style={styles.emptyCardSubtitle}>{text}</Text>
+      {action}
+    </View>
+  );
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#0C0F14" />
+      <StatusBar barStyle="light-content" backgroundColor={colors.bg} />
 
-      {/* Header Bar */}
+      {/* HEADER */}
       <View style={styles.topHeader}>
-        <TouchableOpacity style={styles.backButtonCircle} activeOpacity={0.8} onPress={onBack}>
-          <ArrowLeft size={18} color="#FFFFFF" />
+        <TouchableOpacity style={styles.iconButton} activeOpacity={0.8} onPress={onBack}>
+          <ArrowLeft size={18} color={colors.text} />
         </TouchableOpacity>
-
-        <Text style={styles.headerTitle}>ATHLETE PROFILE</Text>
-
+        <Text style={styles.headerTitle}>Profile</Text>
         <TouchableOpacity
           style={[styles.editButton, isEditing && styles.editButtonActive]}
           activeOpacity={0.8}
-          onPress={() => {
-            if (isEditing) {
-              handleSaveProfile();
-            } else {
-              setIsEditing(true);
-            }
-          }}
+          onPress={() => (isEditing ? handleSaveProfile() : setIsEditing(true))}
           disabled={isSaving}
         >
           {isSaving ? (
-            <ActivityIndicator size="small" color="#FFFFFF" />
-          ) : isEditing ? (
-            <View style={styles.btnRow}>
-              <Save size={13} color="#FFFFFF" style={{ marginRight: 4 }} />
-              <Text style={styles.editButtonText}>Save</Text>
-            </View>
+            <ActivityIndicator size="small" color={colors.onAccent} />
           ) : (
-            <View style={styles.btnRow}>
-              <Edit3 size={13} color="#FFFFFF" style={{ marginRight: 4 }} />
-              <Text style={styles.editButtonText}>Edit</Text>
-            </View>
+            <>
+              {isEditing ? <Save size={13} color={colors.onAccent} /> : <Edit3 size={13} color={colors.text} />}
+              <Text style={[styles.editButtonText, isEditing && { color: colors.onAccent }]}>
+                {isEditing ? 'Save' : 'Edit'}
+              </Text>
+            </>
           )}
-        </TouchableOpacity>
-      </View>
-
-      {/* Sub Navigation Bar (Pill selector from reference) */}
-      <View style={styles.subTabBar}>
-        <TouchableOpacity
-          style={[styles.subTabItem, activeTab === 'profile' && styles.subTabItemActive]}
-          activeOpacity={0.8}
-          onPress={() => setActiveTab('profile')}
-        >
-          <Text style={[styles.subTabText, activeTab === 'profile' && styles.subTabTextActive]}>
-            Profile
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.subTabItem, activeTab === 'friends' && styles.subTabItemActive]}
-          activeOpacity={0.8}
-          onPress={() => setActiveTab('friends')}
-        >
-          <Text style={[styles.subTabText, activeTab === 'friends' && styles.subTabTextActive]}>
-            Friends ({friends.length})
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.subTabItem, activeTab === 'requests' && styles.subTabItemActive]}
-          activeOpacity={0.8}
-          onPress={() => setActiveTab('requests')}
-        >
-          <Text style={[styles.subTabText, activeTab === 'requests' && styles.subTabTextActive]}>
-            Requests
-          </Text>
-          {totalRequests > 0 && (
-            <View style={styles.badgeCountPill}>
-              <Text style={styles.badgeCountText}>{totalRequests}</Text>
-            </View>
-          )}
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.subTabItem, activeTab === 'add_friend' && styles.subTabItemActive]}
-          activeOpacity={0.8}
-          onPress={() => setActiveTab('add_friend')}
-        >
-          <Text style={[styles.subTabText, activeTab === 'add_friend' && styles.subTabTextActive]}>
-            Add
-          </Text>
         </TouchableOpacity>
       </View>
 
@@ -464,503 +498,413 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
         style={styles.scrollContent}
         contentContainerStyle={styles.scrollContainer}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
         refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
-            tintColor="#E8D5C4"
-            colors={['#E8D5C4', '#C8B6FF']}
-          />
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.accent} colors={[colors.accent]} />
         }
       >
-        {activeTab === 'profile' ? (
-          <>
-            {/* Hero Profile Card */}
-            <View style={styles.heroCard}>
-              <View style={styles.avatarWrapper}>
+        {/* HERO */}
+        <View style={styles.heroCard}>
+          <View style={styles.heroTopRow}>
+            <TouchableOpacity activeOpacity={0.85} onPress={handlePickAndUploadPhoto} disabled={isUploadingPhoto}>
+              <ProgressRing size={96} strokeWidth={4} progress={level.progress}>
                 <Avatar
                   username={username || currentUser?.email || 'athlete'}
-                  size={96}
+                  size={82}
                   config={avatarConfig}
                   avatarUrl={avatarUrl}
                 />
-                <TouchableOpacity
-                  style={styles.avatarUploadBadge}
-                  activeOpacity={0.8}
-                  onPress={handlePickAndUploadPhoto}
-                  disabled={isUploadingPhoto}
-                >
-                  {isUploadingPhoto ? (
-                    <ActivityIndicator size="small" color="#FFFFFF" />
-                  ) : (
-                    <CameraIcon size={16} color="#FFFFFF" />
-                  )}
-                </TouchableOpacity>
-              </View>
-
-              <TouchableOpacity
-                style={styles.uploadPhotoBtn}
-                activeOpacity={0.8}
-                onPress={handlePickAndUploadPhoto}
-                disabled={isUploadingPhoto}
-              >
+              </ProgressRing>
+              <View style={styles.cameraBadge}>
                 {isUploadingPhoto ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" style={{ marginRight: 6 }} />
+                  <ActivityIndicator size="small" color={colors.onAccent} />
                 ) : (
-                  <Upload size={14} color="#FFFFFF" style={{ marginRight: 6 }} />
+                  <CameraIcon size={13} color={colors.onAccent} />
                 )}
-                <Text style={styles.uploadPhotoBtnText}>
-                  {avatarUrl ? 'Change Profile Photo' : 'Upload Profile Photo'}
+              </View>
+              <View style={styles.levelBadgeRow} pointerEvents="none">
+                <View style={styles.levelBadge}>
+                  <Text style={styles.levelBadgeText}>LV {level.level}</Text>
+                </View>
+              </View>
+            </TouchableOpacity>
+
+            <View style={styles.heroInfo}>
+              <Text style={styles.heroName} numberOfLines={1}>{fullName || username || 'Ojas Athlete'}</Text>
+              <Text style={styles.heroUsername} numberOfLines={1}>@{username || 'athlete'}</Text>
+              <View style={styles.titleChip}>
+                <ShieldCheck size={12} color={colors.accent} />
+                <Text style={styles.titleChipText}>{level.title}</Text>
+              </View>
+            </View>
+          </View>
+
+          {!!bio && !isEditing && <Text style={styles.heroBio}>{bio}</Text>}
+
+          <View style={styles.xpLabelRow}>
+            <Text style={styles.xpLabel}>
+              {level.xpIntoLevel} / {level.xpForNextLevel} XP
+            </Text>
+            <Text style={styles.xpNext}>Level {level.level + 1} next</Text>
+          </View>
+          <View style={styles.xpTrack}>
+            <View style={[styles.xpFill, { width: `${Math.max(3, level.progress * 100)}%` }]} />
+          </View>
+
+          <View style={styles.statGrid}>
+            {[
+              { label: 'TOTAL XP', value: level.totalXp.toLocaleString(), Icon: Star },
+              { label: 'STREAK', value: `${streak.current}d`, Icon: Flame },
+              { label: 'BEST', value: `${streak.best}d`, Icon: Trophy },
+              { label: 'KCAL', value: totalCalories.toLocaleString(), Icon: Activity },
+            ].map(({ label, value, Icon }) => (
+              <View key={label} style={styles.statTile}>
+                <Icon size={14} color={colors.accent} />
+                <Text style={styles.statValue}>{value}</Text>
+                <Text style={styles.statLabel}>{label}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+
+        {/* TABS */}
+        <View style={styles.subTabBar}>
+          {PROFILE_TABS.map(({ key, label, Icon, badge }) => {
+            const active = activeTab === key;
+            return (
+              <TouchableOpacity
+                key={key}
+                style={[styles.subTabItem, active && styles.subTabItemActive]}
+                activeOpacity={0.85}
+                onPress={() => setActiveTab(key)}
+              >
+                <Icon size={14} color={active ? colors.onAccent : colors.textMuted} />
+                <Text style={[styles.subTabText, active && styles.subTabTextActive]} numberOfLines={1}>
+                  {label}
                 </Text>
+                {!!badge && badge > 0 && (
+                  <View style={styles.badgeCountPill}>
+                    <Text style={styles.badgeCountText}>{badge}</Text>
+                  </View>
+                )}
               </TouchableOpacity>
+            );
+          })}
+        </View>
 
-              <Text style={styles.heroName}>{fullName || username || 'Ojas Athlete'}</Text>
-              <Text style={styles.heroUsername}>@{username || 'athlete'}</Text>
-
-              <View style={styles.badgeRow}>
-                <View style={styles.badgePill}>
-                  <ShieldCheck size={13} color="#FFFFFF" style={{ marginRight: 4 }} />
-                  <Text style={styles.badgeText}>Verified Athlete</Text>
+        {activeTab === 'profile' ? (
+          <>
+            {/* ACHIEVEMENTS */}
+            <View style={styles.sectionCard}>
+              <View style={styles.sectionHeaderRow}>
+                <View style={styles.sectionTitleRow}>
+                  <Award size={15} color={colors.accent} />
+                  <Text style={styles.sectionHeader}>ACHIEVEMENTS</Text>
                 </View>
-                <View style={[styles.badgePill, { backgroundColor: '#C8B6FF' }]}>
-                  <Users size={13} color="#11141A" style={{ marginRight: 4 }} />
-                  <Text style={[styles.badgeText, { color: '#11141A' }]}>
-                    {friends.length} Friends
-                  </Text>
-                </View>
+                <Text style={styles.sectionMeta}>{unlockedCount}/{ACHIEVEMENTS.length} unlocked</Text>
+              </View>
+              <View style={styles.achievementGrid}>
+                {ACHIEVEMENTS.map(({ key, title, hint, Icon, unlocked }) => (
+                  <View key={key} style={[styles.achievement, unlocked && styles.achievementUnlocked]}>
+                    <View style={[styles.achievementIcon, unlocked && { backgroundColor: colors.accent }]}>
+                      {unlocked ? <Icon size={18} color={colors.onAccent} /> : <Lock size={15} color={colors.textDim} />}
+                    </View>
+                    <Text style={[styles.achievementTitle, !unlocked && { color: colors.textMuted }]} numberOfLines={1}>
+                      {title}
+                    </Text>
+                    <Text style={styles.achievementHint} numberOfLines={1}>{hint}</Text>
+                  </View>
+                ))}
               </View>
             </View>
 
-            {/* Profile Details Form */}
+            {/* DETAILS */}
             <View style={styles.sectionCard}>
-              <Text style={styles.sectionHeader}>PERSONAL DETAILS</Text>
-
-              <View style={styles.inputGroup}>
-                <View style={styles.inputLabelRow}>
-                  <Text style={styles.inputLabel}>Username</Text>
-                  {isEditing && (
-                    <TouchableOpacity
-                      style={styles.randomizeUsernameBtn}
-                      activeOpacity={0.7}
-                      onPress={handleGenerateRandomUsername}
-                      disabled={isGeneratingUsername}
-                    >
-                      {isGeneratingUsername ? (
-                        <ActivityIndicator size="small" color="#11141A" />
-                      ) : (
-                        <View style={styles.btnRow}>
-                          <RotateCcw size={11} color="#11141A" style={{ marginRight: 4 }} />
-                          <Text style={styles.randomizeUsernameBtnText}>Randomize</Text>
-                        </View>
-                      )}
-                    </TouchableOpacity>
-                  )}
-                </View>
-                <TextInput
-                  style={[styles.input, !isEditing && styles.inputDisabled]}
-                  value={username}
-                  onChangeText={setUsername}
-                  editable={isEditing}
-                  placeholder="e.g. alex_fitness"
-                  placeholderTextColor="#64748B"
-                  autoCapitalize="none"
-                />
+              <View style={styles.sectionTitleRow}>
+                <User size={15} color={colors.accent} />
+                <Text style={styles.sectionHeader}>PERSONAL DETAILS</Text>
               </View>
 
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Full Name</Text>
-                <TextInput
-                  style={[styles.input, !isEditing && styles.inputDisabled]}
-                  value={fullName}
-                  onChangeText={setFullName}
-                  editable={isEditing}
-                  placeholder="e.g. Alex Johnson"
-                  placeholderTextColor="#64748B"
-                />
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Phone Number</Text>
-                <TextInput
-                  style={[styles.input, !isEditing && styles.inputDisabled]}
-                  value={phoneNumber}
-                  onChangeText={setPhoneNumber}
-                  editable={isEditing}
-                  placeholder="e.g. +1 555-0199"
-                  placeholderTextColor="#64748B"
-                  keyboardType="phone-pad"
-                />
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Bio</Text>
-                <TextInput
-                  style={[styles.input, styles.textArea, !isEditing && styles.inputDisabled]}
-                  value={bio}
-                  onChangeText={setBio}
-                  editable={isEditing}
-                  placeholder="Tell other athletes about your fitness journey..."
-                  placeholderTextColor="#64748B"
-                  multiline
-                  numberOfLines={3}
-                />
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Fitness Focus</Text>
-                <TextInput
-                  style={[styles.input, !isEditing && styles.inputDisabled]}
-                  value={fitnessGoal}
-                  onChangeText={setFitnessGoal}
-                  editable={isEditing}
-                  placeholder="e.g. Strength, Calisthenics, Hypertrophy"
-                  placeholderTextColor="#64748B"
-                />
-              </View>
-            </View>
-
-            {/* Health & Posture Conditions Section */}
-            <View style={styles.sectionCard}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                <Text style={styles.sectionHeader}>HEALTH & POSTURE CONDITIONS</Text>
-                {!isEditing && (
+              {renderDetailField({
+                Icon: AtSign,
+                label: 'Username',
+                value: username,
+                onChangeText: setUsername,
+                placeholder: 'e.g. alex_fitness',
+                autoCapitalize: 'none',
+                right: isEditing ? (
                   <TouchableOpacity
-                    style={styles.quickEditHealthBtn}
+                    style={styles.randomizeBtn}
                     activeOpacity={0.7}
-                    onPress={() => setIsEditing(true)}
+                    onPress={handleGenerateRandomUsername}
+                    disabled={isGeneratingUsername}
                   >
-                    <Edit3 size={12} color="#E25822" style={{ marginRight: 4 }} />
-                    <Text style={styles.quickEditHealthText}>Edit</Text>
+                    {isGeneratingUsername ? (
+                      <ActivityIndicator size="small" color={colors.accent} />
+                    ) : (
+                      <>
+                        <Shuffle size={11} color={colors.accent} />
+                        <Text style={styles.randomizeBtnText}>Randomize</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                ) : undefined,
+              })}
+              {renderDetailField({ Icon: User, label: 'Full name', value: fullName, onChangeText: setFullName, placeholder: 'e.g. Alex Johnson' })}
+              {renderDetailField({ Icon: Phone, label: 'Phone', value: phoneNumber, onChangeText: setPhoneNumber, placeholder: 'e.g. +91 98765 43210', keyboardType: 'phone-pad' })}
+              {renderDetailField({ Icon: Target, label: 'Fitness focus', value: fitnessGoal, onChangeText: setFitnessGoal, placeholder: 'e.g. Strength, Calisthenics' })}
+              {isEditing &&
+                renderDetailField({
+                  Icon: Info,
+                  label: 'Bio',
+                  value: bio,
+                  onChangeText: setBio,
+                  placeholder: 'Tell other athletes about your fitness journey...',
+                  multiline: true,
+                })}
+            </View>
+
+            {/* HEALTH */}
+            <View style={styles.sectionCard}>
+              <View style={styles.sectionHeaderRow}>
+                <View style={styles.sectionTitleRow}>
+                  <HeartPulse size={15} color={colors.accent} />
+                  <Text style={styles.sectionHeader}>HEALTH & POSTURE</Text>
+                </View>
+                {!isEditing && (
+                  <TouchableOpacity style={styles.linkBtn} activeOpacity={0.7} onPress={() => setIsEditing(true)}>
+                    <Edit3 size={12} color={colors.accent} />
+                    <Text style={styles.linkBtnText}>Edit</Text>
                   </TouchableOpacity>
                 )}
               </View>
-              <Text style={styles.healthSectionDesc}>
-                Tell the AI if you experience any of these conditions to tailor exercise routines and posture correction.
-              </Text>
 
-              <View style={{ marginTop: 10, gap: 10 }}>
-                {HEALTH_CONDITIONS.map((cond) => {
-                  const isSelected = healthConditions[cond.key] === true;
-                  return (
-                    <View
-                      key={cond.key}
-                      style={[
-                        styles.healthConditionItem,
-                        isSelected && { borderColor: cond.badgeColor, backgroundColor: 'rgba(30, 41, 59, 0.7)' },
-                      ]}
-                    >
-                      <View style={styles.healthConditionHeader}>
-                        <View style={{ flex: 1 }}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                            <Text style={styles.healthConditionTitle}>{cond.title}</Text>
-                            <View style={[styles.medicalBadgeSmall, { backgroundColor: 'rgba(226, 88, 34, 0.15)' }]}>
-                              <Text style={[styles.medicalBadgeSmallText, { color: '#E25822' }]}>
-                                {cond.medicalTerm}
-                              </Text>
-                            </View>
+              {!isEditing ? (
+                activeConditions.length === 0 ? (
+                  <Text style={styles.healthSectionDesc}>
+                    No conditions selected. Tap Edit to tell the AI about any posture issues so it can tailor your quests.
+                  </Text>
+                ) : (
+                  <View style={styles.conditionChips}>
+                    {activeConditions.map((c) => (
+                      <View key={c.key} style={styles.conditionChip}>
+                        <Text style={styles.conditionChipText}>{c.title}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )
+              ) : (
+                <>
+                  <Text style={styles.healthSectionDesc}>
+                    Tell the AI if you experience any of these to tailor routines and posture correction.
+                  </Text>
+                  {HEALTH_CONDITIONS.map((cond) => {
+                    const isSelected = healthConditions[cond.key] === true;
+                    return (
+                      <View key={cond.key} style={[styles.healthItem, isSelected && styles.healthItemSelected]}>
+                        <View style={styles.healthItemTop}>
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.healthTitle}>{cond.title}</Text>
+                            <Text style={styles.healthSubtitle}>{cond.medicalTerm}</Text>
                           </View>
-                          <Text style={styles.healthConditionSubtitle}>{cond.shortDesc}</Text>
+                          <View style={styles.healthToggleRow}>
+                            <TouchableOpacity
+                              style={[styles.healthToggleBtn, isSelected && styles.healthYesActive]}
+                              activeOpacity={0.8}
+                              onPress={() => setHealthConditions((prev) => ({ ...prev, [cond.key]: true }))}
+                            >
+                              <Check size={14} color={isSelected ? colors.onAccent : colors.textDim} strokeWidth={3} />
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={[styles.healthToggleBtn, !isSelected && styles.healthNoActive]}
+                              activeOpacity={0.8}
+                              onPress={() => setHealthConditions((prev) => ({ ...prev, [cond.key]: false }))}
+                            >
+                              <X size={14} color={!isSelected ? colors.text : colors.textDim} strokeWidth={2.5} />
+                            </TouchableOpacity>
+                          </View>
                         </View>
-                      </View>
-
-                      <Text style={styles.healthConditionQuestion}>{cond.question}</Text>
-
-                      {/* Tick / Cross Selector Buttons */}
-                      <View style={styles.healthToggleRow}>
-                        <TouchableOpacity
-                          activeOpacity={0.8}
-                          disabled={!isEditing}
-                          style={[
-                            styles.healthToggleBtn,
-                            isSelected && [styles.healthYesActive, { backgroundColor: '#E25822' }],
-                            !isEditing && !isSelected && styles.healthBtnDisabled,
-                          ]}
-                          onPress={() => {
-                            setHealthConditions((prev) => ({
-                              ...prev,
-                              [cond.key]: true,
-                            }));
-                          }}
-                        >
-                          <Check
-                            size={14}
-                            color={isSelected ? '#FFFFFF' : '#64748B'}
-                            strokeWidth={isSelected ? 3 : 2}
-                          />
-                          <Text
-                            style={[
-                              styles.healthToggleText,
-                              isSelected && styles.healthToggleTextActive,
-                            ]}
-                          >
-                            Yes
-                          </Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                          activeOpacity={0.8}
-                          disabled={!isEditing}
-                          style={[
-                            styles.healthToggleBtn,
-                            !isSelected && styles.healthNoActive,
-                            !isEditing && isSelected && styles.healthBtnDisabled,
-                          ]}
-                          onPress={() => {
-                            setHealthConditions((prev) => ({
-                              ...prev,
-                              [cond.key]: false,
-                            }));
-                          }}
-                        >
-                          <X
-                            size={14}
-                            color={!isSelected ? '#CBD5E1' : '#475569'}
-                            strokeWidth={!isSelected ? 2.5 : 2}
-                          />
-                          <Text
-                            style={[
-                              styles.healthToggleText,
-                              !isSelected && styles.healthNoTextActive,
-                            ]}
-                          >
-                            No
-                          </Text>
-                        </TouchableOpacity>
-                      </View>
-
-                      {isSelected && (() => {
-                        const matchedExercises = getRecommendedExercisesForCondition(
-                          cond.key,
-                          DEFAULT_EXERCISES
-                        );
-                        const exerciseNames =
-                          matchedExercises.length > 0
-                            ? matchedExercises.map((e) => e.name)
-                            : cond.recommendedExerciseNames;
-
-                        return (
-                          <View style={styles.healthRecBox}>
-                            <Text style={styles.healthRecTitle}>Recommended AI Routine:</Text>
+                        <Text style={styles.healthQuestion}>{cond.question}</Text>
+                        {isSelected && (() => {
+                          const matched = getRecommendedExercisesForCondition(cond.key, DEFAULT_EXERCISES);
+                          const names = matched.length > 0 ? matched.map((e) => e.name) : cond.recommendedExerciseNames;
+                          return (
                             <View style={styles.healthRecBadges}>
-                              {exerciseNames.map((rec) => (
+                              {names.map((rec) => (
                                 <View key={rec} style={styles.healthRecBadge}>
                                   <Text style={styles.healthRecBadgeText}>{rec}</Text>
                                 </View>
                               ))}
                             </View>
-                          </View>
-                        );
-                      })()}
-                    </View>
-                  );
-                })}
-              </View>
+                          );
+                        })()}
+                      </View>
+                    );
+                  })}
+                </>
+              )}
             </View>
 
-            {/* Logout Action */}
-            <TouchableOpacity
-              style={styles.logoutButton}
-              activeOpacity={0.85}
-              onPress={async () => {
-                try {
-                  await supabase.auth.signOut();
-                  onLogout();
-                } catch (e) {
-                  onLogout();
-                }
-              }}
-            >
-              <LogOut size={16} color="#EF4444" style={{ marginRight: 6 }} />
-              <Text style={styles.logoutButtonText}>Sign Out</Text>
-            </TouchableOpacity>
+            {isEditing ? (
+              <TouchableOpacity style={styles.cancelEditBtn} activeOpacity={0.85} onPress={() => { setIsEditing(false); loadProfileData(); }}>
+                <Text style={styles.cancelEditText}>Discard changes</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                style={styles.logoutButton}
+                activeOpacity={0.85}
+                onPress={async () => {
+                  try {
+                    await supabase.auth.signOut();
+                  } finally {
+                    onLogout();
+                  }
+                }}
+              >
+                <LogOut size={16} color={colors.danger} />
+                <Text style={styles.logoutButtonText}>Sign Out</Text>
+              </TouchableOpacity>
+            )}
           </>
         ) : activeTab === 'friends' ? (
-          /* Friends List View */
-          <View style={styles.friendsContainer}>
-            <View style={styles.sectionTitleRow}>
-              <Text style={styles.sectionTitle}>MY FRIENDS ({friends.length})</Text>
-              <TouchableOpacity
-                style={styles.headerActionPill}
-                activeOpacity={0.7}
-                onPress={() => setActiveTab('add_friend')}
-              >
-                <UserPlus size={12} color="#FFFFFF" style={{ marginRight: 4 }} />
-                <Text style={styles.headerActionPillText}>Add New</Text>
+          <View>
+            <View style={styles.listHeaderRow}>
+              <Text style={styles.listTitle}>MY FRIENDS ({friends.length})</Text>
+              <TouchableOpacity style={styles.pillBtn} activeOpacity={0.8} onPress={() => setActiveTab('add_friend')}>
+                <UserPlus size={12} color={colors.onAccent} />
+                <Text style={styles.pillBtnText}>Add new</Text>
               </TouchableOpacity>
             </View>
 
-             {friends.length === 0 ? (
-              <View style={styles.emptyCard}>
-                <Users size={36} color="#64748B" style={{ marginBottom: 10 }} />
-                <Text style={styles.emptyCardTitle}>No Friends Yet</Text>
-                <Text style={styles.emptyCardSubtitle}>
-                  Connect with athletes to compete in 1v1 duels and compare workout milestones!
-                </Text>
-                <TouchableOpacity
-                  style={styles.addFriendPrimaryBtn}
-                  activeOpacity={0.85}
-                  onPress={() => setActiveTab('add_friend')}
-                >
-                  <UserPlus size={15} color="#FFFFFF" style={{ marginRight: 6 }} />
-                  <Text style={styles.addFriendPrimaryBtnText}>Find Friends</Text>
-                </TouchableOpacity>
-              </View>
+            {friends.length === 0 ? (
+              <EmptyState
+                Icon={Users}
+                title="No friends yet"
+                text="Connect with athletes to compete in 1v1 duels and compare workout milestones."
+                action={
+                  <TouchableOpacity style={styles.primaryBtn} activeOpacity={0.85} onPress={() => setActiveTab('add_friend')}>
+                    <UserPlus size={15} color={colors.onAccent} />
+                    <Text style={styles.primaryBtnText}>Find friends</Text>
+                  </TouchableOpacity>
+                }
+              />
             ) : (
-              <View style={styles.friendListCard}>
-                {friends.map((item) => (
-                   <View key={item.friendship_id} style={styles.friendRow}>
-                     <Avatar
-                       username={item.friend.username}
-                       size={44}
-                       config={item.friend.avatar_config}
-                       avatarUrl={item.friend.avatar_url}
-                     />
-                     <View style={styles.friendInfoBox}>
-                       <Text style={styles.friendName} numberOfLines={1}>
-                         {item.friend.full_name || item.friend.username}
-                       </Text>
-                       <Text style={styles.friendUsername}>@{item.friend.username}</Text>
-                       {item.friend.fitness_goal ? (
-                         <Text style={styles.friendBio} numberOfLines={1}>
-                           🎯 {item.friend.fitness_goal}
-                         </Text>
-                       ) : null}
-                     </View>
-
-                     <TouchableOpacity
-                       style={styles.removeFriendBtn}
-                       activeOpacity={0.7}
-                       onPress={() => handleDeleteOrReject(item, true)}
-                       disabled={actionLoadingId === item.friendship_id}
-                     >
-                       {actionLoadingId === item.friendship_id ? (
-                         <ActivityIndicator size="small" color="#EF4444" />
-                       ) : (
-                         <Trash2 size={16} color="#94A3B8" />
-                       )}
-                     </TouchableOpacity>
-                   </View>
-                 ))}
-               </View>
-             )}
-           </View>
-         ) : activeTab === 'requests' ? (
-           /* Friend Requests View */
-           <View style={styles.friendsContainer}>
-             <Text style={styles.sectionTitle}>
-               INCOMING REQUESTS ({incomingRequests.length})
-             </Text>
-
-             {incomingRequests.length === 0 ? (
-               <View style={styles.emptyCardMini}>
-                 <Text style={styles.emptyCardSubtitle}>No incoming friend requests.</Text>
-               </View>
-             ) : (
-               <View style={styles.friendListCard}>
-                 {incomingRequests.map((item) => (
-                   <View key={item.friendship_id} style={styles.friendRow}>
-                     <Avatar
-                       username={item.friend.username}
-                       size={44}
-                       config={item.friend.avatar_config}
-                       avatarUrl={item.friend.avatar_url}
-                     />
-                     <View style={styles.friendInfoBox}>
-                       <Text style={styles.friendName}>
-                         {item.friend.full_name || item.friend.username}
-                       </Text>
-                       <Text style={styles.friendUsername}>@{item.friend.username}</Text>
-                     </View>
-
-                     <View style={styles.requestActionRow}>
-                       <TouchableOpacity
-                         style={styles.acceptBtn}
-                         activeOpacity={0.8}
-                         onPress={() => handleAcceptRequest(item)}
-                         disabled={actionLoadingId === item.friendship_id}
-                       >
-                         {actionLoadingId === item.friendship_id ? (
-                           <ActivityIndicator size="small" color="#FFFFFF" />
-                         ) : (
-                           <Check size={16} color="#FFFFFF" />
-                         )}
-                       </TouchableOpacity>
-
-                       <TouchableOpacity
-                         style={styles.rejectBtn}
-                         activeOpacity={0.8}
-                         onPress={() => handleDeleteOrReject(item, false)}
-                         disabled={actionLoadingId === item.friendship_id}
-                       >
-                         <X size={16} color="#EF4444" />
-                       </TouchableOpacity>
-                     </View>
-                   </View>
-                 ))}
-               </View>
-             )}
-
-             <Text style={[styles.sectionTitle, { marginTop: 24 }]}>
-               PENDING SENT REQUESTS ({outgoingRequests.length})
-             </Text>
-
-             {outgoingRequests.length === 0 ? (
-               <View style={styles.emptyCardMini}>
-                 <Text style={styles.emptyCardSubtitle}>No pending sent requests.</Text>
-               </View>
-             ) : (
-               <View style={styles.friendListCard}>
-                 {outgoingRequests.map((item) => (
-                   <View key={item.friendship_id} style={styles.friendRow}>
-                     <Avatar
-                       username={item.friend.username}
-                       size={44}
-                       config={item.friend.avatar_config}
-                       avatarUrl={item.friend.avatar_url}
-                     />
-                    <View style={styles.friendInfoBox}>
-                      <Text style={styles.friendName}>
-                        {item.friend.full_name || item.friend.username}
-                      </Text>
-                      <Text style={styles.friendUsername}>@{item.friend.username}</Text>
-                      <Text style={styles.pendingTag}>⏳ Pending Approval</Text>
-                    </View>
-
+              friends.map((item) => (
+                <View key={item.friendship_id} style={styles.friendRow}>
+                  <Avatar username={item.friend.username} size={44} config={item.friend.avatar_config} avatarUrl={item.friend.avatar_url} />
+                  <View style={styles.friendInfoBox}>
+                    <Text style={styles.friendName} numberOfLines={1}>{item.friend.full_name || item.friend.username}</Text>
+                    <Text style={styles.friendUsername}>@{item.friend.username}</Text>
+                    {item.friend.fitness_goal ? (
+                      <View style={styles.inlineRow}>
+                        <Target size={11} color={colors.textDim} />
+                        <Text style={styles.friendBio} numberOfLines={1}>{item.friend.fitness_goal}</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                  <TouchableOpacity
+                    style={styles.iconActionBtn}
+                    activeOpacity={0.7}
+                    onPress={() => handleDeleteOrReject(item, true)}
+                    disabled={actionLoadingId === item.friendship_id}
+                  >
+                    {actionLoadingId === item.friendship_id ? (
+                      <ActivityIndicator size="small" color={colors.danger} />
+                    ) : (
+                      <Trash2 size={16} color={colors.textMuted} />
+                    )}
+                  </TouchableOpacity>
+                </View>
+              ))
+            )}
+          </View>
+        ) : activeTab === 'requests' ? (
+          <View>
+            <Text style={styles.listTitle}>INCOMING ({incomingRequests.length})</Text>
+            {incomingRequests.length === 0 ? (
+              <Text style={styles.emptyLine}>No incoming friend requests.</Text>
+            ) : (
+              incomingRequests.map((item) => (
+                <View key={item.friendship_id} style={styles.friendRow}>
+                  <Avatar username={item.friend.username} size={44} config={item.friend.avatar_config} avatarUrl={item.friend.avatar_url} />
+                  <View style={styles.friendInfoBox}>
+                    <Text style={styles.friendName} numberOfLines={1}>{item.friend.full_name || item.friend.username}</Text>
+                    <Text style={styles.friendUsername}>@{item.friend.username}</Text>
+                  </View>
+                  <View style={styles.requestActionRow}>
                     <TouchableOpacity
-                      style={styles.cancelRequestBtn}
-                      activeOpacity={0.7}
+                      style={styles.acceptBtn}
+                      activeOpacity={0.8}
+                      onPress={() => handleAcceptRequest(item)}
+                      disabled={actionLoadingId === item.friendship_id}
+                    >
+                      {actionLoadingId === item.friendship_id ? (
+                        <ActivityIndicator size="small" color={colors.onAccent} />
+                      ) : (
+                        <Check size={16} color={colors.onAccent} />
+                      )}
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.rejectBtn}
+                      activeOpacity={0.8}
                       onPress={() => handleDeleteOrReject(item, false)}
                       disabled={actionLoadingId === item.friendship_id}
                     >
-                      <Text style={styles.cancelRequestText}>Cancel</Text>
+                      <X size={16} color={colors.danger} />
                     </TouchableOpacity>
                   </View>
-                ))}
-              </View>
+                </View>
+              ))
+            )}
+
+            <Text style={[styles.listTitle, { marginTop: 22 }]}>SENT ({outgoingRequests.length})</Text>
+            {outgoingRequests.length === 0 ? (
+              <Text style={styles.emptyLine}>No pending sent requests.</Text>
+            ) : (
+              outgoingRequests.map((item) => (
+                <View key={item.friendship_id} style={styles.friendRow}>
+                  <Avatar username={item.friend.username} size={44} config={item.friend.avatar_config} avatarUrl={item.friend.avatar_url} />
+                  <View style={styles.friendInfoBox}>
+                    <Text style={styles.friendName} numberOfLines={1}>{item.friend.full_name || item.friend.username}</Text>
+                    <Text style={styles.friendUsername}>@{item.friend.username}</Text>
+                    <View style={styles.inlineRow}>
+                      <Clock size={11} color={colors.gold} />
+                      <Text style={styles.pendingTag}>Pending approval</Text>
+                    </View>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.cancelRequestBtn}
+                    activeOpacity={0.7}
+                    onPress={() => handleDeleteOrReject(item, false)}
+                    disabled={actionLoadingId === item.friendship_id}
+                  >
+                    <Text style={styles.cancelRequestText}>Cancel</Text>
+                  </TouchableOpacity>
+                </View>
+              ))
             )}
           </View>
         ) : (
-          /* Add Friend View */
-          <View style={styles.friendsContainer}>
+          <View>
             <View style={styles.sectionCard}>
-              <Text style={styles.sectionHeader}>SEND FRIEND REQUEST</Text>
-              <Text style={styles.addFriendHint}>
-                Enter the exact username of the athlete you want to connect with.
-              </Text>
+              <View style={styles.sectionTitleRow}>
+                <UserPlus size={15} color={colors.accent} />
+                <Text style={styles.sectionHeader}>ADD A FRIEND</Text>
+              </View>
+              <Text style={styles.healthSectionDesc}>Enter the exact username of the athlete you want to connect with.</Text>
 
               <View style={styles.searchRow}>
                 <View style={styles.searchInputWrapper}>
-                  <Search size={16} color="#64748B" style={styles.searchIcon} />
+                  <Search size={16} color={colors.textDim} />
                   <TextInput
                     style={styles.searchInput}
-                    placeholder="Enter athlete username..."
-                    placeholderTextColor="#64748B"
+                    placeholder="Athlete username..."
+                    placeholderTextColor={colors.textDim}
                     value={searchUsername}
                     onChangeText={setSearchUsername}
                     autoCapitalize="none"
                   />
                 </View>
-
                 <TouchableOpacity
                   style={styles.sendRequestBtn}
                   activeOpacity={0.85}
@@ -968,21 +912,18 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                   disabled={isSendingRequest}
                 >
                   {isSendingRequest ? (
-                    <ActivityIndicator size="small" color="#FFFFFF" />
+                    <ActivityIndicator size="small" color={colors.onAccent} />
                   ) : (
-                    <View style={styles.btnRow}>
-                      <UserPlus size={15} color="#FFFFFF" style={{ marginRight: 6 }} />
-                      <Text style={styles.sendRequestBtnText}>Send</Text>
-                    </View>
+                    <Send size={16} color={colors.onAccent} />
                   )}
                 </TouchableOpacity>
               </View>
             </View>
 
             <View style={styles.infoTipBox}>
-              <Info size={18} color="#E8D5C4" style={{ marginRight: 10 }} />
+              <Swords size={18} color={colors.accent} />
               <Text style={styles.infoTipText}>
-                Once the athlete accepts your request from their profile, you will be able to start private 1v1 duels and compare workout milestones!
+                Once they accept, you can send instant 1v1 battle invites and compare workout milestones.
               </Text>
             </View>
           </View>
@@ -993,587 +934,397 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#1A1C20',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#1A1C20',
-    gap: 12,
-  },
-  loadingText: {
-    color: '#94A3B8',
-    fontSize: 14,
-  },
+  container: { flex: 1, backgroundColor: colors.bg },
+  loadingContainer: { flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center', gap: 12 },
+  loadingText: { color: colors.textMuted, fontSize: 13, fontWeight: '600' },
+
   topHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#1A1C20',
+    paddingTop: 8,
+    paddingBottom: 10,
   },
-  backButtonCircle: {
+  iconButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#181D26',
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
   },
-  headerTitle: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '900',
-    letterSpacing: 0.5,
-  },
+  headerTitle: { color: colors.text, fontSize: 17, fontWeight: '900' },
   editButton: {
-    backgroundColor: '#E25822',
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-  },
-  editButtonActive: {
-    backgroundColor: '#354394',
-  },
-  editButtonText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '900',
-  },
-  btnRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 5,
+    height: 36,
+    paddingHorizontal: 14,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    minWidth: 72,
+    justifyContent: 'center',
   },
+  editButtonActive: { backgroundColor: colors.accent, borderColor: colors.accent },
+  editButtonText: { color: colors.text, fontSize: 13, fontWeight: '800' },
+
+  scrollContent: { flex: 1 },
+  scrollContainer: { paddingHorizontal: 16, paddingBottom: 130 },
+
+  // Hero
+  heroCard: {
+    padding: 18,
+    borderRadius: radius.xl,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  heroTopRow: { flexDirection: 'row', alignItems: 'center' },
+  cameraBadge: {
+    position: 'absolute',
+    right: -2,
+    top: 2,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.accent,
+    borderWidth: 2,
+    borderColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  levelBadgeRow: { position: 'absolute', left: 0, right: 0, bottom: -6, alignItems: 'center' },
+  levelBadge: {
+    paddingHorizontal: 8,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: colors.accent,
+    borderWidth: 2,
+    borderColor: colors.surface,
+    justifyContent: 'center',
+  },
+  levelBadgeText: { color: colors.onAccent, fontSize: 10, fontWeight: '900' },
+  heroInfo: { flex: 1, marginLeft: 16 },
+  heroName: { color: colors.text, fontSize: 21, fontWeight: '900' },
+  heroUsername: { color: colors.textMuted, fontSize: 13, fontWeight: '600', marginTop: 2 },
+  titleChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    alignSelf: 'flex-start',
+    marginTop: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(226, 88, 34, 0.14)',
+  },
+  titleChipText: { color: colors.accent, fontSize: 11, fontWeight: '900', letterSpacing: 0.4 },
+  heroBio: { color: colors.textMuted, fontSize: 13, lineHeight: 19, marginTop: 14 },
+  xpLabelRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 18, marginBottom: 6 },
+  xpLabel: { color: colors.text, fontSize: 12, fontWeight: '800' },
+  xpNext: { color: colors.textMuted, fontSize: 11, fontWeight: '700' },
+  xpTrack: { height: 8, borderRadius: 4, backgroundColor: colors.surfaceSunken, overflow: 'hidden' },
+  xpFill: { height: '100%', borderRadius: 4, backgroundColor: colors.accent },
+  statGrid: { flexDirection: 'row', gap: 8, marginTop: 14 },
+  statTile: { flex: 1, alignItems: 'center', paddingVertical: 10, borderRadius: radius.md, backgroundColor: colors.surfaceSunken },
+  statValue: { color: colors.text, fontSize: 15, fontWeight: '900', marginTop: 4 },
+  statLabel: { color: colors.textDim, fontSize: 8.5, fontWeight: '900', letterSpacing: 0.6, marginTop: 1 },
+
+  // Tabs
   subTabBar: {
     flexDirection: 'row',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    gap: 8,
+    marginVertical: 14,
+    padding: 4,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   subTabItem: {
     flex: 1,
+    height: 36,
+    borderRadius: radius.pill,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: '#262A32',
-    gap: 5,
+    gap: 4,
   },
-  subTabItemActive: {
-    backgroundColor: '#FFFFFF',
-  },
-  subTabText: {
-    color: '#8E95A0',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  subTabTextActive: {
-    color: '#11141A',
-    fontWeight: '900',
-  },
+  subTabItemActive: { backgroundColor: colors.accent },
+  subTabText: { color: colors.textMuted, fontSize: 11.5, fontWeight: '900' },
+  subTabTextActive: { color: colors.onAccent },
   badgeCountPill: {
-    backgroundColor: '#EF4444',
+    minWidth: 16,
+    height: 16,
+    paddingHorizontal: 4,
     borderRadius: 8,
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-  },
-  badgeCountText: {
-    color: '#FFFFFF',
-    fontSize: 9,
-    fontWeight: '900',
-  },
-  scrollContent: {
-    flex: 1,
-  },
-  scrollContainer: {
-    padding: 16,
-    paddingBottom: 110,
-  },
-  heroCard: {
-    backgroundColor: '#262A32',
-    borderRadius: 28,
-    padding: 22,
+    backgroundColor: colors.danger,
     alignItems: 'center',
-    marginBottom: 16,
+    justifyContent: 'center',
   },
-  avatarWrapper: {
-    position: 'relative',
-    marginBottom: 8,
+  badgeCountText: { color: '#fff', fontSize: 9, fontWeight: '900' },
+
+  // Sections
+  sectionCard: {
+    padding: 16,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginBottom: 12,
   },
-  avatarUploadBadge: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
+  sectionHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  sectionTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  sectionHeader: { color: colors.text, fontSize: 12.5, fontWeight: '900', letterSpacing: 0.8 },
+  sectionMeta: { color: colors.textMuted, fontSize: 11, fontWeight: '700' },
+
+  // Achievements
+  achievementGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
+  achievement: {
+    width: '31.5%',
+    flexGrow: 1,
+    alignItems: 'center',
+    padding: 10,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceSunken,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  achievementUnlocked: { borderColor: 'rgba(226, 88, 34, 0.4)', backgroundColor: 'rgba(226, 88, 34, 0.08)' },
+  achievementIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: colors.surfaceHi,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  achievementTitle: { color: colors.text, fontSize: 11.5, fontWeight: '900', marginTop: 6 },
+  achievementHint: { color: colors.textDim, fontSize: 9.5, fontWeight: '700', marginTop: 1 },
+
+  // Details
+  detailRow: { flexDirection: 'row', gap: 12, marginTop: 14 },
+  detailIcon: {
     width: 32,
     height: 32,
-    borderRadius: 16,
-    backgroundColor: '#E25822',
+    borderRadius: 10,
+    backgroundColor: 'rgba(226, 88, 34, 0.12)',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#262A32',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 3,
   },
-  uploadPhotoBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#E25822',
-    paddingVertical: 7,
-    paddingHorizontal: 16,
-    borderRadius: 20,
-    marginTop: 6,
-    marginBottom: 10,
-  },
-  uploadPhotoBtnText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  heroName: {
-    color: '#FFFFFF',
-    fontSize: 20,
-    fontWeight: '900',
-    marginTop: 4,
-  },
-  heroUsername: {
-    color: '#E25822',
-    fontSize: 13,
-    fontWeight: '700',
-    marginTop: 2,
-  },
-  badgeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 14,
-    gap: 8,
-  },
-  badgePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#E25822',
-    borderRadius: 14,
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-  },
-  badgeText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '800',
-  },
-  sectionCard: {
-    backgroundColor: '#262A32',
-    borderRadius: 26,
-    padding: 18,
-    marginBottom: 16,
-  },
-  sectionHeader: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '900',
-    letterSpacing: 0.5,
-    marginBottom: 14,
-  },
-  inputGroup: {
-    marginBottom: 14,
-  },
-  inputLabelRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  inputLabel: {
-    color: '#8E95A0',
-    fontSize: 11,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-  },
-  randomizeUsernameBtn: {
-    backgroundColor: '#E25822',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
-  },
-  randomizeUsernameBtnText: {
-    color: '#FFFFFF',
-    fontSize: 10,
-    fontWeight: '900',
-  },
+  detailLabelRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  detailLabel: { color: colors.textDim, fontSize: 10.5, fontWeight: '900', letterSpacing: 0.6, textTransform: 'uppercase' },
+  detailValue: { color: colors.text, fontSize: 14.5, fontWeight: '700', marginTop: 3 },
   input: {
-    backgroundColor: '#323742',
-    borderRadius: 14,
+    marginTop: 6,
+    backgroundColor: colors.surfaceSunken,
+    borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-    paddingHorizontal: 14,
+    borderColor: colors.borderStrong,
+    color: colors.text,
+    fontSize: 14,
+    paddingHorizontal: 12,
     paddingVertical: 10,
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '600',
   },
-  inputDisabled: {
-    backgroundColor: 'rgba(50, 55, 66, 0.5)',
-    borderColor: 'rgba(255, 255, 255, 0.04)',
-    color: '#CBD5E1',
+  textArea: { minHeight: 80, textAlignVertical: 'top' },
+  randomizeBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  randomizeBtnText: { color: colors.accent, fontSize: 11, fontWeight: '800' },
+
+  // Health
+  linkBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  linkBtnText: { color: colors.accent, fontSize: 12, fontWeight: '800' },
+  healthSectionDesc: { color: colors.textMuted, fontSize: 12.5, lineHeight: 18, marginTop: 10 },
+  conditionChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
+  conditionChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(226, 88, 34, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(226, 88, 34, 0.35)',
   },
-  textArea: {
-    minHeight: 70,
-    textAlignVertical: 'top',
+  conditionChipText: { color: colors.accent, fontSize: 12, fontWeight: '800' },
+  healthItem: {
+    marginTop: 10,
+    padding: 12,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceSunken,
+    borderWidth: 1,
+    borderColor: 'transparent',
   },
+  healthItemSelected: { borderColor: 'rgba(226, 88, 34, 0.5)' },
+  healthItemTop: { flexDirection: 'row', alignItems: 'center' },
+  healthTitle: { color: colors.text, fontSize: 14, fontWeight: '900' },
+  healthSubtitle: { color: colors.textDim, fontSize: 11, fontWeight: '700', marginTop: 1 },
+  healthQuestion: { color: colors.textMuted, fontSize: 12, lineHeight: 17, marginTop: 8 },
+  healthToggleRow: { flexDirection: 'row', gap: 6 },
+  healthToggleBtn: {
+    width: 36,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: colors.surfaceHi,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  healthYesActive: { backgroundColor: colors.accent },
+  healthNoActive: { backgroundColor: '#334155' },
+  healthRecBadges: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 },
+  healthRecBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, backgroundColor: colors.surfaceHi },
+  healthRecBadgeText: { color: colors.text, fontSize: 11, fontWeight: '700' },
+
   logoutButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-    borderWidth: 1,
-    borderColor: 'rgba(239, 68, 68, 0.3)',
-    borderRadius: 20,
-    paddingVertical: 14,
-  },
-  logoutButtonText: {
-    color: '#EF4444',
-    fontSize: 13,
-    fontWeight: '900',
-  },
-  friendsContainer: {
+    gap: 8,
+    height: 50,
     marginTop: 4,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.4)',
+    backgroundColor: 'rgba(239, 68, 68, 0.08)',
   },
-  sectionTitleRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  logoutButtonText: { color: colors.danger, fontSize: 14.5, fontWeight: '900' },
+  cancelEditBtn: {
+    height: 48,
+    marginTop: 4,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surfaceHi,
     alignItems: 'center',
-    marginBottom: 12,
+    justifyContent: 'center',
   },
-  sectionTitle: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '900',
-    letterSpacing: 0.5,
-    marginBottom: 10,
-  },
-  headerActionPill: {
+  cancelEditText: { color: colors.text, fontSize: 14, fontWeight: '800' },
+
+  // Friends & requests
+  listHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
+  listTitle: { color: colors.textMuted, fontSize: 11.5, fontWeight: '900', letterSpacing: 0.8, marginBottom: 4 },
+  pillBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#E25822',
+    gap: 4,
     paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 14,
+    height: 30,
+    borderRadius: radius.pill,
+    backgroundColor: colors.accent,
   },
-  headerActionPillText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '900',
-  },
-  emptyCard: {
-    backgroundColor: '#262A32',
-    borderRadius: 24,
-    padding: 28,
-    alignItems: 'center',
-  },
-  emptyCardMini: {
-    backgroundColor: '#262A32',
-    borderRadius: 20,
-    padding: 16,
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  emptyCardTitle: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '900',
-    marginBottom: 6,
-  },
-  emptyCardSubtitle: {
-    color: '#9CA3AF',
-    fontSize: 12,
-    textAlign: 'center',
-    lineHeight: 18,
-  },
-  addFriendPrimaryBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#E25822',
-    borderRadius: 16,
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    marginTop: 16,
-  },
-  addFriendPrimaryBtnText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '900',
-  },
-  friendListCard: {
-    backgroundColor: '#262A32',
-    borderRadius: 24,
-    overflow: 'hidden',
-  },
+  pillBtnText: { color: colors.onAccent, fontSize: 12, fontWeight: '800' },
   friendRow: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.05)',
+    marginTop: 8,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  friendInfoBox: {
-    flex: 1,
-    marginLeft: 12,
-    marginRight: 8,
-  },
-  friendName: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  friendUsername: {
-    color: '#E25822',
-    fontSize: 12,
-    fontWeight: '700',
-    marginTop: 1,
-  },
-  friendBio: {
-    color: '#9CA3AF',
-    fontSize: 11,
-    marginTop: 2,
-  },
-  pendingTag: {
-    color: '#F59E0B',
-    fontSize: 10,
-    fontWeight: '800',
-    marginTop: 2,
-  },
-  removeFriendBtn: {
-    padding: 8,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-  },
-  requestActionRow: {
-    flexDirection: 'row',
+  friendInfoBox: { flex: 1, marginLeft: 12 },
+  friendName: { color: colors.text, fontSize: 14.5, fontWeight: '800' },
+  friendUsername: { color: colors.textMuted, fontSize: 12, marginTop: 1 },
+  inlineRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 },
+  friendBio: { color: colors.textDim, fontSize: 11.5, flexShrink: 1 },
+  iconActionBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.surfaceHi,
     alignItems: 'center',
-    gap: 8,
+    justifyContent: 'center',
   },
+  requestActionRow: { flexDirection: 'row', gap: 8 },
   acceptBtn: {
-    backgroundColor: '#E25822',
-    borderRadius: 12,
-    padding: 8,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
   },
   rejectBtn: {
-    backgroundColor: 'rgba(239, 68, 68, 0.15)',
-    borderWidth: 1,
-    borderColor: 'rgba(239, 68, 68, 0.3)',
-    borderRadius: 12,
-    padding: 8,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
     alignItems: 'center',
     justifyContent: 'center',
   },
+  pendingTag: { color: colors.gold, fontSize: 11, fontWeight: '700' },
   cancelRequestBtn: {
-    backgroundColor: 'rgba(239, 68, 68, 0.15)',
-    borderRadius: 10,
     paddingHorizontal: 12,
-    paddingVertical: 6,
+    height: 32,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surfaceHi,
+    justifyContent: 'center',
   },
-  cancelRequestText: {
-    color: '#EF4444',
-    fontSize: 11,
-    fontWeight: '800',
+  cancelRequestText: { color: colors.text, fontSize: 12, fontWeight: '800' },
+  emptyLine: { color: colors.textDim, fontSize: 12.5, marginTop: 6, marginBottom: 4 },
+  emptyCard: {
+    alignItems: 'center',
+    padding: 24,
+    marginTop: 8,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  addFriendHint: {
-    color: '#9CA3AF',
-    fontSize: 12,
-    marginBottom: 14,
-    lineHeight: 18,
+  emptyIconCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(226, 88, 34, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  searchRow: {
+  emptyCardTitle: { color: colors.text, fontSize: 16, fontWeight: '900', marginTop: 12 },
+  emptyCardSubtitle: { color: colors.textMuted, fontSize: 12.5, textAlign: 'center', lineHeight: 18, marginTop: 4 },
+  primaryBtn: {
     flexDirection: 'row',
-    gap: 8,
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 16,
+    paddingHorizontal: 18,
+    height: 44,
+    borderRadius: radius.pill,
+    backgroundColor: colors.accent,
   },
+  primaryBtnText: { color: colors.onAccent, fontSize: 14, fontWeight: '900' },
+
+  // Add friend
+  searchRow: { flexDirection: 'row', gap: 8, marginTop: 14 },
   searchInputWrapper: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#323742',
-    borderRadius: 16,
-    paddingHorizontal: 12,
+    gap: 8,
+    height: 46,
+    paddingHorizontal: 14,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surfaceSunken,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  searchIcon: {
-    marginRight: 8,
-  },
-  searchInput: {
-    flex: 1,
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '600',
-    paddingVertical: 10,
-  },
+  searchInput: { flex: 1, color: colors.text, fontSize: 14 },
   sendRequestBtn: {
-    backgroundColor: '#E25822',
-    borderRadius: 16,
-    paddingHorizontal: 16,
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  sendRequestBtnText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '900',
   },
   infoTipBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#161B22',
-    borderRadius: 20,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-  },
-  infoTipText: {
-    color: '#CBD5E1',
-    fontSize: 12,
-    flex: 1,
-    lineHeight: 18,
-  },
-  quickEditHealthBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(226, 88, 34, 0.15)',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  quickEditHealthText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#E25822',
-  },
-  healthSectionDesc: {
-    fontSize: 12,
-    color: '#94A3B8',
-    lineHeight: 17,
-    marginBottom: 4,
-  },
-  healthConditionItem: {
-    backgroundColor: '#1E293B',
-    borderRadius: 16,
+    gap: 12,
     padding: 14,
-    borderWidth: 1.5,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-  },
-  healthConditionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginBottom: 4,
-  },
-  healthConditionEmoji: {
-    fontSize: 22,
-  },
-  healthConditionTitle: {
-    fontSize: 14.5,
-    fontWeight: '700',
-    color: '#F8FAFC',
-  },
-  medicalBadgeSmall: {
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 5,
-  },
-  medicalBadgeSmallText: {
-    fontSize: 9.5,
-    fontWeight: '700',
-    letterSpacing: 0.3,
-    textTransform: 'uppercase',
-  },
-  healthConditionSubtitle: {
-    fontSize: 11.5,
-    color: '#94A3B8',
-    marginTop: 1,
-  },
-  healthConditionQuestion: {
-    fontSize: 13,
-    color: '#E2E8F0',
-    marginVertical: 8,
-    lineHeight: 18,
-  },
-  healthToggleRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 6,
-  },
-  healthToggleBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    borderRadius: radius.lg,
+    backgroundColor: 'rgba(226, 88, 34, 0.08)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-    gap: 6,
+    borderColor: 'rgba(226, 88, 34, 0.25)',
   },
-  healthYesActive: {
-    borderColor: 'transparent',
-  },
-  healthNoActive: {
-    backgroundColor: 'rgba(15, 23, 42, 0.8)',
-    borderColor: 'rgba(148, 163, 184, 0.3)',
-  },
-  healthBtnDisabled: {
-    opacity: 0.5,
-  },
-  healthToggleText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-  healthToggleTextActive: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-  },
-  healthNoTextActive: {
-    color: '#CBD5E1',
-  },
-  healthRecBox: {
-    marginTop: 10,
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.08)',
-  },
-  healthRecTitle: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#E25822',
-    marginBottom: 6,
-    textTransform: 'uppercase',
-    letterSpacing: 0.3,
-  },
-  healthRecBadges: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  healthRecBadge: {
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  healthRecBadgeText: {
-    fontSize: 10.5,
-    fontWeight: '600',
-    color: '#F8FAFC',
-  },
+  infoTipText: { flex: 1, color: colors.textMuted, fontSize: 12.5, lineHeight: 18 },
 });

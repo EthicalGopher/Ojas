@@ -1,15 +1,21 @@
-import React, { ReactNode } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { ReactNode, useEffect, useRef } from 'react';
+import { Animated, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Bell, Flame } from 'lucide-react-native';
 import { Avatar } from './Avatar';
+import { ProgressRing } from './ui/ProgressRing';
 import { useMatchmakingStore } from '../store/matchmakingStore';
 import { useUserStore } from '../store/userStore';
+import { useGameStats } from '../hooks/useGameStats';
+import { colors, radius } from '../theme';
+import { selectUnreadCount, useNewsStore } from '../store/newsStore';
 
 export interface HeaderProps {
   title?: string;
   username?: string;
   onlineCount?: number;
   onProfilePress?: () => void;
+  onNewsPress?: () => void;
+  unreadNews?: number;
   leftAction?: ReactNode;
   rightAction?: ReactNode;
 }
@@ -19,11 +25,17 @@ export const Header: React.FC<HeaderProps> = ({
   username: propUsername,
   onlineCount: propOnlineCount,
   onProfilePress,
+  onNewsPress,
+  unreadNews: propUnreadNews,
   leftAction,
   rightAction,
 }) => {
   const storeOnline = useMatchmakingStore((state) => state.total_online);
   const { profile, user, setActiveTab, isGuest } = useUserStore();
+  const { level, streak } = useGameStats();
+  const storeUnread = useNewsStore(selectUnreadCount);
+  const openNews = useUserStore((s) => s.openNews);
+  const unreadNews = propUnreadNews ?? storeUnread;
 
   const activeUsername =
     propUsername ||
@@ -33,65 +45,100 @@ export const Header: React.FC<HeaderProps> = ({
     user?.email?.split('@')[0] ||
     'Guest Athlete';
 
-  const avatarConfig = profile?.avatar_config;
-  const avatarUrl = profile?.avatar_url;
   const displayOnlineCount = propOnlineCount !== undefined ? propOnlineCount : storeOnline;
 
+  // Flame "breathes" while the streak is at risk to nudge a workout today.
+  const flamePulse = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    if (!streak.atRisk) {
+      flamePulse.setValue(1);
+      return;
+    }
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(flamePulse, { toValue: 1.18, duration: 600, useNativeDriver: true }),
+        Animated.timing(flamePulse, { toValue: 1, duration: 600, useNativeDriver: true }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [streak.atRisk, flamePulse]);
+
   const handleProfilePress = () => {
-    if (isGuest) {
-      // In guest mode, prompt to create account
+    if (isGuest || !onProfilePress) {
       setActiveTab('profile');
       return;
     }
-    if (onProfilePress) {
-      onProfilePress();
-    } else {
-      setActiveTab('profile');
-    }
+    onProfilePress();
   };
 
-  const fitnessGoal =
-    profile?.fitness_goal ||
-    user?.user_metadata?.fitness_goal ||
-    (isGuest ? 'Guest Athlete' : 'Fitness Freak');
-
   const leftContent = leftAction ?? (
-    <TouchableOpacity
-      style={styles.profileHeaderRow}
-      activeOpacity={0.8}
-      onPress={handleProfilePress}
-    >
-      <View style={styles.avatarBorder}>
-        <Avatar
-          username={activeUsername}
-          size={42}
-          config={avatarConfig}
-          avatarUrl={avatarUrl}
-        />
+    <TouchableOpacity style={styles.profileRow} activeOpacity={0.8} onPress={handleProfilePress}>
+      <View>
+        <ProgressRing size={50} strokeWidth={3.5} progress={level.progress}>
+          <Avatar
+            username={activeUsername}
+            size={40}
+            config={profile?.avatar_config}
+            avatarUrl={profile?.avatar_url}
+          />
+        </ProgressRing>
+        <View style={styles.levelBadgeRow} pointerEvents="none">
+          <View style={styles.levelBadge}>
+            <Text style={styles.levelBadgeText}>{level.level}</Text>
+          </View>
+        </View>
       </View>
-      <View style={styles.nameTextBox}>
-        <Text style={styles.greetingText} numberOfLines={1}>
-          {activeUsername.toUpperCase()}
+
+      <View style={styles.nameBox}>
+        <Text style={styles.nameText} numberOfLines={1}>
+          {activeUsername}
         </Text>
-        <View style={styles.statusRow}>
-          <Flame size={12} color="#E8D5C4" style={{ marginRight: 3 }} />
-          <Text style={styles.subtitleText} numberOfLines={1}>
-            {fitnessGoal}
+        <View style={styles.xpRow}>
+          <Text style={styles.titleText}>{level.title}</Text>
+          <View style={styles.xpTrack}>
+            <View style={[styles.xpFill, { width: `${Math.max(4, level.progress * 100)}%` }]} />
+          </View>
+          <Text style={styles.xpText}>
+            {level.xpIntoLevel}/{level.xpForNextLevel}
           </Text>
         </View>
       </View>
     </TouchableOpacity>
   );
 
-  const defaultRightAction = isGuest ? (
-    <View style={[styles.onlinePillBadge, { backgroundColor: 'rgba(100, 116, 139, 0.2)', borderColor: 'rgba(148, 163, 184, 0.25)' }]}>
-      <Text style={[styles.onlineCountText, { color: '#94A3B8', fontSize: 11 }]}>Guest</Text>
-    </View>
-  ) : (
-    <View style={styles.headerRightGroup}>
-      <View style={styles.onlinePillBadge}>
-        <Text style={styles.onlineCountText}>{displayOnlineCount}</Text>
+  const defaultRightAction = (
+    <View style={styles.rightGroup}>
+      <View style={[styles.streakChip, streak.atRisk && styles.streakChipRisk, streak.activeToday && styles.streakChipLit]}>
+        <Animated.View style={{ transform: [{ scale: flamePulse }] }}>
+          <Flame
+            size={16}
+            color={streak.activeToday ? colors.flame : streak.atRisk ? colors.gold : colors.textDim}
+            fill={streak.activeToday ? colors.flame : 'transparent'}
+          />
+        </Animated.View>
+        <Text style={[styles.streakText, !streak.activeToday && !streak.atRisk && { color: colors.textDim }]}>
+          {streak.current}
+        </Text>
       </View>
+
+      {!isGuest && (
+        <TouchableOpacity style={styles.bellBtn} activeOpacity={0.8} onPress={onNewsPress ?? openNews}>
+          <Bell size={18} color={colors.text} />
+          {unreadNews > 0 && (
+            <View style={styles.bellBadge}>
+              <Text style={styles.bellBadgeText}>{unreadNews > 9 ? '9+' : unreadNews}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+      )}
+
+      {!isGuest && displayOnlineCount > 0 && (
+        <View style={styles.onlineDotWrap}>
+          <View style={styles.onlineDot} />
+          <Text style={styles.onlineText}>{displayOnlineCount}</Text>
+        </View>
+      )}
     </View>
   );
 
@@ -106,85 +153,80 @@ export const Header: React.FC<HeaderProps> = ({
 
 const styles = StyleSheet.create({
   header: {
-    height: 64,
+    height: 72,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 18,
-    backgroundColor: '#1A1C20',
+    paddingHorizontal: 16,
+    backgroundColor: colors.bg,
   },
-  leftSlot: {
-    flex: 1,
-    alignItems: 'flex-start',
-  },
-  rightSlot: {
-    alignItems: 'flex-end',
-  },
-  profileHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  avatarBorder: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+  leftSlot: { flex: 1, alignItems: 'flex-start', marginRight: 8 },
+  rightSlot: { alignItems: 'flex-end' },
+  profileRow: { flexDirection: 'row', alignItems: 'center' },
+  // Absolute full-width row + alignItems centers the badge on every platform
+  // (alignSelf on an absolute child is ignored on Android).
+  levelBadgeRow: { position: 'absolute', left: 0, right: 0, bottom: -3, alignItems: 'center' },
+  levelBadge: {
+    minWidth: 22,
+    height: 18,
+    paddingHorizontal: 5,
+    borderRadius: 9,
+    backgroundColor: colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#1E232B',
-    borderWidth: 1.5,
-    borderColor: 'rgba(255, 255, 255, 0.15)',
+    borderWidth: 2,
+    borderColor: colors.bg,
   },
-  nameTextBox: {
-    marginLeft: 12,
-  },
-  greetingText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '900',
-    letterSpacing: 0.5,
-  },
-  statusRow: {
+  levelBadgeText: { color: colors.onAccent, fontSize: 10, fontWeight: '900' },
+  nameBox: { marginLeft: 12, flexShrink: 1 },
+  nameText: { color: colors.text, fontSize: 16, fontWeight: '900', letterSpacing: 0.2 },
+  xpRow: { flexDirection: 'row', alignItems: 'center', marginTop: 5, gap: 6 },
+  titleText: { color: colors.accent, fontSize: 10.5, fontWeight: '900', letterSpacing: 0.4, textTransform: 'uppercase' },
+  xpTrack: { width: 64, height: 6, borderRadius: 3, backgroundColor: colors.surfaceHi, overflow: 'hidden' },
+  xpFill: { height: '100%', borderRadius: 3, backgroundColor: colors.accent },
+  xpText: { color: colors.textDim, fontSize: 9.5, fontWeight: '800' },
+  centerTitle: { color: colors.text, fontSize: 16, fontWeight: '800', letterSpacing: 0.5 },
+  rightGroup: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  streakChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 2,
-  },
-  subtitleText: {
-    color: '#9CA3AF',
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  centerTitle: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-  },
-  onlinePillBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#181D26',
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
+    gap: 4,
+    paddingHorizontal: 10,
+    height: 36,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-    gap: 6,
+    borderColor: colors.border,
   },
-  onlineDotIndicator: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
-    backgroundColor: '#E25822',
-  },
-  onlineCountText: {
-    color: '#E25822',
-    fontSize: 12,
-    fontWeight: '900',
-    letterSpacing: 0.5,
-  },
-  headerRightGroup: {
-    flexDirection: 'row',
+  streakChipLit: { backgroundColor: 'rgba(226, 88, 34, 0.14)', borderColor: 'rgba(226, 88, 34, 0.45)' },
+  streakChipRisk: { backgroundColor: 'rgba(245, 158, 11, 0.1)', borderColor: 'rgba(245, 158, 11, 0.45)' },
+  streakText: { color: colors.text, fontSize: 14, fontWeight: '900' },
+  bellBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
     alignItems: 'center',
-    gap: 8,
+    justifyContent: 'center',
   },
+  bellBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    minWidth: 18,
+    height: 18,
+    paddingHorizontal: 4,
+    borderRadius: 9,
+    backgroundColor: colors.danger,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: colors.bg,
+  },
+  bellBadgeText: { color: '#fff', fontSize: 9, fontWeight: '900' },
+  onlineDotWrap: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  onlineDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: colors.success },
+  onlineText: { color: colors.success, fontSize: 11, fontWeight: '900' },
 });

@@ -20,7 +20,10 @@ import {
   disconnectMatchSocket,
   disconnectPresenceSocket,
   fetchQueueCounts,
+  searchQueueWithBotFallback,
 } from '../utils/matchmaking';
+import { useGameStats } from '../hooks/useGameStats';
+import type { SimulatedOpponent } from '../utils/simulatedOpponent';
 import { useMatchmakingStore } from '../store/matchmakingStore';
 import { useUserStore } from '../store/userStore';
 import { ExerciseDetailScreen } from '../screens/ExerciseDetailScreen';
@@ -33,10 +36,13 @@ import { Header } from './Header';
 import { HumanVsAIModal } from './HumanVsAIModal';
 import { MatchMode } from '../features/match/components/MatchCameraScreen';
 import { AIBotProfile } from '../utils/aiBotService';
+import { NewsScreen } from '../screens/NewsScreen';
+import { LevelUpCelebration } from './LevelUpCelebration';
+import { selectUnreadCount, useNewsStore } from '../store/newsStore';
+import { colors, radius } from '../theme';
 
 export type MainTab = 'home' | 'explore' | 'workouts' | 'social' | 'profile';
 
-type SubTab = 'feed' | 'news';
 type DetailSubTab = 'workouts' | 'shop' | 'leaderboard' | 'how_to_play';
 type ExerciseCategory = 'all' | 'strength' | 'cardio' | 'flexibility';
 
@@ -44,7 +50,7 @@ interface HomeScreenProps {
   activeTab: MainTab;
   onTabChange: (tab: MainTab) => void;
   onOpenCamera: (exerciseId?: string, exerciseName?: string, isTutor?: boolean) => void;
-  onOpenMatchCamera: (opponent: string, mode: MatchMode, exerciseId?: string) => void;
+  onOpenMatchCamera: (opponent: string, mode: MatchMode, exerciseId?: string, simulated?: SimulatedOpponent) => void;
   onEnterQueue: (title?: string, message?: string, badge?: string, subInfo?: string, isFFA?: boolean) => void;
   onUpdateQueueStatus?: (title?: string, message?: string, badge?: string, subInfo?: string, countdown?: number, playerCount?: number) => void;
   onCancelQueue: () => void;
@@ -70,7 +76,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   onLogout,
 }) => {
   const [exercisesList, setExercisesList] = useState<ExerciseItem[]>(DEFAULT_EXERCISES);
-  const [activeSubTab, setActiveSubTab] = useState<SubTab>('feed');
+  const activeSubTab = useUserStore((state) => state.homeSubTab);
+  const setActiveSubTab = useUserStore((state) => state.setHomeSubTab);
   const [selectedCategory, setSelectedCategory] = useState<ExerciseCategory>('all');
   const [selectedExercise, setSelectedExercise] = useState<ExerciseItem | null>(null);
   const [detailSubTab, setDetailSubTab] = useState<DetailSubTab>('workouts');
@@ -81,6 +88,12 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const onlineCount = useMatchmakingStore((state) => state.total_online);
   const queueCounts = useMatchmakingStore((state) => state.exercise_counts);
   const setCounts = useMatchmakingStore((state) => state.setCounts);
+
+  const playerLevel = useGameStats().level.level;
+  const unreadNews = useNewsStore(selectUnreadCount);
+  const initNews = useNewsStore((state) => state.init);
+
+  useEffect(() => initNews(currentUser?.id ?? null), [currentUser?.id, initNews]);
 
   const selectedExerciseId = useUserStore((state) => state.selectedExerciseId);
   const setSelectedExerciseId = useUserStore((state) => state.setSelectedExerciseId);
@@ -172,8 +185,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   };
 
   const handleJoinQueue = (exercise: ExerciseItem, queue: 'faceoff' | 'quick_start' | 'ffa') => {
-    const isFFA = queue === 'ffa';
-
     const userId =
       currentUser?.user_metadata?.username ||
       currentUser?.email ||
@@ -181,52 +192,63 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       currentUser?.id ||
       `Player_${Math.floor(1000 + Math.random() * 9000)}`;
 
-    if (isFFA) {
-      onEnterQueue(
-        'BATTLE GROUND LOBBY',
-        'Gathering athletes (Max 10). Match starts when timer expires or lobby fills...',
-        'WAITING: 30s',
-        '👥 1 Athlete Joined',
-        true
-      );
-
-      const matchQueueId = `${exercise.id}_ffa`;
-      connectMatchSocket(userId, matchQueueId);
-
+    if (queue === 'faceoff') {
+      // Live video duel needs a real opponent, so it never falls back to a bot.
+      onEnterQueue('FINDING OPPONENT', 'Searching for a worthy rival in the queue...', undefined, undefined, false);
+      connectMatchSocket(userId, `${exercise.id}_faceoff`);
       const cleanup = addMatchMessageListener((msg) => {
-        if (msg.type === 'ffa_lobby_update') {
-          onUpdateQueueStatus?.(
-            'BATTLE GROUND LOBBY',
-            `Match starts in ${msg.countdown}s (or when 10 athletes join)...`,
-            `STARTING IN ${msg.countdown}s`,
-            `👥 ${msg.player_count} ${msg.player_count === 1 ? 'Athlete' : 'Athletes'} in Lobby (Max 10)`,
-            msg.countdown,
-            msg.player_count
-          );
-        } else if (msg.type === 'ffa_matched') {
-          onOpenMatchCamera('Battle Ground', 'ffa', exercise.id);
+        if (msg.type === 'matched') {
+          onOpenMatchCamera(msg.opponent, 'faceoff', exercise.id);
           cleanup();
         }
       });
+      return;
+    }
+
+    if (queue === 'ffa') {
+      onEnterQueue(
+        'BATTLE GROUND LOBBY',
+        'Gathering athletes (Max 10). Match starts when the timer ends or the lobby fills...',
+        'WAITING: 30s',
+        '1 Athlete Joined',
+        true
+      );
     } else {
       onEnterQueue(
         'FINDING OPPONENT',
-        'Searching for a worthy rival in the queue...',
-        undefined,
-        undefined,
+        'Matching you with an athlete at your level...',
+        'SEARCHING 0:00',
+        'Looking for athletes near your level',
         false
       );
-
-      const matchQueueId = `${exercise.id}_${queue}`;
-      connectMatchSocket(userId, matchQueueId);
-
-      const cleanup = addMatchMessageListener((msg) => {
-        if (msg.type === 'matched') {
-          onOpenMatchCamera(msg.opponent, queue === 'quick_start' ? 'quickjoin' : 'faceoff', exercise.id);
-          cleanup();
-        }
-      });
     }
+
+    searchQueueWithBotFallback({
+      userId,
+      exerciseId: exercise.id,
+      queue,
+      playerLevel,
+      onLobbyUpdate: (countdown, playerCount) =>
+        onUpdateQueueStatus?.(
+          'BATTLE GROUND LOBBY',
+          `Match starts in ${countdown}s (or when 10 athletes join)...`,
+          `STARTING IN ${countdown}s`,
+          `${playerCount} ${playerCount === 1 ? 'Athlete' : 'Athletes'} in Lobby (Max 10)`,
+          countdown,
+          playerCount
+        ),
+      onSearchTick: (elapsed) =>
+        onUpdateQueueStatus?.(undefined, undefined, `SEARCHING 0:${String(elapsed).padStart(2, '0')}`),
+      onResult: (outcome) => {
+        if (outcome.kind === 'simulated') {
+          onOpenMatchCamera(outcome.opponent.username, 'quickjoin', exercise.id, outcome.opponent);
+        } else if (outcome.kind === 'ffa') {
+          onOpenMatchCamera('Battle Ground', 'ffa', exercise.id);
+        } else {
+          onOpenMatchCamera(outcome.opponent, 'quickjoin', exercise.id);
+        }
+      },
+    });
   };
 
   const handleStartCustomMatch = (
@@ -333,7 +355,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     }
 
     if (activeSubTab === 'news') {
-      return renderUnderDevelopment('News & Updates Feed');
+      return <NewsScreen />;
     }
 
     return (
@@ -349,36 +371,49 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         onOpenAiDuel={handleOpenAiDuel}
       />
     );
-  }, [activeSubTab, activeTab, currentUser, detailSubTab, exercisesList, handleOpenAiDuel, onlineCount, onLogout, onOpenCamera, onTabChange, queueCounts, selectedCategory, selectedExercise, selectedModel]);
+  }, [activeSubTab, activeTab, currentUser, detailSubTab, exercisesList, handleOpenAiDuel, onlineCount, onLogout, onOpenCamera, onTabChange, playerLevel, queueCounts, selectedCategory, selectedExercise, selectedModel]);
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#0D111A" />
+      <StatusBar barStyle="light-content" backgroundColor={colors.bg} />
 
       {activeTab === 'home' && !selectedExercise && (
         <Header
-          username={currentUser?.user_metadata?.username || currentUser?.email || 'guest'}
           onlineCount={onlineCount}
           onProfilePress={() => onTabChange('profile')}
+          unreadNews={activeSubTab === 'news' ? 0 : unreadNews}
         />
       )}
 
       {activeTab === 'home' && !selectedExercise && (
         <View style={styles.subNavBar}>
-          <TouchableOpacity style={[styles.subNavTab, activeSubTab === 'feed' && styles.subNavTabActive]} activeOpacity={0.8} onPress={() => setActiveSubTab('feed')}>
-            <Text style={[styles.subNavTabText, activeSubTab === 'feed' && styles.subNavTabTextActive]}>FEED</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={[styles.subNavTab, activeSubTab === 'news' && styles.subNavTabActive]} activeOpacity={0.8} onPress={() => setActiveSubTab('news')}>
-            <View style={styles.newsTabRow}>
-              <Text style={[styles.subNavTabText, activeSubTab === 'news' && styles.subNavTabTextActive]}>NEWS</Text>
-              <View style={styles.redBadgeDot} />
-            </View>
-          </TouchableOpacity>
+          {(['feed', 'news'] as const).map((tab) => {
+            const active = activeSubTab === tab;
+            const showBadge = tab === 'news' && !active && unreadNews > 0;
+            return (
+              <TouchableOpacity
+                key={tab}
+                style={[styles.subNavTab, active && styles.subNavTabActive]}
+                activeOpacity={0.85}
+                onPress={() => setActiveSubTab(tab)}
+              >
+                <Text style={[styles.subNavTabText, active && styles.subNavTabTextActive]}>
+                  {tab === 'feed' ? 'FEED' : 'NEWS'}
+                </Text>
+                {showBadge && (
+                  <View style={styles.newsBadge}>
+                    <Text style={styles.newsBadgeText}>{unreadNews > 9 ? '9+' : unreadNews}</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            );
+          })}
         </View>
       )}
 
       <View style={styles.mainContent}>{mainContent}</View>
+
+      <LevelUpCelebration />
 
       <HumanVsAIModal
         visible={showAiModal}
@@ -441,14 +476,14 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#1A1C20' },
-  subNavBar: { flexDirection: 'row', height: 44, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)', backgroundColor: '#1A1C20' },
-  subNavTab: { flex: 1, alignItems: 'center', justifyContent: 'center', borderBottomWidth: 2, borderBottomColor: 'transparent' },
-  subNavTabActive: { borderBottomColor: '#E8D5C4' },
-  subNavTabText: { color: '#8E95A0', fontSize: 13, fontWeight: '700', letterSpacing: 0.8 },
-  subNavTabTextActive: { color: '#E8D5C4' },
-  newsTabRow: { flexDirection: 'row', alignItems: 'center' },
-  redBadgeDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#EF4444', marginLeft: 6 },
+  container: { flex: 1, backgroundColor: colors.bg },
+  subNavBar: { flexDirection: 'row', marginHorizontal: 16, marginBottom: 4, padding: 4, borderRadius: radius.pill, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
+  subNavTab: { flex: 1, height: 36, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderRadius: radius.pill, gap: 6 },
+  subNavTabActive: { backgroundColor: colors.accent },
+  subNavTabText: { color: colors.textMuted, fontSize: 12.5, fontWeight: '900', letterSpacing: 0.8 },
+  subNavTabTextActive: { color: colors.onAccent },
+  newsBadge: { minWidth: 18, height: 18, paddingHorizontal: 4, borderRadius: 9, backgroundColor: colors.danger, alignItems: 'center', justifyContent: 'center' },
+  newsBadgeText: { color: '#fff', fontSize: 9.5, fontWeight: '900' },
   mainContent: { flex: 1 },
   devContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 16 },
   devCard: { backgroundColor: '#161F30', borderRadius: 24, padding: 24, width: '100%', maxWidth: 360, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },

@@ -12,38 +12,46 @@ import {
   View,
 } from 'react-native';
 import {
+  Activity,
   ArrowLeft,
+  Award,
+  BookOpen,
   Bot,
+  CalendarDays,
   Camera,
   Check,
-  ChevronRight,
+  Cpu,
   Dumbbell,
+  Equal,
   Flame,
   Gamepad2,
   Info,
   Lock,
+  Medal,
+  Palette,
   Play,
-  Plus,
   RefreshCw,
   Search,
   Send,
-  Settings,
-  Shield,
+  ShoppingBag,
   Swords,
+  Target,
+  TrendingDown,
+  TrendingUp,
   Trophy,
-  UserCheck,
-  UserPlus,
   Users,
   Video,
-  Volume2,
   X,
   Zap,
 } from 'lucide-react-native';
 import { Avatar } from '../components/Avatar';
 import { ExerciseIcon } from '../components/ExerciseIcon';
 import { useUserStore } from '../store/userStore';
+import { TierIcon } from '../components/TierIcon';
+import { colors, radius } from '../theme';
 import {
   calculateLevel,
+  LEVEL_TIERS,
   fetchExerciseLeaderboard,
   fetchUserExerciseStats,
   ExerciseLeaderboardEntry,
@@ -69,6 +77,18 @@ export interface ExerciseItem {
   image_url?: string;
   type?: string;
   cure_to?: string[];
+}
+
+type IconType = React.ComponentType<{ size?: number; color?: string; style?: any; fill?: string }>;
+
+interface QueueMode {
+  id: string;
+  title: string;
+  description: string;
+  Icon: IconType;
+  tint: string;
+  badge: string;
+  kind: 'tutor' | 'solo' | 'ai_duel' | 'queue' | 'friend';
 }
 
 interface ExerciseDetailScreenProps {
@@ -304,171 +324,239 @@ export const ExerciseDetailScreen: React.FC<ExerciseDetailScreenProps> = ({
 
   const [showRulesInfoModal, setShowRulesInfoModal] = useState<boolean>(false);
 
+  const isSquat = exercise.id === '1' || exercise.name.toLowerCase().includes('squat');
+
+  const DETAIL_TABS: {
+    key: ExerciseDetailScreenProps['detailTab'];
+    label: string;
+    Icon: IconType;
+    requiresAuth: boolean;
+  }[] = [
+    { key: 'workouts', label: 'Play', Icon: Gamepad2, requiresAuth: false },
+    { key: 'leaderboard', label: 'Ranks', Icon: Trophy, requiresAuth: true },
+    { key: 'how_to_play', label: 'Rules', Icon: BookOpen, requiresAuth: false },
+    { key: 'shop', label: 'Shop', Icon: ShoppingBag, requiresAuth: true },
+  ];
+
+  const TRAIN_MODES: QueueMode[] = [
+    { id: 'ai_tutor', title: 'AI Tutor', description: 'Real-time pose guidance & correction', Icon: Bot, tint: colors.lavender, badge: 'COACH', kind: 'tutor' },
+    { id: 'solo_practice', title: 'Solo Practice', description: 'AI form tracking & rep counting', Icon: Camera, tint: colors.sky, badge: 'SOLO', kind: 'solo' },
+  ];
+
+  const COMPETE_MODES: QueueMode[] = [
+    { id: 'ai_duel', title: 'AI Duel', description: '1v1 match against an AI pacer', Icon: Cpu, tint: colors.accent, badge: 'VS AI', kind: 'ai_duel' },
+    { id: 'ffa', title: 'Battle Ground', description: '10-player live leaderboard match', Icon: Trophy, tint: colors.gold, badge: '10 PLAYERS', kind: 'queue' },
+    { id: 'faceoff', title: 'Faceoff', description: '1v1 split-screen video duel', Icon: Video, tint: colors.pink, badge: '1V1 VIDEO', kind: 'queue' },
+    { id: 'quick_start', title: 'Quick Duel', description: '1v1 fast score battle', Icon: Zap, tint: colors.success, badge: '1V1 SCORE', kind: 'queue' },
+    { id: 'custom_friend', title: 'Friend Battle', description: 'Challenge a friend directly', Icon: Users, tint: colors.lavender, badge: 'INVITE', kind: 'friend' },
+  ];
+
+  const handleModePress = (mode: QueueMode, locked: boolean, aiLocked: boolean) => {
+    if (aiLocked) {
+      Alert.alert('Squats Only', 'AI Duel is currently supported only for Squats. Other exercises will be unlocked soon!', [{ text: 'OK' }]);
+      return;
+    }
+    if (locked) {
+      Alert.alert('Account Required', 'Sign in or create an athlete account to battle live players in online duels.', [{ text: 'OK' }]);
+      return;
+    }
+    switch (mode.kind) {
+      case 'ai_duel':
+        onOpenAiDuel?.('1');
+        break;
+      case 'tutor':
+        onOpenCamera?.(exercise.id, exercise.name, true);
+        break;
+      case 'solo':
+        onOpenCamera?.(exercise.id, exercise.name, false);
+        break;
+      case 'friend':
+        setShowFriendChallengeModal(true);
+        loadFriendsList();
+        break;
+      default:
+        onJoinQueue(exercise, mode.id as 'faceoff' | 'quick_start' | 'ffa');
+    }
+  };
+
+  const renderModeRow = (mode: QueueMode) => {
+    const aiLocked = mode.kind === 'ai_duel' && !isSquat;
+    const isOnline = mode.kind === 'queue' || mode.kind === 'friend';
+    const locked = (isGuest && isOnline) || aiLocked;
+    const { Icon } = mode;
+
+    return (
+      <TouchableOpacity
+        key={mode.id}
+        style={[styles.modeRow, locked && { opacity: 0.55 }]}
+        activeOpacity={0.85}
+        onPress={() => handleModePress(mode, locked, aiLocked)}
+      >
+        <View style={[styles.modeIconTile, { backgroundColor: `${mode.tint}22` }]}>
+          <Icon size={20} color={locked ? colors.textDim : mode.tint} />
+        </View>
+
+        <View style={styles.modeInfo}>
+          <View style={styles.modeTitleRow}>
+            <Text style={styles.modeTitle} numberOfLines={1}>{mode.title}</Text>
+            <View style={styles.modeBadge}>
+              {locked && <Lock size={9} color={colors.textMuted} />}
+              <Text style={styles.modeBadgeText}>{aiLocked ? 'SQUATS ONLY' : locked ? 'LOCKED' : mode.badge}</Text>
+            </View>
+          </View>
+          <Text style={styles.modeDesc} numberOfLines={1}>{mode.description}</Text>
+        </View>
+
+        <View style={[styles.modeAction, locked && styles.modeActionLocked]}>
+          {locked ? (
+            <Lock size={14} color={colors.textMuted} />
+          ) : (
+            <Play size={14} color={colors.onAccent} fill={colors.onAccent} />
+          )}
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
+  const SectionLabel = ({ Icon, title }: { Icon: IconType; title: string }) => (
+    <View style={styles.sectionLabelRow}>
+      <Icon size={14} color={colors.accent} />
+      <Text style={styles.sectionLabel}>{title}</Text>
+    </View>
+  );
+
+  const PODIUM_COLORS = ['#F59E0B', '#C0C0C0', '#CD7F32'];
+
+  const RuleRow = ({ Icon, tint, points, text }: { Icon: IconType; tint: string; points: string; text: string }) => (
+    <View style={styles.ruleRow}>
+      <View style={[styles.ruleIcon, { backgroundColor: `${tint}22` }]}>
+        <Icon size={15} color={tint} />
+      </View>
+      <Text style={styles.ruleText}>{text}</Text>
+      <Text style={[styles.rulePoints, { color: tint }]}>{points}</Text>
+    </View>
+  );
+
+  const scoringRules = (
+    <>
+      <RuleRow Icon={TrendingUp} tint={colors.success} points="+10" text={`Win a ${exercise.name} duel`} />
+      <RuleRow Icon={Equal} tint={colors.gold} points="+5" text="Draw: both players earn points" />
+      <RuleRow Icon={TrendingDown} tint={colors.danger} points="-10" text="Defeat (never drops below 0)" />
+    </>
+  );
+
+  const calorieInfo = (() => {
+    switch (exercise.id) {
+      case '7':
+        return { perRep: '0.45', met: '8.0', formula: 'High upper-body & core compound effort burns ~0.45 kcal per rep.', technique: 'Elbows bend to <= 105° in straight plank and push to full lockout.' };
+      case '4':
+        return { perRep: '0.38', met: '6.0', formula: 'Unilateral leg & core engagement burns ~0.38 kcal per step/rep.', technique: 'Front knee drops to 90° and back knee nears the ground.' };
+      case '2':
+      case '5':
+        return { perRep: '0.30', met: '4.5', formula: 'Continuous abdominal contractions burn ~0.30 kcal per rep.', technique: 'Shoulder blades lift fully off the floor into crunch lockout.' };
+      case '3':
+      case '6':
+      case '8':
+        return { perRep: '0.35', met: '4.0', formula: 'Restorative spine decompression & deep hip holds burn ~0.35 kcal per hold milestone.', technique: 'Knees folded on mat with torso folded forward and arms reaching straight.' };
+      case '1':
+      default:
+        return { perRep: '0.35', met: '5.5', formula: 'Large quadriceps & glute muscle engagement burns ~0.35 kcal per rep.', technique: 'Hip crease drops below knee level (< 90° angle) and returns upright.' };
+    }
+  })();
+
   return (
     <View style={styles.detailScreenContainer}>
-      {/* Top Navigation Bar with Back & Notification badge */}
+      {/* TOP BAR */}
       <View style={styles.topNavBar}>
         <TouchableOpacity style={styles.navButtonCircle} activeOpacity={0.8} onPress={onBack}>
-          <ArrowLeft size={18} color="#FFFFFF" />
+          <ArrowLeft size={18} color={colors.text} />
         </TouchableOpacity>
-
+        <Text style={styles.topNavTitle} numberOfLines={1}>{exercise.name}</Text>
+        <TouchableOpacity style={styles.navButtonCircle} activeOpacity={0.8} onPress={() => setShowRulesInfoModal(true)}>
+          <Info size={18} color={colors.text} />
+        </TouchableOpacity>
       </View>
 
-      {/* HERO BANNER CARD (Vibrant Purple Background #3B4CCA / #3949AB) */}
-      <View style={styles.detailBannerCard}>
-        <View style={styles.bannerTopRow}>
-          <View style={styles.ratingBadge}>
-            <ExerciseIcon
-              imageUrl={exercise.image_url}
-              icon={exercise.icon}
-              size={18}
-              fontSize={13}
-              containerStyle={{ marginRight: 6 }}
-            />
-            <Text style={styles.ratingLabel}>{exercise.name} Score</Text>
-            <View style={styles.ratingNumBox}>
-              <Text style={styles.ratingNumText}>{exercisePoints} PTS</Text>
-            </View>
+      {/* HERO */}
+      <View style={styles.heroCard}>
+        <View style={styles.heroTopRow}>
+          <View style={styles.heroIconTile}>
+            <ExerciseIcon imageUrl={exercise.image_url} icon={exercise.icon} size={52} fontSize={30} />
           </View>
-
-          <View style={styles.scoreRulesPill}>
-            <Text style={styles.scoreRulesText}>+10 Win • +5 Draw • -10 Loss</Text>
-          </View>
-        </View>
-
-        {/* Dynamic Game Level Status & Badges */}
-        <View style={styles.bannerStatsRow}>
-          <View style={styles.starLevelBadge}>
-            <Text style={styles.levelBadgeEmoji}>{levelInfo.badge}</Text>
-            <Text style={styles.levelBadgeNumber}>LVL {levelInfo.level}</Text>
-          </View>
-
-          <View style={styles.userRankInfo}>
-            <View style={styles.rankTitleRow}>
-              <Text style={styles.rankTitle}>{levelInfo.title}</Text>
-              <View style={styles.tierTag}>
-                <Text style={styles.tierTagText}>
-                  {exercise.name} {levelInfo.tier}
-                </Text>
+          <View style={{ flex: 1, marginLeft: 14 }}>
+            <View style={styles.tierRow}>
+              <View style={[styles.tierChip, { backgroundColor: `${levelInfo.color}22`, borderColor: `${levelInfo.color}66` }]}>
+                <TierIcon level={levelInfo.level} size={12} color={levelInfo.color} />
+                <Text style={[styles.tierChipText, { color: levelInfo.color }]}>{levelInfo.tier.toUpperCase()}</Text>
               </View>
+              <Text style={styles.heroLevelText}>LVL {levelInfo.level}</Text>
             </View>
-            <Text style={styles.playedWonStats}>
-              {exerciseMatchesPlayed} Matches • {exerciseMatchesWon} Wins ({winRate}% WR) • {exerciseReps} Reps
+            <Text style={styles.heroTitle}>{levelInfo.title}</Text>
+            <Text style={styles.heroPoints}>
+              <Text style={styles.heroPointsNum}>{exercisePoints}</Text> points
             </Text>
           </View>
         </View>
 
-        {/* Level XP Progress Track */}
-        <View style={styles.progressContainer}>
-          <View style={styles.progressLabelRow}>
-            <Text style={styles.progressLabel}>
-              {exercise.name} Mastery ({levelInfo.progressPercent}%)
-            </Text>
-            <Text style={styles.progressSubLabel}>
-              {levelInfo.level < 6
-                ? `${levelInfo.pointsToNext || 90} pts to Level ${levelInfo.level + 1}`
-                : 'MAX LEVEL ⚡'}
-            </Text>
-          </View>
+        <View style={styles.progressLabelRow}>
+          <Text style={styles.progressLabel}>Mastery {levelInfo.progressPercent}%</Text>
+          <Text style={styles.progressSubLabel}>
+            {levelInfo.level < 6 ? `${levelInfo.pointsToNext || 90} pts to LVL ${levelInfo.level + 1}` : 'Max level reached'}
+          </Text>
+        </View>
+        <View style={styles.rankProgressTrack}>
+          <View style={[styles.rankProgressFill, { width: `${Math.min(100, Math.max(2, levelInfo.progressPercent))}%` }]} />
+        </View>
 
-          <View style={styles.rankProgressTrack}>
-            <View
-              style={[
-                styles.rankProgressFill,
-                { width: `${Math.min(100, Math.max(0, levelInfo.progressPercent))}%` },
-              ]}
-            />
-          </View>
+        <View style={styles.statGrid}>
+          {[
+            { label: 'MATCHES', value: exerciseMatchesPlayed, Icon: Swords },
+            { label: 'WINS', value: exerciseMatchesWon, Icon: Trophy },
+            { label: 'WIN RATE', value: `${winRate}%`, Icon: Target },
+            { label: 'REPS', value: exerciseReps, Icon: Activity },
+          ].map(({ label, value, Icon }) => (
+            <View key={label} style={styles.statTile}>
+              <Icon size={13} color={colors.accent} />
+              <Text style={styles.statValue}>{value}</Text>
+              <Text style={styles.statLabel}>{label}</Text>
+            </View>
+          ))}
         </View>
       </View>
 
-      {/* Sub Navigation Bar (Dark rounded pills) */}
-      <View style={styles.detailSubNavTabBar}>
-        <TouchableOpacity
-          style={[styles.detailSubTabItem, detailTab === 'workouts' && styles.detailSubTabItemActive]}
-          activeOpacity={0.8}
-          onPress={() => onDetailTabChange('workouts')}
-        >
-          <Text
-            style={[
-              styles.detailSubTabText,
-              detailTab === 'workouts' && styles.detailSubTabTextActive,
-            ]}
-          >
-            PLAY
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.detailSubTabItem, detailTab === 'leaderboard' && styles.detailSubTabItemActive, isGuest && { opacity: 0.7 }]}
-          activeOpacity={0.8}
-          onPress={() => {
-            if (isGuest) {
-              Alert.alert(
-                '🔒 Leaderboard Locked',
-                'Sign in or create an account to view global rankings and record your scores.',
-                [{ text: 'OK' }]
-              );
-              return;
-            }
-            onDetailTabChange('leaderboard');
-          }}
-        >
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-            <Text
-              style={[
-                styles.detailSubTabText,
-                detailTab === 'leaderboard' && styles.detailSubTabTextActive,
-              ]}
+      {/* TABS */}
+      <View style={styles.tabBar}>
+        {DETAIL_TABS.map(({ key, label, Icon, requiresAuth }) => {
+          const active = detailTab === key;
+          const locked = isGuest && requiresAuth;
+          return (
+            <TouchableOpacity
+              key={key}
+              style={[styles.tabItem, active && styles.tabItemActive]}
+              activeOpacity={0.85}
+              onPress={() => {
+                if (locked) {
+                  Alert.alert(
+                    `${label} Locked`,
+                    key === 'leaderboard'
+                      ? 'Sign in or create an account to view global rankings and record your scores.'
+                      : 'Sign in to customize athlete gear and items.',
+                    [{ text: 'OK' }]
+                  );
+                  return;
+                }
+                onDetailTabChange(key);
+              }}
             >
-              LEADERBOARD
-            </Text>
-            {isGuest && <Lock size={10} color="#94A3B8" />}
-          </View>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.detailSubTabItem, detailTab === 'how_to_play' && styles.detailSubTabItemActive]}
-          activeOpacity={0.8}
-          onPress={() => onDetailTabChange('how_to_play')}
-        >
-          <Text
-            style={[
-              styles.detailSubTabText,
-              detailTab === 'how_to_play' && styles.detailSubTabTextActive,
-            ]}
-          >
-            RULES
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.detailSubTabItem, detailTab === 'shop' && styles.detailSubTabItemActive, isGuest && { opacity: 0.7 }]}
-          activeOpacity={0.8}
-          onPress={() => {
-            if (isGuest) {
-              Alert.alert(
-                '🔒 Shop Locked',
-                'Sign in to customize athlete gear and items.',
-                [{ text: 'OK' }]
-              );
-              return;
-            }
-            onDetailTabChange('shop');
-          }}
-        >
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-            <Text
-              style={[
-                styles.detailSubTabText,
-                detailTab === 'shop' && styles.detailSubTabTextActive,
-              ]}
-            >
-              SHOP
-            </Text>
-            {isGuest && <Lock size={10} color="#94A3B8" />}
-          </View>
-        </TouchableOpacity>
+              {locked ? (
+                <Lock size={13} color={colors.textDim} />
+              ) : (
+                <Icon size={14} color={active ? colors.onAccent : colors.textMuted} />
+              )}
+              <Text style={[styles.tabText, active && styles.tabTextActive, locked && { color: colors.textDim }]}>{label}</Text>
+            </TouchableOpacity>
+          );
+        })}
       </View>
 
       <ScrollView
@@ -476,521 +564,227 @@ export const ExerciseDetailScreen: React.FC<ExerciseDetailScreenProps> = ({
         contentContainerStyle={styles.detailScrollContent}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
-            tintColor="#E25822"
-            colors={['#E25822', '#3B4CCA']}
-          />
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.accent} colors={[colors.accent]} />
         }
       >
         {detailTab === 'workouts' ? (
           <>
-            {/* QUEUE CARDS MATCHING SCREENSHOT */}
-            {[
-              {
-                id: 'ai_tutor',
-                title: 'AI Tutor',
-                description: 'Real-time pose guidance & correction',
-                iconComponent: <Bot size={20} color="#FFFFFF" />,
-                actionText: 'START',
-                isFriendQueue: false,
-                isSoloMode: false,
-                isAiTutor: true,
-                badge: 'AI TUTOR',
-              },
-              {
-                id: 'solo_practice',
-                title: 'Solo Practice',
-                description: 'AI form tracking & feedback',
-                iconComponent: <Camera size={20} color="#FFFFFF" />,
-                actionText: 'START',
-                isFriendQueue: false,
-                isSoloMode: true,
-                badge: 'SOLO',
-              },
-              {
-                id: 'ai_duel',
-                title: 'AI Duel',
-                description: '1v1 match vs AI bot pacing',
-                iconComponent: <Flame size={20} color="#FFFFFF" />,
-                actionText: 'PLAY',
-                isFriendQueue: false,
-                isSoloMode: false,
-                isAiDuel: true,
-                badge: 'VS AI',
-              },
-              {
-                id: 'ffa',
-                title: 'Battle Ground',
-                description: '10-player live leaderboard match',
-                iconComponent: <Trophy size={20} color="#FFFFFF" />,
-                actionText: 'PLAY',
-                isFriendQueue: false,
-                isSoloMode: false,
-                isFFA: true,
-                badge: '10 PLAYERS',
-              },
-              {
-                id: 'faceoff',
-                title: 'Faceoff',
-                description: '1v1 split-screen video duel',
-                iconComponent: <Video size={20} color="#FFFFFF" />,
-                actionText: 'PLAY',
-                isFriendQueue: false,
-                isSoloMode: false,
-                badge: '1V1 VIDEO',
-              },
-              {
-                id: 'quick_start',
-                title: 'Quick Duel',
-                description: '1v1 fast score battle',
-                iconComponent: <Zap size={20} color="#FFFFFF" />,
-                actionText: 'PLAY',
-                isFriendQueue: false,
-                isSoloMode: false,
-                badge: '1V1 SCORE',
-              },
-              {
-                id: 'custom_friend',
-                title: 'Friend Battle',
-                description: 'Direct challenge with online friends',
-                iconComponent: <Users size={20} color="#FFFFFF" />,
-                actionText: 'PLAY',
-                isFriendQueue: true,
-                isSoloMode: false,
-                badge: 'INVITE',
-              },
-            ].map((queue) => {
-              const isAiDuel = (queue as any).isAiDuel;
-              const isSquat = exercise.id === '1' || exercise.name.toLowerCase().includes('squat');
-              const isAiLocked = isAiDuel && !isSquat;
-              const isOnlineQueue = !queue.isAiTutor && !queue.isSoloMode && !isAiDuel;
-              const isLocked = (isGuest && isOnlineQueue) || isAiLocked;
-
-              return (
-                <View key={queue.id} style={[styles.queueItemCard, isLocked && { opacity: 0.65 }]}>
-                  <View style={[styles.queueIconBox, isLocked && { backgroundColor: '#1E293B' }, isAiDuel && !isAiLocked && { backgroundColor: '#E25822' }]}>
-                    {queue.iconComponent}
-                  </View>
-
-                  <View style={styles.queueInfoBox}>
-                    <View style={styles.queueTitleRow}>
-                      <Text style={styles.queueTitleText} numberOfLines={1}>
-                        {queue.title}
-                      </Text>
-                      {isLocked ? (
-                        <View style={[styles.queueBadgePill, { backgroundColor: 'rgba(100, 116, 139, 0.25)', borderColor: 'rgba(148, 163, 184, 0.3)' }]}>
-                          <Lock size={9} color="#94A3B8" style={{ marginRight: 3 }} />
-                          <Text style={[styles.queueBadgePillText, { color: '#94A3B8' }]}>
-                            {isAiLocked ? 'SQUATS ONLY' : 'LOCKED'}
-                          </Text>
-                        </View>
-                      ) : queue.badge ? (
-                        <View style={[styles.queueBadgePill, isAiDuel && { backgroundColor: 'rgba(226, 88, 34, 0.2)', borderColor: 'rgba(226, 88, 34, 0.4)' }]}>
-                          <Text style={[styles.queueBadgePillText, isAiDuel && { color: '#E25822' }]}>
-                            {queue.badge}
-                          </Text>
-                        </View>
-                      ) : null}
-                    </View>
-                    <Text style={styles.queueDescText} numberOfLines={1}>
-                      {queue.description}
-                    </Text>
-                  </View>
-
-                  <TouchableOpacity
-                    style={[
-                      styles.joinButton,
-                      isLocked && { backgroundColor: 'rgba(255, 255, 255, 0.08)', borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.15)' },
-                      isAiDuel && !isAiLocked && { backgroundColor: '#E25822' },
-                    ]}
-                    activeOpacity={0.85}
-                    onPress={() => {
-                      if (isAiLocked) {
-                        Alert.alert(
-                          'Squats Only',
-                          'AI Duel is currently supported only for Squats. Other exercises will be unlocked soon!',
-                          [{ text: 'OK' }]
-                        );
-                        return;
-                      }
-
-                      if (isLocked) {
-                        Alert.alert(
-                          'Account Required',
-                          'Sign in or create an athlete account to battle live players in online duels.',
-                          [{ text: 'OK' }]
-                        );
-                        return;
-                      }
-
-                      if (isAiDuel) {
-                        onOpenAiDuel?.('1');
-                      } else if (queue.isAiTutor) {
-                        if (onOpenCamera) {
-                          onOpenCamera(exercise.id, exercise.name, true);
-                        }
-                      } else if (queue.isSoloMode) {
-                        if (onOpenCamera) {
-                          onOpenCamera(exercise.id, exercise.name, false);
-                        }
-                      } else if (queue.isFriendQueue) {
-                        setShowFriendChallengeModal(true);
-                        loadFriendsList();
-                      } else {
-                        onJoinQueue(exercise, queue.id as 'faceoff' | 'quick_start' | 'ffa');
-                      }
-                    }}
-                  >
-                    {isLocked ? (
-                      <Lock size={14} color="#94A3B8" />
-                    ) : (
-                      <Text style={[styles.joinButtonText, (queue as any).isAiDuel && { color: '#0F172A', fontWeight: '900' }]}>
-                        {queue.actionText}
-                      </Text>
-                    )}
-                  </TouchableOpacity>
-                </View>
-              );
-            })}
+            <SectionLabel Icon={Dumbbell} title="TRAIN" />
+            {TRAIN_MODES.map(renderModeRow)}
+            <SectionLabel Icon={Swords} title="COMPETE" />
+            {COMPETE_MODES.map(renderModeRow)}
           </>
         ) : detailTab === 'leaderboard' ? (
-          <View style={styles.leaderboardContainer}>
-            {/* My Rank Summary */}
+          <View>
             <View style={styles.myRankCard}>
-              <View style={styles.myRankLeft}>
-                <Avatar
-                  username={profile?.username || user?.email || 'user'}
-                  size={46}
-                  config={profile?.avatar_config}
-                  avatarUrl={profile?.avatar_url}
-                />
-                <View style={styles.myRankInfo}>
-                  <Text style={styles.myRankName}>
-                    {profile?.full_name || profile?.username || 'You'} (You)
-                  </Text>
-                  <Text style={styles.myRankTier}>
-                    {levelInfo.badge} {exercise.name} LVL {levelInfo.level} • {levelInfo.title}
-                  </Text>
+              <Avatar
+                username={profile?.username || user?.email || 'user'}
+                size={46}
+                config={profile?.avatar_config}
+                avatarUrl={profile?.avatar_url}
+              />
+              <View style={styles.myRankInfo}>
+                <Text style={styles.myRankName} numberOfLines={1}>
+                  {profile?.full_name || profile?.username || 'You'}
+                </Text>
+                <View style={styles.inlineRow}>
+                  <TierIcon level={levelInfo.level} size={12} color={levelInfo.color} />
+                  <Text style={styles.myRankTier}>LVL {levelInfo.level} · {levelInfo.title}</Text>
                 </View>
               </View>
-
               <View style={styles.myRankRight}>
-                <Text style={styles.myRankPoints}>{exercisePoints} PTS</Text>
-                <Text style={styles.myRankSub}>
-                  {exerciseMatchesWon}W / {exerciseMatchesPlayed}P
-                </Text>
+                <Text style={styles.myRankPoints}>{exercisePoints}</Text>
+                <Text style={styles.myRankSub}>{exerciseMatchesWon}W / {exerciseMatchesPlayed}P</Text>
               </View>
             </View>
 
-            {/* Standings List */}
             <View style={styles.standingsHeaderRow}>
-              <Text style={styles.standingsHeaderTitle}>
-                🏆 {exercise.name.toUpperCase()} LEADERBOARD
-              </Text>
-              <TouchableOpacity activeOpacity={0.7} onPress={loadLeaderboardData}>
-                <Text style={styles.standingsRefreshText}>Refresh 🔄</Text>
+              <View style={styles.sectionLabelRow}>
+                <Trophy size={14} color={colors.accent} />
+                <Text style={styles.sectionLabel}>{exercise.name.toUpperCase()} STANDINGS</Text>
+              </View>
+              <TouchableOpacity style={styles.refreshBtn} activeOpacity={0.7} onPress={loadLeaderboardData}>
+                <RefreshCw size={13} color={colors.textMuted} />
               </TouchableOpacity>
             </View>
 
             {loadingLeaderboard ? (
-              <View style={styles.centerLoadingBox}>
-                <ActivityIndicator size="small" color="#E8D5C4" />
-                <Text style={styles.loadingLeaderboardText}>
-                  Loading {exercise.name} rankings...
-                </Text>
+              <View style={styles.centerBox}>
+                <ActivityIndicator size="small" color={colors.accent} />
+                <Text style={styles.centerBoxText}>Loading {exercise.name} rankings...</Text>
               </View>
             ) : leaderboard.length === 0 ? (
-              <View style={styles.emptyLeaderboardBox}>
-                <ExerciseIcon
-                  imageUrl={exercise.image_url}
-                  icon={exercise.icon}
-                  size={54}
-                  fontSize={32}
-                  containerStyle={{ marginBottom: 10 }}
-                />
-                <Text style={styles.emptyLeaderboardTitle}>
-                  No {exercise.name} Rankings Yet
-                </Text>
-                <Text style={styles.emptyLeaderboardDesc}>
-                  Be the first athlete to duel in {exercise.name} and claim Rank #1!
-                </Text>
+              <View style={styles.centerBox}>
+                <View style={styles.emptyIconCircle}>
+                  <Trophy size={26} color={colors.accent} />
+                </View>
+                <Text style={styles.emptyTitle}>No {exercise.name} rankings yet</Text>
+                <Text style={styles.centerBoxText}>Be the first athlete to duel and claim rank #1.</Text>
               </View>
             ) : (
-              <View style={styles.leaderboardListBox}>
-                {leaderboard.map((entry, index) => {
-                  const isTop1 = index === 0;
-                  const isTop2 = index === 1;
-                  const isTop3 = index === 2;
-                  const entryLevel = calculateLevel(entry.points, exercise.name);
-                  const isMe = user?.id && entry.user_id === user.id;
+              leaderboard.map((entry, index) => {
+                const entryLevel = calculateLevel(entry.points, exercise.name);
+                const isMe = !!user?.id && entry.user_id === user.id;
+                const podiumColor = PODIUM_COLORS[index];
 
+                return (
+                  <View
+                    key={entry.user_id}
+                    style={[
+                      styles.leaderRow,
+                      podiumColor && { borderColor: `${podiumColor}55` },
+                      isMe && styles.leaderRowMe,
+                    ]}
+                  >
+                    <View style={styles.rankBox}>
+                      {podiumColor ? (
+                        <View style={[styles.podiumCircle, { backgroundColor: `${podiumColor}22` }]}>
+                          <Medal size={16} color={podiumColor} />
+                        </View>
+                      ) : (
+                        <Text style={styles.rankNumberText}>#{index + 1}</Text>
+                      )}
+                    </View>
+                    <Avatar username={entry.username} size={38} config={entry.avatar_config} avatarUrl={entry.avatar_url} />
+                    <View style={styles.leaderNameBox}>
+                      <Text style={[styles.leaderName, isMe && { color: colors.accent }]} numberOfLines={1}>
+                        {entry.full_name || entry.username}{isMe ? ' (You)' : ''}
+                      </Text>
+                      <View style={styles.inlineRow}>
+                        <TierIcon level={entryLevel.level} size={11} color={entryLevel.color} />
+                        <Text style={styles.leaderSub}>
+                          LVL {entryLevel.level} · {entry.matches_won}W · {entry.reps_completed} reps
+                        </Text>
+                      </View>
+                    </View>
+                    <View style={styles.leaderScoreBox}>
+                      <Text style={styles.leaderScore}>{entry.points}</Text>
+                      <Text style={styles.leaderScoreUnit}>PTS</Text>
+                    </View>
+                  </View>
+                );
+              })
+            )}
+          </View>
+        ) : detailTab === 'how_to_play' ? (
+          <View>
+            <View style={styles.infoCard}>
+              <View style={styles.sectionLabelRow}>
+                <Flame size={14} color={colors.accent} />
+                <Text style={styles.sectionLabel}>CALORIE COUNTING</Text>
+              </View>
+              <View style={styles.calPillRow}>
+                <View style={styles.calPill}>
+                  <Text style={styles.calPillVal}>{calorieInfo.perRep}</Text>
+                  <Text style={styles.calPillSub}>kcal per rep</Text>
+                </View>
+                <View style={styles.calPill}>
+                  <Text style={styles.calPillVal}>{calorieInfo.met}</Text>
+                  <Text style={styles.calPillSub}>MET intensity</Text>
+                </View>
+              </View>
+              {[
+                { Icon: Flame, title: 'Calculation', text: calorieInfo.formula },
+                { Icon: Check, title: 'Valid movement', text: calorieInfo.technique },
+                { Icon: CalendarDays, title: 'Daily log', text: 'Saved automatically to your profile and home calendar.' },
+              ].map(({ Icon, title, text }) => (
+                <View key={title} style={styles.bulletRow}>
+                  <Icon size={14} color={colors.textMuted} style={{ marginTop: 2 }} />
+                  <Text style={styles.bulletText}>
+                    <Text style={styles.bulletBold}>{title}: </Text>
+                    {text}
+                  </Text>
+                </View>
+              ))}
+            </View>
+
+            <View style={styles.infoCard}>
+              <View style={styles.sectionLabelRow}>
+                <Zap size={14} color={colors.accent} />
+                <Text style={styles.sectionLabel}>MATCH SCORING</Text>
+              </View>
+              {scoringRules}
+            </View>
+
+            <View style={styles.infoCard}>
+              <View style={styles.sectionLabelRow}>
+                <Award size={14} color={colors.accent} />
+                <Text style={styles.sectionLabel}>LEVEL TIERS</Text>
+              </View>
+              <View style={styles.tierGrid}>
+                {LEVEL_TIERS.map((tier) => {
+                  const isCurrent = tier.level === levelInfo.level;
                   return (
                     <View
-                      key={entry.user_id}
-                      style={[
-                        styles.leaderboardRowItem,
-                        isTop1 && styles.top1Row,
-                        isMe && styles.myHighlightRow,
-                      ]}
+                      key={tier.level}
+                      style={[styles.tierCard, isCurrent && { borderColor: tier.color, backgroundColor: `${tier.color}14` }]}
                     >
-                      <View style={styles.rankBadgeBox}>
-                        {isTop1 ? (
-                          <Text style={styles.podiumEmoji}>🥇</Text>
-                        ) : isTop2 ? (
-                          <Text style={styles.podiumEmoji}>🥈</Text>
-                        ) : isTop3 ? (
-                          <Text style={styles.podiumEmoji}>🥉</Text>
-                        ) : (
-                          <Text style={styles.rankNumberText}>#{index + 1}</Text>
-                        )}
+                      <View style={[styles.tierIconCircle, { backgroundColor: `${tier.color}22` }]}>
+                        <TierIcon level={tier.level} size={16} color={tier.color} />
                       </View>
-
-                      <View style={styles.leaderboardAvatarWrapper}>
-                        <Avatar
-                          username={entry.username}
-                          size={38}
-                          config={entry.avatar_config}
-                          avatarUrl={entry.avatar_url}
-                        />
-                      </View>
-
-                      <View style={styles.leaderboardNameBox}>
-                        <Text
-                          style={[styles.leaderboardUsername, isMe && styles.myUsernameText]}
-                          numberOfLines={1}
-                        >
-                          {entry.full_name || entry.username} {isMe ? '(You)' : ''}
-                        </Text>
-                        <Text style={styles.leaderboardSubText}>
-                          {entryLevel.badge} LVL {entryLevel.level} • {entry.matches_won}W •{' '}
-                          {entry.reps_completed} Reps
-                        </Text>
-                      </View>
-
-                      <View style={styles.leaderboardScoreBox}>
-                        <Text style={styles.leaderboardScoreNum}>{entry.points}</Text>
-                        <Text style={styles.leaderboardScoreUnit}>PTS</Text>
-                      </View>
+                      <Text style={styles.tierCardName}>{tier.title}</Text>
+                      <Text style={styles.tierCardRange}>
+                        {tier.level === 6 ? `${tier.minPoints.toLocaleString()}+ pts` : `${tier.minPoints}-${tier.maxPoints} pts`}
+                      </Text>
+                      {isCurrent && <Text style={[styles.tierCurrent, { color: tier.color }]}>YOU</Text>}
                     </View>
                   );
                 })}
               </View>
-            )}
-          </View>
-        ) : detailTab === 'how_to_play' ? (
-          <View style={styles.rulesContainer}>
-            {/* Calorie Counting & METs Formula for this specific exercise */}
-            <View style={styles.tabInfoCard}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
-                <Text style={styles.tabInfoTitle}>{exercise.name} Calorie Counting</Text>
-              </View>
-
-              {(() => {
-                const exId = exercise.id;
-                let calPerRep = '0.35';
-                let metValue = '5.5 METs';
-                let repFormula = 'Every completed rep burned ~0.35 kcal (70kg bodyweight standard)';
-                let technique = 'Full hip lockout to parallel knee depth counts 1 valid rep.';
-
-                switch (exId) {
-                  case '7':
-                    calPerRep = '0.45';
-                    metValue = '8.0 METs';
-                    repFormula = 'High upper-body & core compound effort burns ~0.45 kcal per rep.';
-                    technique = 'Elbows bend to <= 105° in straight plank and push to full lockout.';
-                    break;
-                  case '4':
-                    calPerRep = '0.38';
-                    metValue = '6.0 METs';
-                    repFormula = 'Unilateral leg & core engagement burns ~0.38 kcal per step/rep.';
-                    technique = 'Front knee drops to 90° and back knee nears the ground.';
-                    break;
-                  case '2':
-                  case '5':
-                    calPerRep = '0.30';
-                    metValue = '4.5 METs';
-                    repFormula = 'Continuous abdominal contractions burn ~0.30 kcal per rep.';
-                    technique = 'Shoulder blades lift fully off the floor into crunch lockout.';
-                    break;
-                  case '3':
-                  case '6':
-                  case '8':
-                    calPerRep = '0.35';
-                    metValue = '4.0 METs';
-                    repFormula = 'Restorative spine decompression & deep hip holds burn ~0.35 kcal per hold milestone.';
-                    technique = 'Knees folded on mat with torso folded forward and arms reaching straight.';
-                    break;
-                  case '1':
-                  default:
-                    calPerRep = '0.35';
-                    metValue = '5.5 METs';
-                    repFormula = 'Large quadriceps & glute muscle engagement burns ~0.35 kcal per rep.';
-                    technique = 'Hip crease drops below knee level (< 90° angle) and returns upright.';
-                    break;
-                }
-
-                return (
-                  <View style={styles.calorieRuleBox}>
-                    <View style={styles.calorieRuleHighlightRow}>
-                      <View style={styles.calRatePill}>
-                        <Text style={styles.calRatePillVal}>{calPerRep} kcal</Text>
-                        <Text style={styles.calRatePillSub}>per valid rep</Text>
-                      </View>
-                      <View style={styles.calRatePill}>
-                        <Text style={styles.calRatePillVal}>{metValue}</Text>
-                        <Text style={styles.calRatePillSub}>MET Intensity</Text>
-                      </View>
-                    </View>
-
-                    <View style={styles.calRuleExplanationList}>
-                      <Text style={styles.calRuleText}>• <Text style={styles.calRuleBold}>Calculation Method:</Text> {repFormula}</Text>
-                      <Text style={styles.calRuleText}>• <Text style={styles.calRuleBold}>Valid Movement:</Text> {technique}</Text>
-                      <Text style={styles.calRuleText}>• <Text style={styles.calRuleBold}>Daily Profile Log:</Text> Automatically stored to your Supabase profile and date calendar.</Text>
-                    </View>
-                  </View>
-                );
-              })()}
-            </View>
-
-            <View style={styles.tabInfoCard}>
-              <Text style={styles.tabInfoTitle}>⚡ {exercise.name} Match Scoring Rules</Text>
-              <View style={styles.rulePointRow}>
-                <View style={[styles.rulePointBadge, { backgroundColor: '#E8D5C4' }]}>
-                  <Text style={[styles.rulePointBadgeText, { color: '#11141A' }]}>+10 PTS</Text>
-                </View>
-                <Text style={styles.rulePointDesc}>Awarded for winning a {exercise.name} duel.</Text>
-              </View>
-
-              <View style={styles.rulePointRow}>
-                <View style={[styles.rulePointBadge, { backgroundColor: '#C8B6FF' }]}>
-                  <Text style={[styles.rulePointBadgeText, { color: '#11141A' }]}>+5 PTS</Text>
-                </View>
-                <Text style={styles.rulePointDesc}>Awarded to both players in a draw.</Text>
-              </View>
-
-              <View style={styles.rulePointRow}>
-                <View style={[styles.rulePointBadge, { backgroundColor: '#FFD6E0' }]}>
-                  <Text style={[styles.rulePointBadgeText, { color: '#11141A' }]}>-10 PTS</Text>
-                </View>
-                <Text style={styles.rulePointDesc}>Deducted on match defeat (floor: 0).</Text>
-              </View>
-            </View>
-
-            <View style={styles.tabInfoCard}>
-              <Text style={styles.tabInfoTitle}>🎖️ {exercise.name} Level Tiers</Text>
-              <View style={styles.tierGrid}>
-                {[
-                  { lvl: 'LVL 1', name: 'Rookie 🥉', range: '0 - 99 pts' },
-                  { lvl: 'LVL 2', name: 'Challenger 🥈', range: '100 - 249 pts' },
-                  { lvl: 'LVL 3', name: 'Warrior 🥇', range: '250 - 499 pts' },
-                  { lvl: 'LVL 4', name: 'Master 💎', range: '500 - 999 pts' },
-                  { lvl: 'LVL 5', name: 'Champion 👑', range: '1,000 - 1,999 pts' },
-                  { lvl: 'LVL 6', name: 'Grandmaster ⚡', range: '2,000+ pts' },
-                ].map((tier, i) => (
-                  <View key={i} style={styles.tierCardItem}>
-                    <Text style={styles.tierCardLvl}>{tier.lvl}</Text>
-                    <Text style={styles.tierCardName}>{tier.name}</Text>
-                    <Text style={styles.tierCardRange}>{tier.range}</Text>
-                  </View>
-                ))}
-              </View>
             </View>
           </View>
         ) : (
-          <View style={styles.rulesContainer}>
-            <View style={styles.tabInfoCard}>
-              <Text style={styles.tabInfoTitle}>🛍️ Exercise Upgrades & Avatars</Text>
-              <Text style={styles.tabInfoBody}>
-                Unlock custom DiceBear avatar themes and special battle particle trails as you advance your mastery tiers!
-              </Text>
+          <View style={styles.infoCard}>
+            <View style={styles.shopIconCircle}>
+              <Palette size={26} color={colors.accent} />
+            </View>
+            <Text style={styles.shopTitle}>Upgrades & Avatars</Text>
+            <Text style={styles.shopBody}>
+              Unlock custom avatar themes and special battle trails as you climb the {exercise.name} mastery tiers.
+            </Text>
+            <View style={styles.comingSoonPill}>
+              <Text style={styles.comingSoonText}>COMING SOON</Text>
             </View>
           </View>
         )}
       </ScrollView>
 
       {/* RULES INFO MODAL */}
-      <Modal
-        visible={showRulesInfoModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowRulesInfoModal(false)}
-      >
+      <Modal visible={showRulesInfoModal} transparent animationType="fade" onRequestClose={() => setShowRulesInfoModal(false)}>
         <View style={styles.modalOverlay}>
-          <View style={styles.infoModalCard}>
-            <View style={styles.friendModalHeader}>
-              <View style={styles.btnRow}>
-                <Info size={18} color="#E8D5C4" style={{ marginRight: 6 }} />
-                <Text style={styles.infoModalTitle}>
-                  {exercise.name.toUpperCase()} SCORING & RULES
-                </Text>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <View style={styles.sectionLabelRow}>
+                <Info size={16} color={colors.accent} />
+                <Text style={styles.modalTitle}>{exercise.name} scoring</Text>
               </View>
-              <TouchableOpacity
-                style={styles.modalCloseBtn}
-                onPress={() => setShowRulesInfoModal(false)}
-              >
-                <X size={18} color="#FFFFFF" />
+              <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setShowRulesInfoModal(false)}>
+                <X size={18} color={colors.text} />
               </TouchableOpacity>
             </View>
 
-            <View style={styles.infoModalBody}>
-              {/* Calorie burn rate for this exercise */}
-              <View style={styles.modalCalorieBox}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-                  <Flame size={14} color="#FF6B35" style={{ marginRight: 4 }} />
-                  <Text style={styles.modalCalorieTitle}>Calorie Calculation</Text>
-                </View>
-                <Text style={styles.modalCalorieSub}>
-                  {exercise.id === '7'
-                    ? '• ~0.45 kcal / rep (8.0 METs upper body + core compound)'
-                    : exercise.id === '4'
-                    ? '• ~0.38 kcal / rep (6.0 METs unilateral leg compound)'
-                    : exercise.id === '2' || exercise.id === '5'
-                    ? '• ~0.30 kcal / rep (4.5 METs abdominal contractions)'
-                    : exercise.id === '3' || exercise.id === '6'
-                    ? '• ~0.40 kcal / hold unit (5.0 METs isometric hold)'
-                    : '• ~0.35 kcal / rep (5.5 METs squat knee flexion)'}
-                </Text>
-                <Text style={styles.modalCalorieNote}>
-                  Burned calories are automatically saved to your profile and home calendar by date.
+            <View style={styles.modalCalorieBox}>
+              <View style={styles.inlineRow}>
+                <Flame size={14} color={colors.accent} />
+                <Text style={styles.modalCalorieTitle}>
+                  ~{calorieInfo.perRep} kcal per rep · {calorieInfo.met} METs
                 </Text>
               </View>
-
-              <View style={styles.rulePointRow}>
-                <View style={[styles.rulePointBadge, { backgroundColor: '#E8D5C4' }]}>
-                  <Text style={[styles.rulePointBadgeText, { color: '#11141A' }]}>+10 PTS</Text>
-                </View>
-                <Text style={styles.rulePointDesc}>Awarded for winning a match.</Text>
-              </View>
-
-              <View style={styles.rulePointRow}>
-                <View style={[styles.rulePointBadge, { backgroundColor: '#C8B6FF' }]}>
-                  <Text style={[styles.rulePointBadgeText, { color: '#11141A' }]}>+5 PTS</Text>
-                </View>
-                <Text style={styles.rulePointDesc}>Awarded to both players on draw.</Text>
-              </View>
-
-              <View style={styles.rulePointRow}>
-                <View style={[styles.rulePointBadge, { backgroundColor: '#FFD6E0' }]}>
-                  <Text style={[styles.rulePointBadgeText, { color: '#11141A' }]}>-10 PTS</Text>
-                </View>
-                <Text style={styles.rulePointDesc}>Deducted on defeat (minimum: 0 PTS).</Text>
-              </View>
+              <Text style={styles.modalCalorieNote}>
+                Burned calories are saved to your profile and home calendar by date.
+              </Text>
             </View>
 
-            <TouchableOpacity
-              style={styles.infoModalCloseBtn}
-              activeOpacity={0.85}
-              onPress={() => setShowRulesInfoModal(false)}
-            >
-              <Text style={styles.infoModalCloseBtnText}>Got it</Text>
+            {scoringRules}
+
+            <TouchableOpacity style={styles.primaryBtn} activeOpacity={0.85} onPress={() => setShowRulesInfoModal(false)}>
+              <Text style={styles.primaryBtnText}>Got it</Text>
             </TouchableOpacity>
           </View>
         </View>
       </Modal>
 
-      {/* FRIEND CHALLENGE SELECTION MODAL */}
+      {/* FRIEND CHALLENGE MODAL */}
       <Modal
         visible={showFriendChallengeModal}
         transparent
@@ -999,14 +793,12 @@ export const ExerciseDetailScreen: React.FC<ExerciseDetailScreenProps> = ({
           if (!activeSentInvite) setShowFriendChallengeModal(false);
         }}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.friendModalCard}>
-            <View style={styles.friendModalHeader}>
-              <View style={styles.btnRow}>
-                <Users size={18} color="#11141A" style={{ marginRight: 6 }} />
-                <Text style={styles.friendModalTitle}>
-                  CHALLENGE A FRIEND (1v1 {exercise.name.toUpperCase()})
-                </Text>
+        <View style={[styles.modalOverlay, { justifyContent: 'flex-end', padding: 0 }]}>
+          <View style={styles.sheetCard}>
+            <View style={styles.modalHeader}>
+              <View style={[styles.sectionLabelRow, { flex: 1 }]}>
+                <Swords size={16} color={colors.accent} />
+                <Text style={styles.modalTitle} numberOfLines={1}>Challenge a friend</Text>
               </View>
               <TouchableOpacity
                 style={styles.modalCloseBtn}
@@ -1015,172 +807,121 @@ export const ExerciseDetailScreen: React.FC<ExerciseDetailScreenProps> = ({
                   setShowFriendChallengeModal(false);
                 }}
               >
-                <X size={18} color="#11141A" />
+                <X size={18} color={colors.text} />
               </TouchableOpacity>
             </View>
 
-            {/* If invite is currently sent and waiting */}
             {activeSentInvite ? (
-              <View style={styles.waitingInsideModalBox}>
-                <View style={styles.inviteWaitingIconBox}>
-                  <Swords size={32} color="#11141A" />
+              <View style={styles.waitingBox}>
+                <View style={styles.waitingIconCircle}>
+                  <Swords size={30} color={colors.onAccent} />
                 </View>
-                <Text style={styles.inviteWaitingTitle}>Challenge Sent!</Text>
-                <Text style={styles.inviteWaitingDesc}>
-                  Invited <Text style={styles.highlightFriend}>@{activeSentInvite.receiverUsername}</Text> to a 1v1 {exercise.name}{' '}
-                  {activeSentInvite.mode === 'faceoff' ? 'Faceoff' : 'Score Duel'}.
+                <Text style={styles.waitingTitle}>Challenge sent!</Text>
+                <Text style={styles.waitingDesc}>
+                  Invited <Text style={{ color: colors.accent, fontWeight: '900' }}>@{activeSentInvite.receiverUsername}</Text> to a 1v1{' '}
+                  {exercise.name} {activeSentInvite.mode === 'faceoff' ? 'Faceoff' : 'Score Duel'}.
                 </Text>
-                <View style={styles.inviteTimerBox}>
-                  <ActivityIndicator size="small" color="#11141A" style={{ marginRight: 8 }} />
-                  <Text style={styles.inviteTimerText}>
-                    Waiting for response ({inviteTimeoutSeconds}s)...
-                  </Text>
+                <View style={styles.waitingTimer}>
+                  <ActivityIndicator size="small" color={colors.accent} />
+                  <Text style={styles.waitingTimerText}>Waiting for response ({inviteTimeoutSeconds}s)</Text>
                 </View>
-                <TouchableOpacity
-                  style={styles.cancelInviteBtn}
-                  activeOpacity={0.85}
-                  onPress={cancelOutgoingInvite}
-                >
-                  <Text style={styles.cancelInviteBtnText}>Cancel Invitation</Text>
+                <TouchableOpacity style={styles.secondaryBtn} activeOpacity={0.85} onPress={cancelOutgoingInvite}>
+                  <Text style={styles.secondaryBtnText}>Cancel invitation</Text>
                 </TouchableOpacity>
               </View>
             ) : (
               <>
-                {/* Battle Mode Toggle */}
                 <View style={styles.modeToggleRow}>
-                  <TouchableOpacity
-                    style={[
-                      styles.modeToggleBtn,
-                      selectedBattleMode === 'faceoff' && styles.modeToggleBtnActive,
-                    ]}
-                    activeOpacity={0.8}
-                    onPress={() => setSelectedBattleMode('faceoff')}
-                  >
-                    <Video
-                      size={14}
-                      color="#11141A"
-                      style={{ marginRight: 5 }}
-                    />
-                    <Text
-                      style={[
-                        styles.modeToggleText,
-                        selectedBattleMode === 'faceoff' && styles.modeToggleTextActive,
-                      ]}
-                    >
-                      Faceoff (Camera)
-                    </Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[
-                      styles.modeToggleBtn,
-                      selectedBattleMode === 'quickjoin' && styles.modeToggleBtnActive,
-                    ]}
-                    activeOpacity={0.8}
-                    onPress={() => setSelectedBattleMode('quickjoin')}
-                  >
-                    <Zap
-                      size={14}
-                      color="#11141A"
-                      style={{ marginRight: 5 }}
-                    />
-                    <Text
-                      style={[
-                        styles.modeToggleText,
-                        selectedBattleMode === 'quickjoin' && styles.modeToggleTextActive,
-                      ]}
-                    >
-                      Score Duel
-                    </Text>
-                  </TouchableOpacity>
+                  {([
+                    { key: 'faceoff' as const, label: 'Faceoff (Camera)', Icon: Video },
+                    { key: 'quickjoin' as const, label: 'Score Duel', Icon: Zap },
+                  ]).map(({ key, label, Icon }) => {
+                    const active = selectedBattleMode === key;
+                    return (
+                      <TouchableOpacity
+                        key={key}
+                        style={[styles.modeToggleBtn, active && styles.modeToggleBtnActive]}
+                        activeOpacity={0.8}
+                        onPress={() => setSelectedBattleMode(key)}
+                      >
+                        <Icon size={14} color={active ? colors.onAccent : colors.textMuted} />
+                        <Text style={[styles.modeToggleText, active && { color: colors.onAccent }]}>{label}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
                 </View>
 
-                {/* Direct Challenge by Username Write-in */}
                 <View style={styles.directChallengeRow}>
                   <View style={styles.directInputWrap}>
-                    <Search size={14} color="#6B7280" style={{ marginRight: 6 }} />
+                    <Search size={14} color={colors.textDim} />
                     <TextInput
                       style={styles.directInput}
-                      placeholder="Challenge athlete by @username..."
-                      placeholderTextColor="#6B7280"
+                      placeholder="Challenge by @username..."
+                      placeholderTextColor={colors.textDim}
                       value={customUsername}
                       onChangeText={setCustomUsername}
                       autoCapitalize="none"
                     />
                   </View>
                   <TouchableOpacity
-                    style={styles.directSendBtn}
+                    style={[styles.directSendBtn, !customUsername.trim() && { opacity: 0.5 }]}
                     activeOpacity={0.85}
                     onPress={handleChallengeByUsername}
                     disabled={!customUsername.trim()}
                   >
-                    <Send size={14} color="#FFFFFF" />
+                    <Send size={15} color={colors.onAccent} />
                   </TouchableOpacity>
                 </View>
 
-                {/* Friends List */}
-                <Text style={styles.friendsSubHeader}>
-                  YOUR FRIENDS ({friends.length})
-                </Text>
+                <Text style={styles.friendsSubHeader}>YOUR FRIENDS ({friends.length})</Text>
 
-                <ScrollView style={styles.friendsModalScroll} showsVerticalScrollIndicator={false}>
+                <ScrollView style={styles.friendsScroll} showsVerticalScrollIndicator={false}>
                   {loadingFriends ? (
-                    <View style={styles.friendsLoadingBox}>
-                      <ActivityIndicator size="small" color="#11141A" />
-                      <Text style={styles.friendsLoadingText}>Loading friends list...</Text>
+                    <View style={styles.centerBox}>
+                      <ActivityIndicator size="small" color={colors.accent} />
+                      <Text style={styles.centerBoxText}>Loading friends...</Text>
                     </View>
                   ) : friends.length === 0 ? (
-                    <View style={styles.emptyFriendsBox}>
-                      <Users size={28} color="#4B5563" style={{ marginBottom: 6 }} />
-                      <Text style={styles.emptyFriendsTitle}>No Friends Added Yet</Text>
-                      <Text style={styles.emptyFriendsSubtitle}>
-                        Add friends in your Profile tab to send them instant 1v1 battle invites!
-                      </Text>
+                    <View style={styles.centerBox}>
+                      <Users size={26} color={colors.textDim} />
+                      <Text style={styles.emptyTitle}>No friends added yet</Text>
+                      <Text style={styles.centerBoxText}>Add friends in your Profile tab to send instant 1v1 invites.</Text>
                     </View>
                   ) : (
-                    <View style={styles.friendsRosterBox}>
-                      {friends.map((item) => {
-                        const isChallengingThis = challengingFriendId === item.friend.id;
-                        return (
-                          <View key={item.friendship_id} style={styles.friendRosterRow}>
-                            <View style={styles.friendRosterAvatarWrap}>
-                              <Avatar
-                                username={item.friend.username}
-                                size={40}
-                                config={item.friend.avatar_config}
-                                avatarUrl={item.friend.avatar_url}
-                              />
-                              <View style={styles.onlineBadgeDot} />
-                            </View>
-
-                            <View style={styles.friendRosterInfo}>
-                              <Text style={styles.friendRosterName} numberOfLines={1}>
-                                {item.friend.full_name || item.friend.username}
-                              </Text>
-                              <Text style={styles.friendRosterUsername}>
-                                @{item.friend.username}
-                              </Text>
-                            </View>
-
-                            <TouchableOpacity
-                              style={styles.challengeActionBtn}
-                              activeOpacity={0.85}
-                              onPress={() => handleChallengeFriend(item.friend)}
-                              disabled={isChallengingThis}
-                            >
-                              {isChallengingThis ? (
-                                <ActivityIndicator size="small" color="#FFFFFF" />
-                              ) : (
-                                <View style={styles.btnRow}>
-                                  <Swords size={12} color="#FFFFFF" style={{ marginRight: 4 }} />
-                                  <Text style={styles.challengeActionBtnText}>CHALLENGE</Text>
-                                </View>
-                              )}
-                            </TouchableOpacity>
+                    friends.map((item) => {
+                      const isChallengingThis = challengingFriendId === item.friend.id;
+                      return (
+                        <View key={item.friendship_id} style={styles.friendRow}>
+                          <Avatar
+                            username={item.friend.username}
+                            size={40}
+                            config={item.friend.avatar_config}
+                            avatarUrl={item.friend.avatar_url}
+                          />
+                          <View style={styles.friendInfo}>
+                            <Text style={styles.friendName} numberOfLines={1}>
+                              {item.friend.full_name || item.friend.username}
+                            </Text>
+                            <Text style={styles.friendUsername}>@{item.friend.username}</Text>
                           </View>
-                        );
-                      })}
-                    </View>
+                          <TouchableOpacity
+                            style={styles.challengeBtn}
+                            activeOpacity={0.85}
+                            onPress={() => handleChallengeFriend(item.friend)}
+                            disabled={isChallengingThis}
+                          >
+                            {isChallengingThis ? (
+                              <ActivityIndicator size="small" color={colors.onAccent} />
+                            ) : (
+                              <>
+                                <Swords size={12} color={colors.onAccent} />
+                                <Text style={styles.challengeBtnText}>Challenge</Text>
+                              </>
+                            )}
+                          </TouchableOpacity>
+                        </View>
+                      );
+                    })
                   )}
                 </ScrollView>
               </>
@@ -1193,619 +934,403 @@ export const ExerciseDetailScreen: React.FC<ExerciseDetailScreenProps> = ({
 };
 
 const styles = StyleSheet.create({
-  detailScreenContainer: { flex: 1, backgroundColor: '#1A1C20' },
+  detailScreenContainer: { flex: 1, backgroundColor: colors.bg },
+
   topNavBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 8,
+    paddingTop: 8,
+    paddingBottom: 10,
   },
   navButtonCircle: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: '#2A2E35',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  notificationBadgePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#E25822',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 16,
-  },
-  notificationBadgeDot: {
-    width: 5,
-    height: 5,
-    borderRadius: 2.5,
-    backgroundColor: '#FFFFFF',
-    marginRight: 4,
-  },
-  notificationBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '900',
-  },
-  btnRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  detailBannerCard: {
-    backgroundColor: '#354394',
-    borderRadius: 22,
+  topNavTitle: { flex: 1, textAlign: 'center', color: colors.text, fontSize: 17, fontWeight: '900', marginHorizontal: 12 },
+
+  // Hero
+  heroCard: {
     marginHorizontal: 16,
-    marginTop: 6,
     padding: 16,
+    borderRadius: radius.xl,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  bannerTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  ratingBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(26, 28, 35, 0.45)',
-    borderRadius: 12,
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-  },
-  ratingLabel: { color: '#E2E8F0', fontSize: 12, fontWeight: '700' },
-  ratingNumBox: {
-    backgroundColor: 'rgba(26, 28, 35, 0.7)',
-    borderRadius: 6,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    marginLeft: 6,
-  },
-  ratingNumText: { color: '#E8D5C4', fontSize: 11, fontWeight: '900' },
-  scoreRulesPill: {
-    backgroundColor: 'rgba(26, 28, 35, 0.55)',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 10,
-  },
-  scoreRulesText: { color: '#E8D5C4', fontSize: 10, fontWeight: '800' },
-  bannerStatsRow: { flexDirection: 'row', alignItems: 'center', marginTop: 14 },
-  starLevelBadge: {
-    backgroundColor: 'rgba(26, 28, 35, 0.5)',
-    borderRadius: 14,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+  heroTopRow: { flexDirection: 'row', alignItems: 'center' },
+  heroIconTile: {
+    width: 72,
+    height: 72,
+    borderRadius: 20,
+    backgroundColor: 'rgba(226, 88, 34, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(226, 88, 34, 0.3)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  levelBadgeEmoji: { fontSize: 22 },
-  levelBadgeNumber: { fontSize: 11, fontWeight: '900', marginTop: 4, color: '#FFFFFF' },
-  userRankInfo: { marginLeft: 14, flex: 1 },
-  rankTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  rankTitle: { color: '#FFFFFF', fontSize: 20, fontWeight: '900' },
-  tierTag: {
-    backgroundColor: 'rgba(26, 28, 35, 0.5)',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  tierTagText: { fontSize: 10, fontWeight: '800', color: '#E8D5C4' },
-  playedWonStats: { color: '#E2E8F0', fontSize: 11, marginTop: 4 },
-  progressContainer: { marginTop: 14 },
-  progressLabelRow: {
+  tierRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  tierChip: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 6,
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: radius.pill,
+    borderWidth: 1,
   },
-  progressLabel: { color: '#FFFFFF', fontSize: 11, fontWeight: '700' },
-  progressSubLabel: { color: '#FFFFFF', fontSize: 11, fontWeight: '800' },
-  rankProgressTrack: {
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: 'rgba(26, 28, 35, 0.6)',
-    overflow: 'hidden',
-  },
-  rankProgressFill: { height: '100%', borderRadius: 4, backgroundColor: '#E25822' },
-  detailSubNavTabBar: {
-    flexDirection: 'row',
-    marginTop: 14,
-    paddingHorizontal: 16,
-    gap: 8,
-  },
-  detailSubTabItem: {
+  tierChipText: { fontSize: 9.5, fontWeight: '900', letterSpacing: 0.6 },
+  heroLevelText: { color: colors.textMuted, fontSize: 11, fontWeight: '900' },
+  heroTitle: { color: colors.text, fontSize: 22, fontWeight: '900', marginTop: 4 },
+  heroPoints: { color: colors.textMuted, fontSize: 12, fontWeight: '700', marginTop: 1 },
+  heroPointsNum: { color: colors.accent, fontWeight: '900', fontSize: 14 },
+  progressLabelRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 16, marginBottom: 6 },
+  progressLabel: { color: colors.text, fontSize: 11.5, fontWeight: '800' },
+  progressSubLabel: { color: colors.textMuted, fontSize: 11, fontWeight: '700' },
+  rankProgressTrack: { height: 8, borderRadius: 4, backgroundColor: colors.surfaceSunken, overflow: 'hidden' },
+  rankProgressFill: { height: '100%', borderRadius: 4, backgroundColor: colors.accent },
+  statGrid: { flexDirection: 'row', gap: 8, marginTop: 14 },
+  statTile: {
     flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
     paddingVertical: 10,
-    borderRadius: 20,
-    backgroundColor: '#262A32',
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceSunken,
   },
-  detailSubTabItemActive: {
-    backgroundColor: '#FFFFFF',
+  statValue: { color: colors.text, fontSize: 16, fontWeight: '900', marginTop: 4 },
+  statLabel: { color: colors.textDim, fontSize: 8.5, fontWeight: '900', letterSpacing: 0.6, marginTop: 1 },
+
+  // Tabs
+  tabBar: {
+    flexDirection: 'row',
+    marginHorizontal: 16,
+    marginTop: 12,
+    padding: 4,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  detailSubTabText: { color: '#8E95A0', fontSize: 11, fontWeight: '900', letterSpacing: 0.3 },
-  detailSubTabTextActive: { color: '#11141A' },
-  detailScrollView: { flex: 1 },
-  detailScrollContent: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 110 },
-  queueItemCard: {
+  tabItem: {
+    flex: 1,
+    height: 36,
+    borderRadius: radius.pill,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#262A32',
-    borderRadius: 20,
-    padding: 14,
-    marginBottom: 10,
-  },
-  queueIconBox: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    backgroundColor: '#323742',
-    alignItems: 'center',
     justifyContent: 'center',
+    gap: 5,
   },
-  queueInfoBox: { flex: 1, marginLeft: 12, marginRight: 8 },
-  queueTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  queueTitleText: { color: '#FFFFFF', fontSize: 15, fontWeight: '900' },
-  queueBadgePill: {
-    backgroundColor: 'rgba(26, 28, 35, 0.6)',
-    paddingHorizontal: 7,
+  tabItemActive: { backgroundColor: colors.accent },
+  tabText: { color: colors.textMuted, fontSize: 12, fontWeight: '900' },
+  tabTextActive: { color: colors.onAccent },
+
+  detailScrollView: { flex: 1 },
+  detailScrollContent: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 120 },
+
+  // Mode list
+  sectionLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  sectionLabel: { color: colors.text, fontSize: 12.5, fontWeight: '900', letterSpacing: 0.8 },
+  modeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginTop: 10,
+  },
+  modeIconTile: { width: 46, height: 46, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  modeInfo: { flex: 1, marginHorizontal: 12 },
+  modeTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  modeTitle: { color: colors.text, fontSize: 15, fontWeight: '900', flexShrink: 1 },
+  modeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 6,
+    backgroundColor: colors.surfaceHi,
   },
-  queueBadgePillText: { color: '#E8D5C4', fontSize: 9, fontWeight: '900', letterSpacing: 0.3 },
-  queueDescText: { color: '#9CA3AF', fontSize: 11, marginTop: 3 },
-  joinButton: {
-    backgroundColor: '#E25822',
-    borderRadius: 16,
-    paddingHorizontal: 18,
-    paddingVertical: 9,
-    minWidth: 72,
+  modeBadgeText: { color: colors.textMuted, fontSize: 8.5, fontWeight: '900', letterSpacing: 0.5 },
+  modeDesc: { color: colors.textMuted, fontSize: 12, marginTop: 3 },
+  modeAction: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  joinButtonText: { color: '#FFFFFF', fontSize: 11, fontWeight: '900', letterSpacing: 0.5 },
-  leaderboardContainer: { marginTop: 14 },
+  modeActionLocked: { backgroundColor: colors.surfaceHi },
+
+  // Leaderboard
+  inlineRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   myRankCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#354394',
-    borderRadius: 20,
     padding: 14,
-    marginBottom: 16,
+    borderRadius: radius.lg,
+    backgroundColor: 'rgba(226, 88, 34, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(226, 88, 34, 0.35)',
   },
-  myRankLeft: { flexDirection: 'row', alignItems: 'center' },
-  myRankInfo: { marginLeft: 10 },
-  myRankName: { color: '#FFFFFF', fontSize: 15, fontWeight: '900' },
-  myRankTier: { color: '#E2E8F0', fontSize: 11, fontWeight: '700', marginTop: 2 },
+  myRankInfo: { flex: 1, marginLeft: 12 },
+  myRankName: { color: colors.text, fontSize: 15, fontWeight: '900', marginBottom: 3 },
+  myRankTier: { color: colors.textMuted, fontSize: 11.5, fontWeight: '700' },
   myRankRight: { alignItems: 'flex-end' },
-  myRankPoints: { color: '#FFFFFF', fontSize: 18, fontWeight: '900' },
-  myRankSub: { color: '#E2E8F0', fontSize: 11, marginTop: 2, fontWeight: '700' },
-  standingsHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  standingsHeaderTitle: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '900',
-    letterSpacing: 0.5,
-  },
-  standingsRefreshText: { color: '#E25822', fontSize: 12, fontWeight: '700' },
-  centerLoadingBox: {
+  myRankPoints: { color: colors.accent, fontSize: 22, fontWeight: '900' },
+  myRankSub: { color: colors.textMuted, fontSize: 10.5, fontWeight: '700' },
+  standingsHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 18, marginBottom: 4 },
+  refreshBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 30,
-    gap: 8,
   },
-  loadingLeaderboardText: { color: '#9CA3AF', fontSize: 12 },
-  emptyLeaderboardBox: {
+  leaderRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#262A32',
-    borderRadius: 24,
-    padding: 24,
+    padding: 10,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
     marginTop: 8,
   },
-  emptyLeaderboardTitle: { color: '#FFFFFF', fontSize: 16, fontWeight: '800', marginTop: 8 },
-  emptyLeaderboardDesc: {
-    color: '#9CA3AF',
-    fontSize: 12,
-    textAlign: 'center',
-    marginTop: 4,
-    lineHeight: 18,
-  },
-  leaderboardListBox: {
-    backgroundColor: '#262A32',
-    borderRadius: 20,
-    overflow: 'hidden',
-  },
-  leaderboardRowItem: {
-    flexDirection: 'row',
+  leaderRowMe: { borderColor: colors.accent },
+  rankBox: { width: 36, alignItems: 'center', marginRight: 6 },
+  podiumCircle: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
+  rankNumberText: { color: colors.textMuted, fontSize: 13, fontWeight: '900' },
+  leaderNameBox: { flex: 1, marginLeft: 10 },
+  leaderName: { color: colors.text, fontSize: 14, fontWeight: '800', marginBottom: 2 },
+  leaderSub: { color: colors.textMuted, fontSize: 11 },
+  leaderScoreBox: { alignItems: 'flex-end', marginLeft: 8 },
+  leaderScore: { color: colors.text, fontSize: 17, fontWeight: '900' },
+  leaderScoreUnit: { color: colors.textDim, fontSize: 9, fontWeight: '900' },
+  centerBox: { alignItems: 'center', paddingVertical: 32, gap: 8 },
+  centerBoxText: { color: colors.textMuted, fontSize: 12.5, textAlign: 'center', lineHeight: 18, paddingHorizontal: 20 },
+  emptyIconCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(226, 88, 34, 0.12)',
     alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.05)',
+    justifyContent: 'center',
   },
-  top1Row: { backgroundColor: 'rgba(226, 88, 34, 0.1)' },
-  myHighlightRow: { backgroundColor: 'rgba(53, 67, 148, 0.3)' },
-  rankBadgeBox: { width: 34, alignItems: 'center', justifyContent: 'center' },
-  podiumEmoji: { fontSize: 20 },
-  rankNumberText: { color: '#8E95A0', fontSize: 13, fontWeight: '800' },
-  leaderboardAvatarWrapper: { marginLeft: 4, marginRight: 10 },
-  leaderboardNameBox: { flex: 1 },
-  leaderboardUsername: { color: '#F8FAFC', fontSize: 14, fontWeight: '700' },
-  myUsernameText: { color: '#E25822', fontWeight: '800' },
-  leaderboardSubText: { color: '#9CA3AF', fontSize: 11, marginTop: 2 },
-  leaderboardScoreBox: { alignItems: 'flex-end' },
-  leaderboardScoreNum: { color: '#E25822', fontSize: 15, fontWeight: '900' },
-  leaderboardScoreUnit: { color: '#8E95A0', fontSize: 9, fontWeight: '800' },
-  rulesContainer: { marginTop: 14, gap: 12 },
-  tabInfoCard: {
-    backgroundColor: '#262A32',
-    borderRadius: 20,
-    padding: 18,
-  },
-  tabInfoTitle: { color: '#FFFFFF', fontSize: 16, fontWeight: '900' },
-  tabInfoBody: { color: '#CBD5E1', fontSize: 13, lineHeight: 20 },
-  calorieRuleBox: {
-    marginTop: 6,
-  },
-  calorieRuleHighlightRow: {
-    flexDirection: 'row',
-    gap: 10,
+  emptyTitle: { color: colors.text, fontSize: 15, fontWeight: '900' },
+
+  // Rules
+  infoCard: {
+    padding: 16,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
     marginBottom: 12,
   },
-  calRatePill: {
+  calPillRow: { flexDirection: 'row', gap: 10, marginTop: 12, marginBottom: 6 },
+  calPill: {
     flex: 1,
-    backgroundColor: 'rgba(255, 107, 53, 0.12)',
-    borderRadius: 14,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 107, 53, 0.3)',
+    padding: 12,
+    borderRadius: radius.md,
+    backgroundColor: 'rgba(226, 88, 34, 0.1)',
     alignItems: 'center',
   },
-  calRatePillVal: {
-    color: '#FF6B35',
-    fontSize: 16,
-    fontWeight: '900',
+  calPillVal: { color: colors.accent, fontSize: 20, fontWeight: '900' },
+  calPillSub: { color: colors.textMuted, fontSize: 10.5, fontWeight: '700', marginTop: 1 },
+  bulletRow: { flexDirection: 'row', gap: 8, marginTop: 10 },
+  bulletText: { flex: 1, color: colors.textMuted, fontSize: 12.5, lineHeight: 18 },
+  bulletBold: { color: colors.text, fontWeight: '800' },
+  ruleRow: { flexDirection: 'row', alignItems: 'center', marginTop: 12 },
+  ruleIcon: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  ruleText: { flex: 1, color: colors.text, fontSize: 13, fontWeight: '600', marginLeft: 10 },
+  rulePoints: { fontSize: 15, fontWeight: '900' },
+  tierGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
+  tierCard: {
+    width: '31.5%',
+    flexGrow: 1,
+    alignItems: 'center',
+    padding: 10,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceSunken,
+    borderWidth: 1,
+    borderColor: 'transparent',
   },
-  calRatePillSub: {
-    color: '#CBD5E1',
-    fontSize: 10,
-    fontWeight: '700',
-    marginTop: 2,
+  tierIconCircle: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
+  tierCardName: { color: colors.text, fontSize: 12, fontWeight: '900', marginTop: 6 },
+  tierCardRange: { color: colors.textDim, fontSize: 10, fontWeight: '700', marginTop: 2 },
+  tierCurrent: { fontSize: 8.5, fontWeight: '900', letterSpacing: 0.8, marginTop: 4 },
+
+  // Shop
+  shopIconCircle: {
+    alignSelf: 'center',
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'rgba(226, 88, 34, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  calRuleExplanationList: {
-    gap: 6,
+  shopTitle: { color: colors.text, fontSize: 17, fontWeight: '900', textAlign: 'center', marginTop: 12 },
+  shopBody: { color: colors.textMuted, fontSize: 13, lineHeight: 19, textAlign: 'center', marginTop: 6 },
+  comingSoonPill: {
+    alignSelf: 'center',
+    marginTop: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surfaceHi,
   },
-  calRuleText: {
-    color: '#CBD5E1',
-    fontSize: 12.5,
-    lineHeight: 18,
+  comingSoonText: { color: colors.textMuted, fontSize: 10, fontWeight: '900', letterSpacing: 1 },
+
+  // Modals
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(5, 8, 14, 0.82)', justifyContent: 'center', padding: 20 },
+  modalCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.xl,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  calRuleBold: {
-    color: '#FFFFFF',
-    fontWeight: '800',
+  sheetCard: {
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
+    padding: 20,
+    paddingBottom: 32,
+    maxHeight: '85%',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
+  modalTitle: { color: colors.text, fontSize: 17, fontWeight: '900' },
+  modalCloseBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: colors.surfaceHi,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   modalCalorieBox: {
-    backgroundColor: 'rgba(255, 107, 53, 0.1)',
-    borderRadius: 14,
+    marginTop: 12,
     padding: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 107, 53, 0.25)',
-    marginBottom: 14,
+    borderRadius: radius.md,
+    backgroundColor: 'rgba(226, 88, 34, 0.1)',
   },
-  modalCalorieTitle: {
-    color: '#FF6B35',
-    fontSize: 12,
-    fontWeight: '900',
+  modalCalorieTitle: { color: colors.text, fontSize: 13, fontWeight: '800' },
+  modalCalorieNote: { color: colors.textMuted, fontSize: 11.5, marginTop: 4, lineHeight: 16 },
+  primaryBtn: {
+    marginTop: 18,
+    height: 50,
+    borderRadius: radius.pill,
+    backgroundColor: colors.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  modalCalorieSub: {
-    color: '#E2E8F0',
-    fontSize: 12,
-    lineHeight: 17,
-    marginTop: 2,
+  primaryBtnText: { color: colors.onAccent, fontSize: 15, fontWeight: '900' },
+  secondaryBtn: {
+    marginTop: 18,
+    height: 48,
+    alignSelf: 'stretch',
+    borderRadius: radius.pill,
+    backgroundColor: colors.surfaceHi,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  modalCalorieNote: {
-    color: '#94A3B8',
-    fontSize: 10.5,
-    marginTop: 6,
+  secondaryBtnText: { color: colors.text, fontSize: 14, fontWeight: '800' },
+
+  // Friend challenge
+  waitingBox: { alignItems: 'center', paddingVertical: 16 },
+  waitingIconCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: colors.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  rulePointRow: {
+  waitingTitle: { color: colors.text, fontSize: 20, fontWeight: '900', marginTop: 14 },
+  waitingDesc: { color: colors.textMuted, fontSize: 13, textAlign: 'center', lineHeight: 19, marginTop: 6 },
+  waitingTimer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 10,
-  },
-  rulePointBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    minWidth: 72,
-    alignItems: 'center',
-  },
-  rulePointBadgeText: { fontSize: 11, fontWeight: '900' },
-  rulePointDesc: { color: '#CBD5E1', fontSize: 12, marginLeft: 12, flex: 1 },
-  tierGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: 8,
-  },
-  tierCardItem: {
-    width: '48%',
-    backgroundColor: '#323742',
-    borderRadius: 16,
-    padding: 12,
-  },
-  tierCardLvl: { color: '#E25822', fontSize: 10, fontWeight: '800' },
-  tierCardName: { color: '#FFFFFF', fontSize: 12, fontWeight: '700', marginTop: 2 },
-  tierCardRange: { color: '#9CA3AF', fontSize: 10, marginTop: 2 },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.85)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 16,
-  },
-  infoModalCard: {
-    backgroundColor: '#262A32',
-    borderRadius: 24,
-    padding: 20,
-    width: '100%',
-    maxWidth: 380,
-  },
-  infoModalTitle: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '900',
-    letterSpacing: 0.5,
-  },
-  infoModalBody: {
-    marginVertical: 14,
-  },
-  infoModalCloseBtn: {
-    backgroundColor: '#E25822',
-    borderRadius: 14,
-    paddingVertical: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  infoModalCloseBtnText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '900',
-  },
-  friendModalCard: {
-    backgroundColor: '#E8D5C4',
-    borderRadius: 28,
-    padding: 20,
-    width: '100%',
-    maxWidth: 420,
-    maxHeight: '85%',
-  },
-  friendModalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 14,
-  },
-  friendModalTitle: {
-    color: '#11141A',
-    fontSize: 13,
-    fontWeight: '900',
-    letterSpacing: 0.5,
-  },
-  modalCloseBtn: {
-    padding: 6,
-    borderRadius: 12,
-    backgroundColor: 'rgba(17, 20, 26, 0.08)',
-  },
-  waitingInsideModalBox: {
-    alignItems: 'center',
-    paddingVertical: 20,
-  },
-  inviteWaitingIconBox: {
-    width: 64,
-    height: 64,
-    borderRadius: 20,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 14,
-  },
-  inviteWaitingTitle: {
-    color: '#11141A',
-    fontSize: 20,
-    fontWeight: '900',
-  },
-  inviteWaitingDesc: {
-    color: '#374151',
-    fontSize: 13,
-    textAlign: 'center',
-    marginTop: 6,
-    lineHeight: 18,
-  },
-  highlightFriend: {
-    color: '#11141A',
-    fontWeight: '900',
-  },
-  inviteTimerBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
+    marginTop: 14,
     paddingHorizontal: 14,
     paddingVertical: 8,
-    marginTop: 16,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surfaceSunken,
   },
-  inviteTimerText: {
-    color: '#11141A',
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  cancelInviteBtn: {
-    backgroundColor: '#11141A',
-    borderRadius: 16,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    marginTop: 18,
-    width: '100%',
-    alignItems: 'center',
-  },
-  cancelInviteBtnText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  modeToggleRow: {
-    flexDirection: 'row',
-    backgroundColor: 'rgba(17, 20, 26, 0.08)',
-    borderRadius: 16,
-    padding: 4,
-    marginBottom: 12,
-    gap: 4,
-  },
+  waitingTimerText: { color: colors.text, fontSize: 12.5, fontWeight: '700' },
+  modeToggleRow: { flexDirection: 'row', gap: 8, marginTop: 14 },
   modeToggleBtn: {
     flex: 1,
+    height: 42,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 8,
-    borderRadius: 12,
+    gap: 6,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surfaceSunken,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  modeToggleBtnActive: {
-    backgroundColor: '#FFFFFF',
-  },
-  modeToggleText: {
-    color: '#4B5563',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  modeToggleTextActive: {
-    color: '#11141A',
-    fontWeight: '900',
-  },
-  directChallengeRow: {
-    flexDirection: 'row',
-    marginBottom: 12,
-    gap: 8,
-  },
+  modeToggleBtnActive: { backgroundColor: colors.accent, borderColor: colors.accent },
+  modeToggleText: { color: colors.textMuted, fontSize: 12.5, fontWeight: '800' },
+  directChallengeRow: { flexDirection: 'row', gap: 8, marginTop: 12 },
   directInputWrap: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    paddingHorizontal: 12,
+    gap: 8,
+    height: 46,
+    paddingHorizontal: 14,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surfaceSunken,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  directInput: {
-    flex: 1,
-    color: '#11141A',
-    fontSize: 12,
-    paddingVertical: 10,
-    fontWeight: '600',
-  },
+  directInput: { flex: 1, color: colors.text, fontSize: 14 },
   directSendBtn: {
-    backgroundColor: '#11141A',
-    borderRadius: 14,
-    paddingHorizontal: 16,
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  friendsSubHeader: {
-    color: '#11141A',
-    fontSize: 11,
-    fontWeight: '900',
-    letterSpacing: 0.6,
-    marginBottom: 8,
-  },
-  friendsModalScroll: {
-    maxHeight: 220,
-  },
-  friendsLoadingBox: {
+  friendsSubHeader: { color: colors.textMuted, fontSize: 11, fontWeight: '900', letterSpacing: 0.8, marginTop: 18, marginBottom: 4 },
+  friendsScroll: { maxHeight: 320 },
+  friendRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 12,
-    gap: 8,
-  },
-  friendsLoadingText: {
-    color: '#374151',
-    fontSize: 11,
-  },
-  emptyFriendsBox: {
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 16,
-  },
-  emptyFriendsTitle: {
-    color: '#11141A',
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  emptyFriendsSubtitle: {
-    color: '#4B5563',
-    fontSize: 11,
-    textAlign: 'center',
-    marginTop: 2,
-  },
-  friendsRosterBox: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    overflow: 'hidden',
-  },
-  friendRosterRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 10,
+    paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(17, 20, 26, 0.05)',
+    borderBottomColor: colors.border,
   },
-  friendRosterAvatarWrap: {
-    position: 'relative',
-  },
-  onlineBadgeDot: {
-    position: 'absolute',
-    bottom: -1,
-    right: -1,
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#E8D5C4',
-    borderWidth: 1.5,
-    borderColor: '#FFFFFF',
-  },
-  friendRosterInfo: {
-    flex: 1,
-    marginLeft: 10,
-    marginRight: 8,
-  },
-  friendRosterName: {
-    color: '#11141A',
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  friendRosterUsername: {
-    color: '#4B5563',
-    fontSize: 11,
-    marginTop: 1,
-  },
-  challengeActionBtn: {
-    backgroundColor: '#11141A',
-    borderRadius: 12,
+  friendInfo: { flex: 1, marginLeft: 12 },
+  friendName: { color: colors.text, fontSize: 14, fontWeight: '800' },
+  friendUsername: { color: colors.textMuted, fontSize: 11.5, marginTop: 1 },
+  challengeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
     paddingHorizontal: 12,
-    paddingVertical: 7,
+    height: 34,
+    borderRadius: radius.pill,
+    backgroundColor: colors.accent,
   },
-  challengeActionBtnText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '900',
-    letterSpacing: 0.5,
-  },
+  challengeBtnText: { color: colors.onAccent, fontSize: 12, fontWeight: '900' },
 });

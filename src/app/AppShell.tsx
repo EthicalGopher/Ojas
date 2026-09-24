@@ -11,6 +11,7 @@ import { AuthModal } from '../features/auth/components/AuthModal';
 import { CameraScreen } from '../features/camera/components/CameraScreen';
 import { MatchCameraScreen, MatchMode } from '../features/match/components/MatchCameraScreen';
 import { TabBar } from '../components/TabBar';
+import { VersusIntro } from '../features/match/components/VersusIntro';
 
 import { Swords, Video, Zap, Check, X, Flame } from 'lucide-react-native';
 import { Avatar } from '../components/Avatar';
@@ -20,7 +21,10 @@ import {
   connectMatchSocket,
   disconnectMatchSocket,
   addMatchMessageListener,
+  searchQueueWithBotFallback,
 } from '../utils/matchmaking';
+import { useGameStats } from '../hooks/useGameStats';
+import type { SimulatedOpponent } from '../utils/simulatedOpponent';
 import { supabase } from '../utils/supabase';
 import { useUserStore } from '../store/userStore';
 import {
@@ -44,6 +48,8 @@ export default function AppShell() {
   const [opponentUsername, setOpponentUsername] = useState<string>('');
   const [matchMode, setMatchMode] = useState<MatchMode>('faceoff');
   const [matchExerciseId, setMatchExerciseId] = useState<string>('1');
+  const [simulatedOpponent, setSimulatedOpponent] = useState<SimulatedOpponent | null>(null);
+  const [showVersus, setShowVersus] = useState<boolean>(false);
   const [selectedModel, setSelectedModel] = useState<ModelComplexity>('medium');
   const [showAuthModal, setShowAuthModal] = useState<boolean>(false);
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
@@ -55,6 +61,7 @@ export default function AppShell() {
   const [soloExerciseName, setSoloExerciseName] = useState<string>('Squats');
   const [isAiTutorMode, setIsAiTutorMode] = useState<boolean>(false);
   const { activeTab, setActiveTab, setUser } = useUserStore();
+  const playerLevel = useGameStats().level.level;
 
   // Listen for incoming 1v1 battle invites from friends
   useEffect(() => {
@@ -68,6 +75,11 @@ export default function AppShell() {
       cleanup();
     };
   }, [currentUser?.id]);
+
+  // Every match opens with the versus intro while the camera and pose model load underneath.
+  useEffect(() => {
+    setShowVersus(isMatchCamera);
+  }, [isMatchCamera]);
 
   // Auth initialization
   useEffect(() => {
@@ -146,6 +158,7 @@ export default function AppShell() {
 
     // Connect to the room and open match camera
     connectMatchSocket(currentUsername, matchRoomId);
+    setSimulatedOpponent(null);
     setOpponentUsername(opponent);
     setMatchMode(mode);
     setMatchExerciseId(exerciseId);
@@ -203,8 +216,10 @@ export default function AppShell() {
             opponentUsername={opponentUsername}
             selfUsername={currentUser?.user_metadata?.username || currentUser?.email || 'user'}
             exerciseId={matchExerciseId}
+            simulatedOpponent={simulatedOpponent}
             onClose={() => {
               setTimeout(() => {
+                setSimulatedOpponent(null);
                 setIsMatchCamera(false);
                 setIsFullscreen(false);
                 setActiveTab('home');
@@ -215,6 +230,7 @@ export default function AppShell() {
             }}
             onRequeue={(nextMode, exId) => {
               setTimeout(() => {
+                setSimulatedOpponent(null);
                 setIsMatchCamera(false);
                 setIsFullscreen(false);
                 setActiveTab('home');
@@ -228,37 +244,56 @@ export default function AppShell() {
                   currentUser?.id ||
                   `Player_${Math.floor(1000 + Math.random() * 9000)}`;
 
-                if (nextMode === 'ffa') {
-                  setWaitingTitle('BATTLE GROUND LOBBY');
-                  setWaitingMessage('Gathering athletes (Max 10). Match starts when timer expires or lobby fills...');
-                  setWaitingBadge('WAITING: 30s');
-                  setWaitingSubInfo('👥 1 Athlete Joined');
-                  setIsFFALobby(true);
+                // A finished bot match requeues as Quick Duel: real athletes first, bot as fallback.
+                if (nextMode === 'ffa' || nextMode === 'quickjoin' || nextMode === 'ai_battle') {
+                  const queue = nextMode === 'ffa' ? 'ffa' : 'quick_start';
+                  const isFFA = queue === 'ffa';
+                  setWaitingTitle(isFFA ? 'BATTLE GROUND LOBBY' : 'FINDING OPPONENT');
+                  setWaitingMessage(
+                    isFFA
+                      ? 'Gathering athletes (Max 10). Match starts when the timer ends or the lobby fills...'
+                      : 'Matching you with an athlete at your level...'
+                  );
+                  setWaitingBadge(isFFA ? 'WAITING: 30s' : 'SEARCHING 0:00');
+                  setWaitingSubInfo(isFFA ? '1 Athlete Joined' : 'Looking for athletes near your level');
+                  setIsFFALobby(isFFA);
                   setFfaLobbyCountdown(30);
                   setFfaLobbyPlayerCount(1);
                   setMatchWaiting(true);
 
-                  const matchQueueId = `${exId}_ffa`;
-                  connectMatchSocket(userId, matchQueueId);
+                  const openMatch = (opponent: string, mode: MatchMode, simulated: SimulatedOpponent | null = null) => {
+                    setSimulatedOpponent(simulated);
+                    setMatchWaiting(false);
+                    setIsFFALobby(false);
+                    setOpponentUsername(opponent);
+                    setMatchMode(mode);
+                    setMatchExerciseId(exId);
+                    setIsMatchCamera(true);
+                    setIsFullscreen(true);
+                  };
 
-                  const cleanup = addMatchMessageListener((msg: any) => {
-                    if (msg.type === 'ffa_lobby_update') {
-                      setWaitingTitle('BATTLE GROUND LOBBY');
-                      setWaitingMessage(`Match starts in ${msg.countdown}s (or when 10 athletes join)...`);
-                      setWaitingBadge(`STARTING IN ${msg.countdown}s`);
-                      setWaitingSubInfo(`👥 ${msg.player_count} ${msg.player_count === 1 ? 'Athlete' : 'Athletes'} in Lobby (Max 10)`);
-                      setFfaLobbyCountdown(msg.countdown);
-                      setFfaLobbyPlayerCount(msg.player_count);
-                    } else if (msg.type === 'ffa_matched') {
-                      setMatchWaiting(false);
-                      setIsFFALobby(false);
-                      setOpponentUsername('Battle Ground');
-                      setMatchMode('ffa');
-                      setMatchExerciseId(exId);
-                      setIsMatchCamera(true);
-                      setIsFullscreen(true);
-                      cleanup();
-                    }
+                  searchQueueWithBotFallback({
+                    userId,
+                    exerciseId: exId,
+                    queue,
+                    playerLevel,
+                    onLobbyUpdate: (countdown, playerCount) => {
+                      setWaitingMessage(`Match starts in ${countdown}s (or when 10 athletes join)...`);
+                      setWaitingBadge(`STARTING IN ${countdown}s`);
+                      setWaitingSubInfo(`${playerCount} ${playerCount === 1 ? 'Athlete' : 'Athletes'} in Lobby (Max 10)`);
+                      setFfaLobbyCountdown(countdown);
+                      setFfaLobbyPlayerCount(playerCount);
+                    },
+                    onSearchTick: (elapsed) => setWaitingBadge(`SEARCHING 0:${String(elapsed).padStart(2, '0')}`),
+                    onResult: (outcome) => {
+                      if (outcome.kind === 'simulated') {
+                        openMatch(outcome.opponent.username, 'quickjoin', outcome.opponent);
+                      } else if (outcome.kind === 'ffa') {
+                        openMatch('Battle Ground', 'ffa');
+                      } else {
+                        openMatch(outcome.opponent, 'quickjoin');
+                      }
+                    },
                   });
                 } else {
                   setWaitingTitle('FINDING OPPONENT');
@@ -268,16 +303,14 @@ export default function AppShell() {
                   setIsFFALobby(false);
                   setMatchWaiting(true);
 
-                  const queueType = nextMode === 'quickjoin' ? 'quick_start' : 'faceoff';
-                  const matchQueueId = `${exId}_${queueType}`;
-                  connectMatchSocket(userId, matchQueueId);
+                  connectMatchSocket(userId, `${exId}_faceoff`);
 
                   const cleanup = addMatchMessageListener((msg: any) => {
                     if (msg.type === 'matched') {
                       setMatchWaiting(false);
                       setIsFFALobby(false);
                       setOpponentUsername(msg.opponent);
-                      setMatchMode(queueType === 'quick_start' ? 'quickjoin' : 'faceoff');
+                      setMatchMode('faceoff');
                       setMatchExerciseId(exId);
                       setIsMatchCamera(true);
                       setIsFullscreen(true);
@@ -314,7 +347,8 @@ export default function AppShell() {
                 setIsAiTutorMode(!!isTutor);
                 setIsFullscreen(true);
               }}
-              onOpenMatchCamera={(opponent: string, mode: MatchMode, exerciseId?: string) => {
+              onOpenMatchCamera={(opponent: string, mode: MatchMode, exerciseId?: string, simulated?: SimulatedOpponent) => {
+                setSimulatedOpponent(simulated ?? null);
                 setMatchWaiting(false);
                 setIsFFALobby(false);
                 setOpponentUsername(opponent);
@@ -357,6 +391,8 @@ export default function AppShell() {
               onSelectModel={setSelectedModel}
               onLogout={() => {
                 setCurrentUser(null);
+                // Guests have no Supabase session, so onAuthStateChange never clears the store for them.
+                setUser(null);
                 setActiveTab('home');
               }}
             />
@@ -414,6 +450,18 @@ export default function AppShell() {
             }}
           />
         ) : null}
+
+        {isMatchCamera && showVersus && (
+          <VersusIntro
+            key={`vs-${opponentUsername}-${matchMode}`}
+            mode={matchMode}
+            opponentUsername={opponentUsername}
+            exerciseId={matchExerciseId}
+            simulatedOpponent={simulatedOpponent}
+            lobbyPlayerCount={ffaLobbyPlayerCount}
+            onDone={() => setShowVersus(false)}
+          />
+        )}
 
         {/* Incoming 1v1 Battle Challenge Modal */}
         {incomingInvite && (

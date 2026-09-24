@@ -61,6 +61,8 @@ import {
   AIBotState,
 } from '../../../utils/aiBotService';
 import { AIOpponentView } from './AIOpponentView';
+import { SimulatedOpponent } from '../../../utils/simulatedOpponent';
+import { getAvatarUri } from '../../../components/Avatar';
 
 export type MatchMode = 'faceoff' | 'quickjoin' | 'ffa' | 'ai_battle';
 
@@ -74,6 +76,8 @@ interface MatchCameraScreenProps {
   opponentUsername?: string;
   selfUsername?: string;
   exerciseId?: string;
+  /** Stand-in opponent used when matchmaking found nobody; shown as a regular player. */
+  simulatedOpponent?: SimulatedOpponent | null;
 }
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -128,7 +132,12 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
   opponentUsername = 'opponent',
   selfUsername = 'user',
   exerciseId = '1',
+  simulatedOpponent = null,
 }) => {
+  // Simulated opponents play through the normal PvP screen, driven by the AI rep simulation.
+  const isSimulated = !!simulatedOpponent && mode !== 'ai_battle';
+  const usesAiSimulation = mode === 'ai_battle' || isSimulated;
+  const [simRound, setSimRound] = useState(0);
   const [hasPermission, setHasPermission] = useState<boolean>(false);
   const [hasOpponentStream, setHasOpponentStream] = useState(false);
   const [selfScore, setSelfScore] = useState(0);
@@ -170,18 +179,19 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
   const { autoRematch, toggleAutoRematch, setAutoRematch } = useMatchmakingStore();
 
   const currentBot: AIBotProfile = useMemo(() => {
+    if (simulatedOpponent) return simulatedOpponent.bot;
     if (mode === 'ai_battle') {
       return getBotByName(opponentUsername || '') || AI_BOT_LEVELS[0];
     }
     return AI_BOT_LEVELS[0];
-  }, [mode, opponentUsername]);
+  }, [mode, opponentUsername, simulatedOpponent]);
 
   const aiSimulationRef = useRef<AIBattleSimulation | null>(null);
   const [aiBotState, setAiBotState] = useState<AIBotState | null>(null);
 
   // Initialize AI Battle Simulation
   useEffect(() => {
-    if (mode === 'ai_battle') {
+    if (usesAiSimulation) {
       const sim = new AIBattleSimulation(currentBot, exerciseId);
       aiSimulationRef.current = sim;
       setAiBotState({
@@ -196,7 +206,7 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
       });
       setOpponentScore(0);
     }
-  }, [mode, currentBot, exerciseId]);
+  }, [usesAiSimulation, currentBot, exerciseId, simRound]);
 
   // When in AI battle and local pose is ready, automatically set opponentReady
   useEffect(() => {
@@ -205,9 +215,16 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
     }
   }, [mode, localReady]);
 
+  // A simulated opponent "finishes setting up" a moment after us, like a real player would.
+  useEffect(() => {
+    if (!isSimulated || !localReady) return;
+    const t = setTimeout(() => setOpponentReady(true), 1200 + Math.random() * 2500);
+    return () => clearTimeout(t);
+  }, [isSimulated, localReady]);
+
   // Live simulation tick during active match
   useEffect(() => {
-    if (mode !== 'ai_battle' || matchPhase !== 'active_match' || matchEnded) return;
+    if (!usesAiSimulation || matchPhase !== 'active_match' || matchEnded) return;
 
     const interval = setInterval(() => {
       if (aiSimulationRef.current) {
@@ -218,10 +235,14 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
     }, 100);
 
     return () => clearInterval(interval);
-  }, [mode, matchPhase, matchEnded, selfScore, timeLeft]);
+  }, [usesAiSimulation, matchPhase, matchEnded, selfScore, timeLeft]);
 
   // Fetch opponent's avatar from Supabase profiles
   useEffect(() => {
+    if (isSimulated) {
+      setOpponentAvatarUrl(getAvatarUri(opponentUsername || 'athlete'));
+      return;
+    }
     if (mode === 'ai_battle' || !opponentUsername || opponentUsername === 'opponent' || opponentUsername === 'Free For All' || opponentUsername === 'Battle Ground') {
       return;
     }
@@ -248,7 +269,7 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
     return () => {
       isMounted = false;
     };
-  }, [opponentUsername, mode]);
+  }, [opponentUsername, mode, isSimulated]);
 
   useEffect(() => {
     const sub = Dimensions.addEventListener('change', ({ window }) => {
@@ -801,6 +822,7 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
   };
 
   const resetMatchState = () => {
+    if (usesAiSimulation) setSimRound((r) => r + 1);
     setSelfScore(0);
     setOpponentScore(0);
     setTimeLeft(120);
@@ -831,6 +853,19 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
   };
 
   const handleRestartMatch = () => {
+    if (isSimulated) {
+      Alert.alert('Rematch Sent', `Rematch request sent to @${opponentUsername}. Waiting for response...`);
+      // Answer after a short, human-feeling pause.
+      setTimeout(() => {
+        if (Math.random() < 0.65) {
+          Alert.alert('Rematch Accepted!', `@${opponentUsername} accepted the rematch! Starting now.`);
+          resetMatchState();
+        } else {
+          Alert.alert('Rematch Declined', `@${opponentUsername} declined the rematch.`);
+        }
+      }, 1500 + Math.random() * 2500);
+      return;
+    }
     sendMatchMessage({ type: 'rematch_request', sender: selfUsername });
     Alert.alert('Rematch Sent ⚔️', `Rematch request sent to @${opponentUsername}. Waiting for response...`);
   };
@@ -1337,6 +1372,7 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
           }
         }}
         onSendFriendRequest={handleSendFriendRequest}
+        canAddFriend={!isSimulated}
       />
     </View>
   );
@@ -1357,6 +1393,7 @@ interface DraggableWidgetProps {
   autoRematch: boolean;
   onNextBattle: () => void;
   onSendFriendRequest: () => void;
+  canAddFriend?: boolean;
 }
 
 const DraggableActionsWidget: React.FC<DraggableWidgetProps> = ({
@@ -1371,6 +1408,7 @@ const DraggableActionsWidget: React.FC<DraggableWidgetProps> = ({
   autoRematch,
   onNextBattle,
   onSendFriendRequest,
+  canAddFriend = true,
 }) => {
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const isLandscape = windowWidth > windowHeight;
@@ -1506,7 +1544,7 @@ const DraggableActionsWidget: React.FC<DraggableWidgetProps> = ({
             )}
 
             {/* 7. Send Friend Request - Only for PVP */}
-            {!isAiBattle && (
+            {!isAiBattle && canAddFriend && (
               <TouchableOpacity
                 style={[styles.widgetActionBtn, styles.friendActionBtn]}
                 activeOpacity={0.75}

@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { AIBotProfile, getBotByLevel } from './aiBotService';
+import { SimulatedOpponent, createSimulatedOpponent } from './simulatedOpponent';
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'https://app.codequestpro.in';
 
@@ -178,6 +180,7 @@ export const addConnectListener = (cb: (counts: QueueCounts) => void) => {
 };
 
 export const disconnectMatchSocket = () => {
+  cancelActiveSearch();
   if (socket) {
     try {
       socket.onopen = null;
@@ -263,4 +266,121 @@ export const disconnectPresenceSocket = () => {
     } catch (e) {}
     presenceSocket = null;
   }
+};
+
+// ============= QUEUE SEARCH WITH BOT FALLBACK =============
+
+/** Quick Duel waits this long (randomised per search) for a real opponent before a simulated one steps in. */
+const QUICK_DUEL_WAIT_MIN_SECONDS = 7;
+const QUICK_DUEL_WAIT_MAX_SECONDS = 13;
+/** If the Battle Ground lobby never answers (server down), fall back after this long. */
+const FFA_NO_RESPONSE_SECONDS = 8;
+
+export type QueueSearchOutcome =
+  | { kind: 'human'; opponent: string }
+  | { kind: 'ffa'; playerCount: number }
+  | { kind: 'simulated'; opponent: SimulatedOpponent };
+
+interface QueueSearchOptions {
+  userId: string;
+  exerciseId: string;
+  queue: 'quick_start' | 'ffa';
+  /** Overall athlete level, used to pick a bot of matching difficulty. */
+  playerLevel?: number;
+  onLobbyUpdate?: (countdown: number, playerCount: number) => void;
+  /** Seconds spent searching so far (Quick Duel only). */
+  onSearchTick?: (elapsedSeconds: number) => void;
+  onResult: (outcome: QueueSearchOutcome) => void;
+}
+
+let cancelActiveSearch: () => void = () => {};
+
+export const pickBotForLevel = (playerLevel: number = 1): AIBotProfile => {
+  const botLevel = playerLevel <= 2 ? 1 : playerLevel <= 5 ? 2 : playerLevel <= 9 ? 3 : 4;
+  return getBotByLevel(botLevel);
+};
+
+/**
+ * Joins a real matchmaking queue. Anyone already waiting is matched right away by the
+ * server; if nobody is available, the search resolves with an AI bot instead.
+ */
+export const searchQueueWithBotFallback = ({
+  userId,
+  exerciseId,
+  queue,
+  playerLevel = 1,
+  onLobbyUpdate,
+  onSearchTick,
+  onResult,
+}: QueueSearchOptions): void => {
+  cancelActiveSearch();
+
+  let settled = false;
+  let removeListener: () => void = () => {};
+  let tickTimer: ReturnType<typeof setInterval> | null = null;
+  let fallbackTimer: ReturnType<typeof setTimeout> | null = null;
+
+  const cleanup = () => {
+    settled = true;
+    removeListener();
+    if (tickTimer) clearInterval(tickTimer);
+    if (fallbackTimer) clearTimeout(fallbackTimer);
+    cancelActiveSearch = () => {};
+  };
+
+  const settle = (outcome: QueueSearchOutcome) => {
+    if (settled) return;
+    cleanup();
+    if (outcome.kind === 'simulated') {
+      // Leave the real queue so no human gets matched against an empty seat.
+      disconnectMatchSocket();
+    }
+    onResult(outcome);
+  };
+
+  const goBot = () =>
+    settle({ kind: 'simulated', opponent: createSimulatedOpponent(pickBotForLevel(playerLevel), playerLevel) });
+
+  cancelActiveSearch = cleanup;
+
+  removeListener = addMatchMessageListener((msg) => {
+    if (queue === 'quick_start' && msg.type === 'matched') {
+      settle({ kind: 'human', opponent: msg.opponent });
+    } else if (queue === 'ffa' && msg.type === 'ffa_lobby_update') {
+      // The lobby is alive; its own countdown now decides when the match starts.
+      if (fallbackTimer) {
+        clearTimeout(fallbackTimer);
+        fallbackTimer = null;
+      }
+      onLobbyUpdate?.(msg.countdown, msg.player_count);
+    } else if (queue === 'ffa' && msg.type === 'ffa_matched') {
+      const others = (msg.players || []).filter((p) => p !== userId);
+      if (others.length === 0) {
+        goBot();
+      } else {
+        settle({ kind: 'ffa', playerCount: msg.player_count });
+      }
+    }
+  });
+
+  if (queue === 'quick_start') {
+    const waitSeconds =
+      QUICK_DUEL_WAIT_MIN_SECONDS +
+      Math.floor(Math.random() * (QUICK_DUEL_WAIT_MAX_SECONDS - QUICK_DUEL_WAIT_MIN_SECONDS + 1));
+    let elapsed = 0;
+    onSearchTick?.(elapsed);
+    tickTimer = setInterval(() => {
+      if (settled) return;
+      elapsed += 1;
+      if (elapsed >= waitSeconds) {
+        goBot();
+      } else {
+        onSearchTick?.(elapsed);
+      }
+    }, 1000);
+  } else {
+    fallbackTimer = setTimeout(goBot, FFA_NO_RESPONSE_SECONDS * 1000);
+  }
+
+  connectMatchSocket(userId, `${exerciseId}_${queue}`);
 };
