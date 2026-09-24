@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -9,6 +9,7 @@ import {
   Text,
   TouchableOpacity,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import {
   Activity,
@@ -53,7 +54,7 @@ import { DailyChallengesSection } from '../components/DailyChallengesSection';
 import { useDailyChallengeStore } from '../store/dailyChallengeStore';
 import { useGameStats } from '../hooks/useGameStats';
 import { isActiveDay, toDateKey, XP_PER_MATCH } from '../utils/gamification';
-import { cardThemes, colors, radius, shadow } from '../theme';
+import { colors, exerciseCardThemes, radius } from '../theme';
 
 export type { ExerciseItem };
 
@@ -313,35 +314,97 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
     },
   ];
 
-  const streakMessage = streak.activeToday
-    ? `${streak.current}-day streak secured. Come back tomorrow to keep it going.`
-    : streak.atRisk
-    ? `Your ${streak.current}-day streak ends tonight. One workout keeps it alive.`
-    : 'Finish any workout today to start a streak.';
-
   const TUTORIAL_CARDS = [
-    { tutorial: TUTORIALS[0], tag: 'AI TRACKER', title: 'How AI Tracking Works', Icon: Bot, tint: colors.lavender },
-    { tutorial: TUTORIALS[1], tag: 'RULES', title: '1v1 Battle Scoring', Icon: Swords, tint: colors.flame },
-    { tutorial: TUTORIALS[2], tag: 'SETUP', title: 'Camera Positioning', Icon: Smartphone, tint: colors.accent },
+    { tutorial: TUTORIALS[0], tag: 'AI TRACKER', title: 'How AI Tracking Works', Icon: Bot },
+    { tutorial: TUTORIALS[1], tag: 'RULES', title: '1v1 Battle Scoring', Icon: Swords },
+    { tutorial: TUTORIALS[2], tag: 'SETUP', title: 'Camera Positioning', Icon: Smartphone },
   ];
 
+  const openArena = () => {
+    if (isGuest) {
+      Alert.alert(
+        '1v1 Arena Locked',
+        'Sign in or create a free athlete account to duel live players in real-time battles.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+    onExerciseSelect(activeExercise);
+  };
+
+  // Featured carousel (like the reference's big banner with page dots).
+  const HERO_SLIDES = [
+    {
+      key: 'arena',
+      tag: `RANKED · +${XP_PER_MATCH} XP`,
+      title: `${activeExercise.name}\n1v1 Arena`,
+      sub: 'Live camera battle. Most clean reps wins.',
+      cta: isGuest ? 'Sign in to play' : 'Play now',
+      CtaIcon: isGuest ? Lock : Play,
+      visual: <ExerciseIcon imageUrl={activeExercise.image_url} icon={activeExercise.icon || '🏋️‍♂️'} size={110} fontSize={60} />,
+      onPress: openArena,
+    },
+    {
+      key: 'ai',
+      tag: 'AI DUEL',
+      title: 'Human\nvs AI',
+      sub: 'Beat 4 bot levels in a 2-minute duel.',
+      cta: 'Start duel',
+      CtaIcon: Swords,
+      visual: <Bot size={92} color="rgba(255,255,255,0.92)" strokeWidth={1.4} />,
+      onPress: () => onOpenAiDuel?.(activeExercise.id),
+    },
+    {
+      key: 'scan',
+      tag: 'AI SCANNER',
+      title: 'Posture\nScan',
+      sub: 'Check knees, spine & shoulders in 3 seconds.',
+      cta: 'Scan now',
+      CtaIcon: Scan,
+      visual: <Scan size={92} color="rgba(255,255,255,0.92)" strokeWidth={1.4} />,
+      onPress: () => setIsDeformityScannerVisible(true),
+    },
+  ];
+
+  const { width: windowWidth } = useWindowDimensions();
+  const heroWidth = windowWidth - 36;
+  const heroRef = useRef<ScrollView>(null);
+  const [heroIndex, setHeroIndex] = useState(0);
+
+  // Gentle auto-advance; restarts whenever the user swipes.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const next = (heroIndex + 1) % HERO_SLIDES.length;
+      heroRef.current?.scrollTo({ x: next * (heroWidth + 12), animated: true });
+      setHeroIndex(next);
+    }, 5000);
+    return () => clearTimeout(t);
+  }, [heroIndex, heroWidth, HERO_SLIDES.length]);
+
   const SectionHeader = ({
-    Icon,
     title,
+    actionLabel,
+    onAction,
     right,
   }: {
-    Icon: React.ComponentType<{ size?: number; color?: string }>;
     title: string;
+    actionLabel?: string;
+    onAction?: () => void;
     right?: React.ReactNode;
   }) => (
     <View style={styles.sectionHeaderRow}>
-      <View style={styles.headerLeftRow}>
-        <Icon size={15} color={colors.accent} />
-        <Text style={styles.sectionHeaderTitle}>{title}</Text>
-      </View>
-      {right}
+      <Text style={styles.sectionHeaderTitle}>{title}</Text>
+      {right ??
+        (actionLabel ? (
+          <TouchableOpacity style={styles.seeAllBtn} onPress={onAction} activeOpacity={0.7}>
+            <Text style={styles.seeAllText}>{actionLabel}</Text>
+            <ChevronRight size={14} color={colors.textMuted} />
+          </TouchableOpacity>
+        ) : null)}
     </View>
   );
+
+  const tutorials = exercises.slice(0, 4);
 
   return (
     <ScrollView
@@ -349,98 +412,119 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
       contentContainerStyle={styles.feedScrollContent}
       showsVerticalScrollIndicator={false}
     >
-      {/* 1. CALENDAR + STREAK */}
-      <View style={styles.calendarCard}>
-        <View style={styles.calendarHeaderRow}>
-          <Text style={styles.calendarMonthText}>{currentMonthYear}</Text>
-          <View style={[styles.streakChip, streak.activeToday && styles.streakChipLit]}>
-            <Flame
-              size={13}
-              color={streak.activeToday ? '#FFFFFF' : streak.current > 0 ? colors.flame : cardThemes.navy.sub}
-              fill={streak.activeToday ? '#FFFFFF' : 'transparent'}
-            />
-            <Text style={styles.streakChipText}>
-              {streak.current} day streak
+      {/* 1. FEATURED HERO CAROUSEL */}
+      <ScrollView
+        ref={heroRef}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        snapToInterval={heroWidth + 12}
+        decelerationRate="fast"
+        contentContainerStyle={{ gap: 12 }}
+        onMomentumScrollEnd={(e) => setHeroIndex(Math.round(e.nativeEvent.contentOffset.x / (heroWidth + 12)))}
+      >
+        {HERO_SLIDES.map(({ key, tag, title, sub, cta, CtaIcon, visual, onPress }) => (
+          <TouchableOpacity key={key} style={[styles.heroCard, { width: heroWidth }]} activeOpacity={0.92} onPress={onPress}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.heroTag}>{tag}</Text>
+              <Text style={styles.heroTitle}>{title}</Text>
+              <Text style={styles.heroSub} numberOfLines={2}>{sub}</Text>
+              <View style={styles.heroCta}>
+                <CtaIcon size={14} color={colors.flame} />
+                <Text style={styles.heroCtaText}>{cta}</Text>
+              </View>
+            </View>
+            <View style={styles.heroVisual}>{visual}</View>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+      <View style={styles.dotsRow}>
+        {HERO_SLIDES.map((s, i) => (
+          <View key={s.key} style={[styles.dot, i === heroIndex && styles.dotActive]} />
+        ))}
+      </View>
+
+      {/* 2. YOUR ACTIVITY */}
+      <SectionHeader title="Your activity" actionLabel="Profile" onAction={() => onNavigateToTab?.('profile')} />
+
+      <View style={styles.weekRow}>
+        {currentWeekDays.map((item) => {
+          const isSelected = selectedDateString === item.dateString;
+          const active = isActiveDay(profile, item.dateString) || (item.isToday && streak.activeToday);
+          return (
+            <TouchableOpacity
+              key={item.dateString}
+              style={[styles.weekDay, isSelected && styles.weekDaySelected]}
+              activeOpacity={0.8}
+              onPress={() => setSelectedDateString(item.dateString)}
+            >
+              <Text style={[styles.weekLetter, isSelected && styles.weekTextSelected]}>{item.day}</Text>
+              <Text style={[styles.weekDate, isSelected && styles.weekTextSelected]}>{item.date}</Text>
+              <View style={[styles.weekDot, active && styles.weekDotActive, isSelected && active && { backgroundColor: '#FFFFFF' }]} />
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      <View style={styles.activityGrid}>
+        <View style={styles.activityCol}>
+          <View style={styles.statTile}>
+            <View style={styles.statIcon}>
+              <Flame size={16} color={colors.flame} />
+            </View>
+            <Text style={styles.statLabel}>Energy burned</Text>
+            <Text style={styles.statValue}>
+              {dayCaloriesBurned} <Text style={styles.statUnit}>kcal</Text>
+            </Text>
+          </View>
+          <View style={styles.statTile}>
+            <View style={styles.statIcon}>
+              <Activity size={16} color={colors.flame} />
+            </View>
+            <Text style={styles.statLabel}>Reps · Matches</Text>
+            <Text style={styles.statValue}>
+              {dayRepsCompleted} <Text style={styles.statUnit}>· {dayMatchesPlayed}</Text>
             </Text>
           </View>
         </View>
 
-        <View style={styles.daysRow}>
-          {currentWeekDays.map((item) => {
-            const isSelected = selectedDateString === item.dateString;
-            const active = isActiveDay(profile, item.dateString) || (item.isToday && streak.activeToday);
-
-            return (
-              <TouchableOpacity
-                key={item.dateString}
-                style={styles.dayItem}
-                activeOpacity={0.8}
-                onPress={() => setSelectedDateString(item.dateString)}
-              >
-                <Text style={[styles.dayLetter, (isSelected || item.isToday) && styles.dayLetterActive]}>
-                  {item.day}
-                </Text>
-                <View
-                  style={[
-                    styles.dateCircle,
-                    item.isToday && !isSelected && styles.dateCircleToday,
-                    isSelected && styles.dateCircleSelected,
-                  ]}
-                >
-                  <Text style={[styles.dateNumber, isSelected && styles.dateNumberSelected]}>{item.date}</Text>
-                </View>
-                <View style={styles.dayMarker}>
-                  {active && <Flame size={11} color={colors.flame} fill={colors.flame} />}
-                </View>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-
-        <Text style={styles.streakMessage}>{streakMessage}</Text>
-
-        <View style={styles.calendarCalorieRow}>
-          <View style={styles.calendarCalorieLeft}>
-            <View style={styles.calFlameIconCircle}>
-              <Activity size={17} color="#FFFFFF" />
-            </View>
-            <View>
-              <Text style={styles.calBurnNumberText}>
-                {dayCaloriesBurned} <Text style={styles.calBurnUnitText}>kcal</Text>
-              </Text>
-              <Text style={styles.calBurnLabelText}>
-                {selectedDayItem?.isToday
-                  ? "Today's energy burned"
-                  : `Burned on ${selectedDayItem?.fullDate?.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) || selectedDateString}`}
-              </Text>
-            </View>
+        <View style={styles.streakTile}>
+          <View style={styles.statIcon}>
+            <Flame size={16} color={colors.flame} fill={streak.activeToday ? colors.flame : 'transparent'} />
           </View>
-
-          <View style={styles.calendarCalorieStatsRight}>
-            <View style={styles.calMiniStatPill}>
-              <Text style={styles.calMiniStatVal}>{dayRepsCompleted}</Text>
-              <Text style={styles.calMiniStatLbl}>REPS</Text>
-            </View>
-            <View style={styles.calMiniStatPill}>
-              <Text style={styles.calMiniStatVal}>{dayMatchesPlayed}</Text>
-              <Text style={styles.calMiniStatLbl}>MATCHES</Text>
-            </View>
+          <Text style={styles.statLabel}>Day streak</Text>
+          <Text style={styles.streakValue}>{streak.current}</Text>
+          <View style={styles.streakFlames}>
+            {currentWeekDays.map((d) => (
+              <Flame
+                key={d.dateString}
+                size={12}
+                color={isActiveDay(profile, d.dateString) || (d.isToday && streak.activeToday) ? colors.flame : colors.textDim}
+                fill={isActiveDay(profile, d.dateString) || (d.isToday && streak.activeToday) ? colors.flame : 'transparent'}
+              />
+            ))}
           </View>
+          <Text style={styles.streakHint} numberOfLines={2}>
+            {streak.activeToday ? 'Streak secured today' : streak.atRisk ? 'Ends tonight - keep it alive' : 'Start one today'}
+          </Text>
+          <TouchableOpacity
+            style={styles.streakBtn}
+            activeOpacity={0.85}
+            onPress={() => onOpenCamera(activeExercise.id, activeExercise.name, true)}
+          >
+            <Text style={styles.streakBtnText}>{streak.activeToday ? 'Train more' : 'Start now'}</Text>
+          </TouchableOpacity>
         </View>
       </View>
 
-      {/* 2. LEVEL PROGRESS */}
+      {/* 3. LEVEL */}
       <TouchableOpacity style={styles.levelStrip} activeOpacity={0.85} onPress={() => onNavigateToTab?.('profile')}>
-        <View style={styles.levelStripBadge}>
-          <Text style={styles.levelStripBadgeLabel}>LV</Text>
-          <Text style={styles.levelStripBadgeText}>{level.level}</Text>
+        <View style={styles.levelBadge}>
+          <Text style={styles.levelBadgeText}>LV {level.level}</Text>
         </View>
         <View style={{ flex: 1 }}>
-          <View style={styles.levelStripTopRow}>
-            <Text style={styles.levelStripTitle}>{level.title}</Text>
-            <Text style={styles.levelStripXp}>
-              {level.xpForNextLevel - level.xpIntoLevel} XP to level {level.level + 1}
-            </Text>
+          <View style={styles.levelTopRow}>
+            <Text style={styles.levelTitle}>{level.title}</Text>
+            <Text style={styles.levelXp}>{level.xpForNextLevel - level.xpIntoLevel} XP to level {level.level + 1}</Text>
           </View>
           <View style={styles.levelTrack}>
             <View style={[styles.levelFill, { width: `${Math.max(3, level.progress * 100)}%` }]} />
@@ -448,7 +532,7 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
         </View>
       </TouchableOpacity>
 
-      {/* 3. DAILY QUESTS */}
+      {/* 4. DAILY QUESTS */}
       <DailyChallengesSection
         exercises={exercises}
         profile={profile}
@@ -457,7 +541,7 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
         onExerciseSelect={onExerciseSelect}
       />
 
-      {/* 4. HEALTH CHECK-IN QUESTION */}
+      {/* 5. BODY CHECK-IN */}
       {!isSurveyCompleted && (() => {
         const currentCond = HEALTH_CONDITIONS[currentQuestionIndex];
         if (!currentCond) return null;
@@ -481,7 +565,7 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
                 <Text style={styles.yesBtnText}>Yes</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.noBtn} activeOpacity={0.85} onPress={() => handleAnswerQuestion(false)}>
-                <X size={18} color={cardThemes.pink.text} strokeWidth={2.5} />
+                <X size={18} color={colors.text} strokeWidth={2.5} />
                 <Text style={styles.noBtnText}>No</Text>
               </TouchableOpacity>
             </View>
@@ -489,10 +573,9 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
         );
       })()}
 
-      {/* 5. GAME MODES */}
+      {/* 6. AI COACH GRID (two alternating colors) */}
       <SectionHeader
-        Icon={Swords}
-        title="GAME MODES"
+        title="AI coach"
         right={
           <View style={styles.onlineBadgePill}>
             <View style={styles.pulseGreenDot} />
@@ -500,158 +583,71 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
           </View>
         }
       />
-
-      <TouchableOpacity
-        style={styles.arenaCard}
-        activeOpacity={0.92}
-        onPress={() => {
-          if (isGuest) {
-            Alert.alert(
-              '1v1 Arena Locked',
-              'Sign in or create a free athlete account to duel live players in real-time battles.',
-              [{ text: 'OK' }]
-            );
-            return;
-          }
-          onExerciseSelect(activeExercise);
-        }}
-      >
-        <View style={{ flex: 1 }}>
-          <View style={styles.modeTagRow}>
-            <View style={styles.modeTag}>
-              <Text style={styles.modeTagText}>RANKED</Text>
-            </View>
-            <View style={styles.rewardTag}>
-              <Text style={styles.rewardTagText}>+{XP_PER_MATCH} XP</Text>
-            </View>
-          </View>
-          <Text style={styles.arenaTitle}>{activeExercise.name} 1v1 Arena</Text>
-          <Text style={styles.arenaSub} numberOfLines={2}>
-            Live camera battle. Most clean reps wins.
-          </Text>
-          <View style={styles.playBtn}>
-            {isGuest ? <Lock size={13} color={colors.text} /> : <Play size={13} color={colors.text} fill={colors.text} />}
-            <Text style={styles.playBtnText}>{isGuest ? 'Sign in to play' : 'Play now'}</Text>
-          </View>
-        </View>
-        <ExerciseIcon
-          imageUrl={activeExercise.image_url}
-          icon={activeExercise.icon || '🏋️‍♂️'}
-          size={72}
-          fontSize={40}
-        />
-      </TouchableOpacity>
-
-      <View style={styles.modeRow}>
-        <TouchableOpacity
-          style={[styles.modeCard, { backgroundColor: colors.lavender }]}
-          activeOpacity={0.9}
-          onPress={() => onOpenAiDuel?.(activeExercise.id)}
-        >
-          <View style={styles.modeIconCircle}>
-            <Bot size={20} color={colors.textOnLight} />
-          </View>
-          <Text style={styles.modeTitle}>Human vs AI</Text>
-          <Text style={styles.modeSub}>Beat 4 bot levels</Text>
-          <View style={styles.modeFooter}>
-            <Text style={styles.modeFooterText}>2 MIN DUEL</Text>
-            <ChevronRight size={16} color={colors.textOnLight} />
-          </View>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.modeCard, { backgroundColor: colors.pink }]}
-          activeOpacity={0.9}
-          onPress={() => setIsDeformityScannerVisible(true)}
-        >
-          <View style={styles.modeIconCircle}>
-            <Scan size={20} color={colors.textOnLight} />
-          </View>
-          <Text style={styles.modeTitle}>Posture Scan</Text>
-          <Text style={styles.modeSub}>Knees, spine & shoulders</Text>
-          <View style={styles.modeFooter}>
-            <Text style={styles.modeFooterText}>3 SEC SCAN</Text>
-            <ChevronRight size={16} color={colors.textOnLight} />
-          </View>
-        </TouchableOpacity>
-      </View>
-
-      {/* 6. AI COACH */}
-      <SectionHeader Icon={Bot} title="AI COACH" right={<Text style={styles.sectionSubHint}>Voice + pose feedback</Text>} />
-
-      <FlatList
-        data={exercises}
-        keyExtractor={(item) => item.id}
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.tutorFlatListContent}
-        renderItem={({ item, index }) => {
-          const defaultPalettes = [colors.lavender, colors.pink, colors.flame, colors.navy];
-          const cardBg = item.bg_theme || defaultPalettes[index % defaultPalettes.length];
-          const isDarkCard = cardBg === colors.navy || cardBg === colors.flame;
-          const textColor = isDarkCard ? colors.text : colors.textOnLight;
-          const subTextColor = isDarkCard ? '#E2E8F0' : '#4B5563';
+      <View style={styles.tutorGrid}>
+        {tutorials.map((item, index) => {
+          const theme = exerciseCardThemes[index % exerciseCardThemes.length];
           const duration = item.duration_mins || (index % 2 === 0 ? 32 : 25);
-
           return (
             <TouchableOpacity
-              style={[styles.tutorCard, { backgroundColor: cardBg }]}
+              key={item.id}
+              style={[styles.tutorCard, { backgroundColor: theme.bg }]}
               activeOpacity={0.88}
               onPress={() => onOpenCamera(item.id, item.name, true)}
             >
               <View style={styles.tutorTopRow}>
-                <View style={[styles.tutorCategoryPill, isDarkCard && { backgroundColor: 'rgba(255, 255, 255, 0.2)' }]}>
-                  <Text style={[styles.tutorCategory, { color: textColor }]}>
-                    {item.category?.toUpperCase() || 'FITNESS'}
-                  </Text>
+                <View style={[styles.tutorPill, { backgroundColor: theme.chip }]}>
+                  <Text style={[styles.tutorPillText, { color: theme.text }]}>{item.category?.toUpperCase() || 'FITNESS'}</Text>
                 </View>
-                <View style={styles.tutorDurationBadge}>
-                  <Text style={styles.tutorDuration}>{duration}m</Text>
+                <View style={styles.tutorDuration}>
+                  <Text style={styles.tutorDurationText}>{duration}m</Text>
                 </View>
               </View>
               <View style={styles.tutorIconWrap}>
-                <ExerciseIcon imageUrl={item.image_url} icon={item.icon} size={48} fontSize={28} />
+                <ExerciseIcon imageUrl={item.image_url} icon={item.icon} size={70} fontSize={40} />
               </View>
               <View style={styles.tutorBottomRow}>
                 <View style={{ flex: 1, marginRight: 6 }}>
-                  <Text style={[styles.tutorTitle, { color: textColor }]} numberOfLines={1}>{item.name}</Text>
-                  <Text style={[styles.tutorSub, { color: subTextColor }]} numberOfLines={1}>Voice & Pose</Text>
+                  <Text style={[styles.tutorTitle, { color: theme.text }]} numberOfLines={1}>{item.name}</Text>
+                  <Text style={[styles.tutorSub, { color: theme.sub }]} numberOfLines={1}>Voice & pose</Text>
                 </View>
-                <View style={[styles.tutorPlay, isDarkCard && { backgroundColor: colors.text }]}>
-                  <Play size={10} color={isDarkCard ? colors.textOnLight : colors.text} fill={isDarkCard ? colors.textOnLight : colors.text} />
+                <View style={styles.tutorPlay}>
+                  <Play size={11} color="#FFFFFF" fill="#FFFFFF" />
                 </View>
               </View>
-            </TouchableOpacity>
-          );
-        }}
-      />
-
-      {/* 7. GUIDES */}
-      <SectionHeader Icon={Lightbulb} title="GUIDES" right={<Text style={styles.sectionSubHint}>Tap for guide</Text>} />
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.guideRow}>
-        {TUTORIAL_CARDS.map(({ tutorial, tag, title, Icon }, i) => {
-          const theme = [cardThemes.lavender, cardThemes.pink, cardThemes.orange][i % 3];
-          return (
-            <TouchableOpacity
-              key={tag}
-              style={[styles.guideCard, { backgroundColor: theme.bg }]}
-              activeOpacity={0.88}
-              onPress={() => setSelectedTutorial(tutorial)}
-            >
-              <View style={[styles.guideIcon, { backgroundColor: theme.chip }]}>
-                <Icon size={18} color={theme.text} />
-              </View>
-              <Text style={[styles.guideTag, { color: theme.sub }]}>{tag}</Text>
-              <Text style={[styles.guideTitle, { color: theme.text }]}>{title}</Text>
-              <Text style={[styles.guideDesc, { color: theme.sub }]} numberOfLines={2}>{tutorial.subtitle}</Text>
             </TouchableOpacity>
           );
         })}
+      </View>
+      {exercises.length > 4 && (
+        <TouchableOpacity style={styles.moreBtn} activeOpacity={0.8} onPress={() => onNavigateToTab?.('workouts')}>
+          <Text style={styles.moreBtnText}>See all {exercises.length} exercises</Text>
+          <ChevronRight size={15} color={colors.text} />
+        </TouchableOpacity>
+      )}
+      <View style={{ height: 30 }} />
+
+      {/* 7. GUIDES */}
+      <SectionHeader title="Guides" />
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.guideRow}>
+        {TUTORIAL_CARDS.map(({ tutorial, tag, title, Icon }) => (
+          <TouchableOpacity
+            key={tag}
+            style={styles.guideCard}
+            activeOpacity={0.88}
+            onPress={() => setSelectedTutorial(tutorial)}
+          >
+            <View style={styles.guideIcon}>
+              <Icon size={18} color={colors.flame} />
+            </View>
+            <Text style={styles.guideTag}>{tag}</Text>
+            <Text style={styles.guideTitle}>{title}</Text>
+            <Text style={styles.guideDesc} numberOfLines={2}>{tutorial.subtitle}</Text>
+          </TouchableOpacity>
+        ))}
       </ScrollView>
 
       {/* 8. SQUAD */}
-      <SectionHeader Icon={Users} title="YOUR SQUAD" right={<Text style={styles.sectionSubHint}>{friends.length} friends</Text>} />
-
+      <SectionHeader title="Your squad" actionLabel={`${friends.length} friends`} onAction={() => onNavigateToTab?.('profile')} />
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalAvatarRow}>
         <TouchableOpacity style={styles.avatarItem} activeOpacity={0.8} onPress={() => onNavigateToTab?.('profile')}>
           <View style={styles.addFriendCircle}>
@@ -743,74 +739,40 @@ const styles = StyleSheet.create({
   feedScrollView: { flex: 1, backgroundColor: colors.bg },
   feedScrollContent: { paddingHorizontal: 18, paddingTop: 14, paddingBottom: 150 },
 
-  // Calendar + streak
-  calendarCard: { backgroundColor: cardThemes.navy.bg, borderRadius: radius.xl, padding: 20, marginBottom: 18 },
-  calendarHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-  calendarMonthText: { color: cardThemes.navy.text, fontSize: 17, fontWeight: '900' },
-  streakChip: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: cardThemes.navy.chip, borderRadius: radius.pill, paddingHorizontal: 11, paddingVertical: 6 },
-  streakChipLit: { backgroundColor: 'rgba(226, 88, 34, 0.9)' },
-  streakChipText: { color: cardThemes.navy.text, fontSize: 11.5, fontWeight: '900' },
-  daysRow: { flexDirection: 'row', justifyContent: 'space-between' },
-  dayItem: { alignItems: 'center', width: 38 },
-  dayLetter: { color: cardThemes.navy.sub, fontSize: 11, fontWeight: '800', marginBottom: 8 },
-  dayLetterActive: { color: cardThemes.navy.text },
-  dateCircle: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
-  dateCircleToday: { borderWidth: 2, borderColor: colors.flame },
-  dateCircleSelected: { backgroundColor: colors.flame },
-  dateNumber: { color: cardThemes.navy.text, fontSize: 13.5, fontWeight: '700' },
-  dateNumberSelected: { color: colors.text, fontWeight: '900' },
-  dayMarker: { height: 14, marginTop: 4, alignItems: 'center', justifyContent: 'center' },
-  streakMessage: { color: cardThemes.navy.sub, fontSize: 12.5, fontWeight: '600', marginTop: 12, lineHeight: 18 },
-  calendarCalorieRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'rgba(0, 0, 0, 0.18)', borderRadius: radius.lg, paddingVertical: 14, paddingHorizontal: 16, marginTop: 16 },
-  calendarCalorieLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flexShrink: 1 },
-  calFlameIconCircle: { width: 38, height: 38, borderRadius: 19, backgroundColor: colors.flame, alignItems: 'center', justifyContent: 'center' },
-  calBurnNumberText: { color: cardThemes.navy.text, fontSize: 19, fontWeight: '900' },
-  calBurnUnitText: { color: '#FFB38A', fontSize: 12, fontWeight: '800' },
-  calBurnLabelText: { color: cardThemes.navy.sub, fontSize: 10.5, fontWeight: '700', marginTop: 2 },
-  calendarCalorieStatsRight: { flexDirection: 'row', gap: 8 },
-  calMiniStatPill: { backgroundColor: cardThemes.navy.chip, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 6, alignItems: 'center', minWidth: 50 },
-  calMiniStatVal: { color: cardThemes.navy.text, fontSize: 13, fontWeight: '900' },
-  calMiniStatLbl: { color: cardThemes.navy.sub, fontSize: 8, fontWeight: '800', letterSpacing: 0.5 },
-
-  // Level strip
-  levelStrip: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 18, borderRadius: radius.xl, backgroundColor: cardThemes.lavender.bg, marginBottom: 26 },
-  levelStripBadge: { width: 52, height: 52, borderRadius: 16, backgroundColor: cardThemes.lavender.chip, alignItems: 'center', justifyContent: 'center' },
-  levelStripBadgeLabel: { color: cardThemes.lavender.sub, fontSize: 9, fontWeight: '900', letterSpacing: 0.5 },
-  levelStripBadgeText: { color: cardThemes.lavender.text, fontSize: 20, fontWeight: '900', lineHeight: 22 },
-  levelStripTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 },
-  levelStripTitle: { color: cardThemes.lavender.text, fontSize: 16, fontWeight: '900' },
-  levelStripXp: { color: cardThemes.lavender.sub, fontSize: 11.5, fontWeight: '800' },
-  levelTrack: { height: 10, borderRadius: 5, backgroundColor: cardThemes.lavender.track, overflow: 'hidden' },
-  levelFill: { height: '100%', borderRadius: 5, backgroundColor: cardThemes.lavender.text },
-
-  // Health question
-  questionCard: { padding: 20, borderRadius: radius.xl, backgroundColor: cardThemes.pink.bg, marginBottom: 26 },
-  questionTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  questionTag: { backgroundColor: cardThemes.pink.chip, borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 5 },
-  questionTagText: { color: cardThemes.pink.text, fontSize: 10, fontWeight: '900', letterSpacing: 0.6 },
-  questionCounter: { color: cardThemes.pink.sub, fontSize: 11, fontWeight: '900' },
-  questionPrompt: { color: cardThemes.pink.text, fontSize: 17, fontWeight: '900', lineHeight: 24, marginTop: 14 },
-  questionHint: { color: cardThemes.pink.sub, fontSize: 12.5, marginTop: 6 },
-  questionActions: { flexDirection: 'row', gap: 12, marginTop: 18 },
-  yesBtn: {
-    flex: 1,
-    height: 48,
-    borderRadius: radius.pill,
-    backgroundColor: colors.accent,
+  // Hero carousel
+  heroCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
+    backgroundColor: colors.flame,
+    borderRadius: radius.xl,
+    padding: 22,
+    minHeight: 190,
   },
-  yesBtnText: { color: colors.onAccent, fontSize: 15, fontWeight: '900' },
-  noBtn: { flex: 1, height: 48, borderRadius: radius.pill, backgroundColor: cardThemes.pink.chip, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
-  noBtnText: { color: cardThemes.pink.text, fontSize: 15, fontWeight: '900' },
+  heroTag: { color: 'rgba(255,255,255,0.8)', fontSize: 10.5, fontWeight: '900', letterSpacing: 1.2 },
+  heroTitle: { color: '#FFFFFF', fontSize: 26, fontWeight: '900', lineHeight: 30, marginTop: 8 },
+  heroSub: { color: 'rgba(255,255,255,0.88)', fontSize: 12.5, fontWeight: '600', lineHeight: 17, marginTop: 6 },
+  heroCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    alignSelf: 'flex-start',
+    backgroundColor: '#FFFFFF',
+    borderRadius: radius.pill,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    marginTop: 16,
+  },
+  heroCtaText: { color: colors.flame, fontSize: 13, fontWeight: '900' },
+  heroVisual: { width: 110, alignItems: 'center', justifyContent: 'center', marginLeft: 8 },
+  dotsRow: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginTop: 12, marginBottom: 26 },
+  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.surfaceHi },
+  dotActive: { width: 18, backgroundColor: colors.flame },
 
   // Section headers
-  sectionHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 6, marginBottom: 14 },
-  headerLeftRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
-  sectionHeaderTitle: { color: colors.text, fontSize: 13, fontWeight: '900', letterSpacing: 0.8 },
-  sectionSubHint: { color: colors.textDim, fontSize: 11.5, fontWeight: '700' },
+  sectionHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
+  sectionHeaderTitle: { color: colors.text, fontSize: 19, fontWeight: '900' },
+  seeAllBtn: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  seeAllText: { color: colors.textMuted, fontSize: 12.5, fontWeight: '700' },
   onlineBadgePill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -823,87 +785,189 @@ const styles = StyleSheet.create({
   pulseGreenDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: colors.success },
   onlineBadgeText: { color: colors.success, fontSize: 11, fontWeight: '900' },
 
-  // Game modes
-  arenaCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.flame, borderRadius: radius.xl, padding: 22, marginBottom: 14, ...shadow(6) },
-  modeTagRow: { flexDirection: 'row', gap: 6 },
-  modeTag: { backgroundColor: 'rgba(17, 20, 26, 0.22)', borderRadius: radius.pill, paddingHorizontal: 9, paddingVertical: 4 },
-  modeTagText: { color: colors.text, fontSize: 10, fontWeight: '900', letterSpacing: 0.6 },
-  rewardTag: { backgroundColor: colors.text, borderRadius: radius.pill, paddingHorizontal: 9, paddingVertical: 4 },
-  rewardTagText: { color: colors.textOnLight, fontSize: 10, fontWeight: '900', letterSpacing: 0.4 },
-  arenaTitle: { color: colors.text, fontSize: 22, fontWeight: '900', marginTop: 10 },
-  arenaSub: { color: 'rgba(255, 255, 255, 0.85)', fontSize: 12, fontWeight: '600', marginTop: 4 },
-  playBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    alignSelf: 'flex-start',
-    backgroundColor: colors.textOnLight,
-    borderRadius: radius.pill,
-    paddingHorizontal: 16,
-    paddingVertical: 9,
-    marginTop: 14,
-  },
-  playBtnText: { color: colors.text, fontSize: 12.5, fontWeight: '900' },
-  modeRow: { flexDirection: 'row', gap: 14, marginBottom: 28 },
-  modeCard: { flex: 1, borderRadius: radius.xl, padding: 18, minHeight: 175 },
-  modeIconCircle: {
+  // Activity
+  weekRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 14 },
+  weekDay: {
     width: 42,
-    height: 42,
-    borderRadius: 13,
-    backgroundColor: 'rgba(17, 20, 26, 0.08)',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderRadius: 14,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  weekDaySelected: { backgroundColor: colors.flame, borderColor: colors.flame },
+  weekLetter: { color: colors.textMuted, fontSize: 10.5, fontWeight: '800' },
+  weekDate: { color: colors.text, fontSize: 14, fontWeight: '900', marginTop: 2 },
+  weekTextSelected: { color: '#FFFFFF' },
+  weekDot: { width: 5, height: 5, borderRadius: 3, marginTop: 5, backgroundColor: 'transparent' },
+  weekDotActive: { backgroundColor: colors.flame },
+  activityGrid: { flexDirection: 'row', gap: 12, marginBottom: 14 },
+  activityCol: { flex: 1, gap: 12 },
+  statTile: {
+    padding: 16,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  statIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: 'rgba(226, 88, 34, 0.14)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  modeTitle: { color: colors.textOnLight, fontSize: 16, fontWeight: '900', marginTop: 14 },
-  modeSub: { color: '#374151', fontSize: 11.5, fontWeight: '600', marginTop: 3 },
-  modeFooter: {
+  statLabel: { color: colors.textMuted, fontSize: 11.5, fontWeight: '700', marginTop: 10 },
+  statValue: { color: colors.text, fontSize: 24, fontWeight: '900', marginTop: 2 },
+  statUnit: { color: colors.textMuted, fontSize: 13, fontWeight: '800' },
+  streakTile: {
+    flex: 1,
+    padding: 16,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  streakValue: { color: colors.text, fontSize: 40, fontWeight: '900', lineHeight: 46, marginTop: 2 },
+  streakFlames: { flexDirection: 'row', gap: 3, marginTop: 4 },
+  streakHint: { color: colors.textMuted, fontSize: 11.5, lineHeight: 16, marginTop: 8 },
+  streakBtn: {
+    marginTop: 'auto',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderRadius: radius.pill,
+    backgroundColor: colors.flame,
+  },
+  streakBtnText: { color: '#FFFFFF', fontSize: 13, fontWeight: '900' },
+
+  // Level
+  levelStrip: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 'auto',
-    paddingTop: 12,
-  },
-  modeFooterText: { color: colors.textOnLight, fontSize: 10, fontWeight: '900', letterSpacing: 0.8 },
-
-  // AI coach
-  tutorFlatListContent: { gap: 14, paddingBottom: 8, marginBottom: 26 },
-  tutorCard: {
-    width: 142,
-    height: 142,
+    gap: 14,
+    padding: 16,
     borderRadius: radius.lg,
-    padding: 12,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginBottom: 28,
+  },
+  levelBadge: {
+    width: 50,
+    height: 50,
+    borderRadius: 16,
+    backgroundColor: 'rgba(226, 88, 34, 0.14)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  levelBadgeText: { color: colors.flame, fontSize: 13, fontWeight: '900' },
+  levelTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 },
+  levelTitle: { color: colors.text, fontSize: 16, fontWeight: '900' },
+  levelXp: { color: colors.textMuted, fontSize: 11.5, fontWeight: '700' },
+  levelTrack: { height: 9, borderRadius: 5, backgroundColor: colors.surfaceHi, overflow: 'hidden' },
+  levelFill: { height: '100%', borderRadius: 5, backgroundColor: colors.flame },
+
+  // Body check-in
+  questionCard: {
+    padding: 20,
+    borderRadius: radius.xl,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginBottom: 28,
+  },
+  questionTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  questionTag: { backgroundColor: 'rgba(226, 88, 34, 0.14)', borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 5 },
+  questionTagText: { color: colors.flame, fontSize: 10, fontWeight: '900', letterSpacing: 0.6 },
+  questionCounter: { color: colors.textDim, fontSize: 11, fontWeight: '900' },
+  questionPrompt: { color: colors.text, fontSize: 17, fontWeight: '900', lineHeight: 24, marginTop: 14 },
+  questionHint: { color: colors.textMuted, fontSize: 12.5, marginTop: 6 },
+  questionActions: { flexDirection: 'row', gap: 12, marginTop: 18 },
+  yesBtn: {
+    flex: 1,
+    height: 48,
+    borderRadius: radius.pill,
+    backgroundColor: colors.accent,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  yesBtnText: { color: colors.onAccent, fontSize: 15, fontWeight: '900' },
+  noBtn: {
+    flex: 1,
+    height: 48,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surfaceHi,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  noBtnText: { color: colors.text, fontSize: 15, fontWeight: '900' },
+
+  // AI coach grid
+  tutorGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+  tutorCard: {
+    width: '47.5%',
+    flexGrow: 1,
+    borderRadius: radius.xl,
+    padding: 14,
+    minHeight: 200,
     justifyContent: 'space-between',
   },
   tutorTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  tutorCategoryPill: { backgroundColor: 'rgba(17, 20, 26, 0.08)', borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2 },
-  tutorCategory: { fontSize: 8.5, fontWeight: '800', letterSpacing: 0.4 },
-  tutorDurationBadge: { backgroundColor: colors.text, borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2 },
-  tutorDuration: { color: colors.textOnLight, fontSize: 9, fontWeight: '900' },
-  tutorIconWrap: { alignItems: 'center', justifyContent: 'center' },
-  tutorBottomRow: {
+  tutorPill: { borderRadius: 8, paddingHorizontal: 7, paddingVertical: 3 },
+  tutorPillText: { fontSize: 8.5, fontWeight: '900', letterSpacing: 0.4 },
+  tutorDuration: { backgroundColor: '#FFFFFF', borderRadius: 8, paddingHorizontal: 7, paddingVertical: 3 },
+  tutorDurationText: { color: colors.textOnLight, fontSize: 9.5, fontWeight: '900' },
+  tutorIconWrap: { alignItems: 'center', justifyContent: 'center', marginVertical: 10 },
+  tutorBottomRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  tutorTitle: { fontSize: 14.5, fontWeight: '900' },
+  tutorSub: { fontSize: 10.5, fontWeight: '700', marginTop: 1 },
+  tutorPlay: { width: 28, height: 28, borderRadius: 14, backgroundColor: colors.textOnLight, alignItems: 'center', justifyContent: 'center' },
+  moreBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingTop: 4,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(17, 20, 26, 0.08)',
+    justifyContent: 'center',
+    gap: 4,
+    marginTop: 14,
+    paddingVertical: 12,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  tutorTitle: { fontSize: 13, fontWeight: '900' },
-  tutorSub: { fontSize: 9, fontWeight: '700', marginTop: 1 },
-  tutorPlay: { width: 22, height: 22, borderRadius: 11, backgroundColor: colors.textOnLight, alignItems: 'center', justifyContent: 'center' },
+  moreBtnText: { color: colors.text, fontSize: 13, fontWeight: '800' },
 
   // Guides
-  guideRow: { gap: 14, paddingBottom: 8, marginBottom: 26 },
-  guideCard: { width: 210, padding: 18, borderRadius: radius.xl },
-  guideIcon: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  guideTag: { fontSize: 9.5, fontWeight: '900', letterSpacing: 0.8, marginTop: 14 },
-  guideTitle: { fontSize: 15, fontWeight: '900', marginTop: 4 },
-  guideDesc: { fontSize: 12, lineHeight: 17, marginTop: 6 },
+  guideRow: { gap: 12, paddingTop: 2, paddingBottom: 8, marginBottom: 20 },
+  guideCard: {
+    width: 210,
+    padding: 18,
+    borderRadius: radius.xl,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  guideIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: 'rgba(226, 88, 34, 0.14)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  guideTag: { color: colors.flame, fontSize: 9.5, fontWeight: '900', letterSpacing: 0.8, marginTop: 14 },
+  guideTitle: { color: colors.text, fontSize: 15, fontWeight: '900', marginTop: 4 },
+  guideDesc: { color: colors.textMuted, fontSize: 12, lineHeight: 17, marginTop: 6 },
 
   // Squad
   horizontalAvatarRow: { gap: 14, paddingBottom: 8, alignItems: 'flex-start' },
   avatarItem: { alignItems: 'center', width: 64 },
-  avatarWrapper: { padding: 2, borderRadius: 32, borderWidth: 2, borderColor: colors.lavender },
+  avatarWrapper: { padding: 2, borderRadius: 32, borderWidth: 2, borderColor: colors.flame },
   addFriendCircle: {
     width: 58,
     height: 58,

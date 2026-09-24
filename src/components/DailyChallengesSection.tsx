@@ -21,7 +21,7 @@ import {
   DailyChallengeSummary,
 } from '../utils/dailyChallengeService';
 import { useDailyChallengeStore } from '../store/dailyChallengeStore';
-import { cardThemes, colors, radius } from '../theme';
+import { colors, radius } from '../theme';
 
 interface DailyChallengesSectionProps {
   exercises: ExerciseItem[];
@@ -31,12 +31,10 @@ interface DailyChallengesSectionProps {
   onExerciseSelect: (exercise: ExerciseItem) => void;
 }
 
+// Exercise cards alternate between the two shared exercise colors.
 const CARD_PALETTES = [
   { bg: '#C8B6FF', textColor: '#11141A', subColor: '#374151', badgeBg: 'rgba(17, 20, 26, 0.08)' },
   { bg: '#FFD6E0', textColor: '#11141A', subColor: '#374151', badgeBg: 'rgba(17, 20, 26, 0.08)' },
-  { bg: '#A7F3D0', textColor: '#11141A', subColor: '#065F46', badgeBg: 'rgba(6, 95, 70, 0.1)' },
-  { bg: '#E8D5C4', textColor: '#11141A', subColor: '#374151', badgeBg: 'rgba(17, 20, 26, 0.08)' },
-  { bg: '#FDE68A', textColor: '#11141A', subColor: '#451A03', badgeBg: 'rgba(69, 26, 3, 0.08)' },
 ];
 
 export const DailyChallengesSection: React.FC<DailyChallengesSectionProps> = ({
@@ -80,8 +78,7 @@ export const DailyChallengesSection: React.FC<DailyChallengesSectionProps> = ({
       {/* 1. SECTION HEADER */}
       <View style={styles.headerRow}>
         <View style={styles.headerLeft}>
-          <Target size={15} color={colors.accent} style={{ marginRight: 6 }} />
-          <Text style={styles.headerTitle}>DAILY QUESTS</Text>
+          <Text style={styles.headerTitle}>Daily quests</Text>
           <View style={styles.xpRewardPill}>
             <Text style={styles.xpRewardText}>+{totalXp} XP</Text>
           </View>
@@ -270,12 +267,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  headerTitle: {
-    color: colors.text,
-    fontSize: 13,
-    fontWeight: '900',
-    letterSpacing: 0.8,
-  },
+  headerTitle: { color: colors.text, fontSize: 19, fontWeight: '900' },
   xpRewardPill: {
     marginLeft: 8,
     backgroundColor: colors.accent,
@@ -314,24 +306,24 @@ const styles = StyleSheet.create({
     fontSize: 10.5,
     fontWeight: '800',
   },
-  totalProgressCard: { backgroundColor: cardThemes.sand.bg, borderRadius: radius.xl, padding: 18, marginBottom: 16 },
+  totalProgressCard: { backgroundColor: colors.surface, borderRadius: radius.xl, padding: 18, marginBottom: 16, borderWidth: 1, borderColor: colors.border },
   totalProgressTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   totalProgressLeft: {
     flex: 1,
     marginRight: 10,
   },
-  totalProgressTitle: { color: cardThemes.sand.text, fontSize: 14.5, fontWeight: '900' },
-  totalProgressSubtitle: { color: cardThemes.sand.sub, fontSize: 11.5, marginTop: 3, fontWeight: '600' },
-  totalPercentPill: { backgroundColor: cardThemes.sand.chip, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 5 },
+  totalProgressTitle: { color: colors.text, fontSize: 14.5, fontWeight: '900' },
+  totalProgressSubtitle: { color: colors.textMuted, fontSize: 11.5, marginTop: 3, fontWeight: '600' },
+  totalPercentPill: { backgroundColor: 'rgba(226, 88, 34, 0.14)', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 5 },
   totalPercentPillDone: {
     backgroundColor: 'rgba(16, 185, 129, 0.15)',
     borderColor: 'rgba(16, 185, 129, 0.35)',
   },
-  totalPercentText: { color: cardThemes.sand.text, fontSize: 13, fontWeight: '900' },
+  totalPercentText: { color: colors.flame, fontSize: 13, fontWeight: '900' },
   totalPercentTextDone: {
     color: '#10B981',
   },
-  totalProgressBarTrack: { height: 10, width: '100%', backgroundColor: cardThemes.sand.track, borderRadius: 5, overflow: 'hidden' },
+  totalProgressBarTrack: { height: 9, width: '100%', backgroundColor: colors.surfaceHi, borderRadius: 5, overflow: 'hidden' },
   totalProgressBarFill: {
     height: '100%',
     borderRadius: 3,

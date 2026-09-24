@@ -68,3 +68,6 @@ export const cardThemes = {
 
 /** Rotating order used for lists of cards (same rhythm as the Exercises screen). */
 export const cardCycle: CardTheme[] = [cardThemes.lavender, cardThemes.pink, cardThemes.orange, cardThemes.navy, cardThemes.mint];
+
+/** Exercise cards alternate between just these two colors. */
+export const exerciseCardThemes: CardTheme[] = [cardThemes.lavender, cardThemes.pink];
