@@ -11,6 +11,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -50,6 +51,7 @@ export const LoadingScreen: React.FC<LoadingScreenProps> = ({
   onCancel,
   fullScreen = true,
 }) => {
+  const insets = useSafeAreaInsets();
   const [quoteData, setQuoteData] = useState<QuoteData>({
     quote: 'The secret of getting ahead is getting started.',
     author: 'Mark Twain',
@@ -143,7 +145,7 @@ export const LoadingScreen: React.FC<LoadingScreenProps> = ({
   };
 
   return (
-    <View style={[styles.container, !fullScreen && styles.overlayContainer]}>
+    <View style={[styles.container, !fullScreen && styles.overlayContainer, { paddingBottom: insets.bottom + 64 }]}>
       <StatusBar barStyle="light-content" backgroundColor={COLORS.background} />
 
       <Text style={styles.title}>{title}</Text>

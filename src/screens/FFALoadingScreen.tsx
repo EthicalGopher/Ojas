@@ -11,6 +11,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const LOADING_ANIMATION = require('../../assets/Videoes/loading_animation.gif');
@@ -48,6 +49,7 @@ export const FFALoadingScreen: React.FC<FFALoadingScreenProps> = ({
   onTimerExpired,
   fullScreen = true,
 }) => {
+  const insets = useSafeAreaInsets();
   const [countdown, setCountdown] = useState<number>(
     typeof serverSeconds === 'number' ? serverSeconds : initialSeconds
   );
@@ -155,7 +157,7 @@ export const FFALoadingScreen: React.FC<FFALoadingScreenProps> = ({
   const timerTextColor = isUrgent ? COLORS.coral : COLORS.accent;
 
   return (
-    <View style={[styles.container, !fullScreen && styles.overlayContainer]}>
+    <View style={[styles.container, !fullScreen && styles.overlayContainer, { paddingBottom: insets.bottom + 64 }]}>
       <StatusBar barStyle="light-content" backgroundColor={COLORS.background} />
 
       {/* Top clean title without boxes or icons */}
