@@ -34,7 +34,15 @@ import {
   UserPlus,
   X,
   Zap,
+  AlertTriangle,
+  Check,
+  ChevronsDown,
+  Equal,
+  Ruler,
+  ScanLine,
+  Sun,
 } from 'lucide-react-native';
+import { ProgressRing } from '../../../components/ui/ProgressRing';
 import {
   disconnectMatchSocket,
   addMatchMessageListener,
@@ -1063,94 +1071,81 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
         />
       )}
 
-      {/* OVERLAY 2: 30-Second Camera Setup with Center-to-Top Animation & Clean 1-2 Word Visibility Instruction */}
+      {/* OVERLAY 2: Camera setup - countdown ring, body-frame guide and positioning status */}
       {matchPhase === 'setup_countdown' && (() => {
-        // Dynamic clean 1-2 word instruction based on visibility & countdown
-        let instructionText = 'STEP BACK';
-        let instructionColor = '#F87171'; // Red/Salmon
-        let instructionBg = 'rgba(239, 68, 68, 0.35)';
-        let instructionBorder = '#EF4444';
-
-        if (setupCount <= 3) {
-          instructionText = 'GET READY';
-          instructionColor = '#E8D5C4';
-          instructionBg = 'rgba(232, 213, 196, 0.35)';
-          instructionBorder = '#E8D5C4';
-        } else if (visibility >= 0.7) {
-          instructionText = 'PERFECT';
-          instructionColor = '#34D399'; // Emerald
-          instructionBg = 'rgba(52, 211, 153, 0.35)';
-          instructionBorder = '#10B981';
-        } else if (visibility >= 0.35) {
-          instructionText = 'MOVE BACK';
-          instructionColor = '#FBBF24'; // Amber
-          instructionBg = 'rgba(251, 191, 36, 0.35)';
-          instructionBorder = '#F59E0B';
-        }
-
-        const centerTop = (windowHeight - 140) / 2;
-        const targetTop = 18;
-
-        const animatedTop = setupPositionAnim.interpolate({
-          inputRange: [0, 1],
-          outputRange: [centerTop, targetTop],
-        });
-
-        const animatedScale = setupPositionAnim.interpolate({
-          inputRange: [0, 1],
-          outputRange: [1, 0.52],
-        });
-
-        // Guidance text smooth fade, scale, and subtle slide-in animation
-        const instructionOpacity = instructionAnim.interpolate({
-          inputRange: [0, 1],
-          outputRange: [0, 1],
-        });
-
-        const instructionScale = instructionAnim.interpolate({
-          inputRange: [0, 1],
-          outputRange: [0.85, 1],
-        });
-
-        const instructionTranslateY = instructionAnim.interpolate({
-          inputRange: [0, 1],
-          outputRange: [15, 0],
-        });
+        const status =
+          setupCount <= 3
+            ? { label: 'GET READY', hint: 'The match starts in a moment', color: '#E25822', Icon: Zap }
+            : visibility >= 0.7
+            ? { label: 'PERFECT', hint: 'Hold this spot - you are fully in frame', color: '#10B981', Icon: Check }
+            : visibility >= 0.35
+            ? { label: 'MOVE BACK', hint: 'A little further from the phone', color: '#F59E0B', Icon: ChevronsDown }
+            : { label: 'STEP BACK', hint: 'Get your whole body inside the frame', color: '#EF4444', Icon: ScanLine };
+        const framePct = Math.round(Math.min(1, Math.max(0, visibility)) * 100);
+        const rivalName = mode === 'ffa' ? 'Battle Ground' : mode === 'ai_battle' ? currentBot.name : `@${opponentUsername}`;
+        const StatusIcon = status.Icon;
+        // Split modes (AI duel / faceoff) only cover the player's own camera half; keep clear of
+        // the floating action bar at the bottom.
+        const isSplit = mode !== 'quickjoin' && mode !== 'ffa';
+        const compact = isSplit || isLandscape;
+        const region = isSplit
+          ? isLandscape
+            ? { top: 0, bottom: 0, left: windowWidth / 2, right: 0 }
+            : { top: windowHeight / 2, bottom: 0, left: 0, right: 0 }
+          : { top: 0, bottom: 0, left: 0, right: 0 };
 
         return (
-          <View style={styles.countdownOverlay} pointerEvents="none">
-            {/* Countdown Badge - Starts in center, becomes small and moves smoothly to top */}
-            <Animated.View
-              style={[
-                styles.countdownCircleBadge,
-                {
-                  position: 'absolute',
-                  top: animatedTop,
-                  transform: [{ scale: animatedScale }],
-                },
-              ]}
-            >
-              <Text style={styles.countdownNumberText}>{setupCount}</Text>
-            </Animated.View>
+          <View
+            style={[
+              styles.setupOverlay,
+              region,
+              { paddingTop: isSplit && !isLandscape ? 12 : isLandscape ? 16 : 48, paddingBottom: isLandscape ? 84 : 136 },
+            ]}
+            pointerEvents="none"
+          >
+            {/* Top bar: who you're facing + countdown ring */}
+            <View style={styles.setupTopBar}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.setupEyebrow}>GET INTO POSITION</Text>
+                <Text style={styles.setupTitle} numberOfLines={1}>vs {rivalName}</Text>
+              </View>
+              <ProgressRing size={62} strokeWidth={5} progress={setupCount / 30} color={status.color} trackColor="rgba(255,255,255,0.15)">
+                <Text style={styles.setupCount}>{setupCount}</Text>
+              </ProgressRing>
+            </View>
 
-            {/* Guidance Text Card - Smoothly appears after counter reaches the top */}
-            <Animated.View
-              style={[
-                styles.instructionPillCard,
-                {
-                  backgroundColor: instructionBg,
-                  borderColor: instructionBorder,
-                  opacity: instructionOpacity,
-                  transform: [
-                    { scale: instructionScale },
-                    { translateY: instructionTranslateY },
-                  ],
-                },
-              ]}
-            >
-              <Text style={[styles.instructionMainText, { color: instructionColor }]}>
-                {instructionText}
-              </Text>
+            {/* Body frame guide (full-screen camera only) */}
+            {!compact && <View style={styles.frameGuide}>
+              {(['tl', 'tr', 'bl', 'br'] as const).map((corner) => (
+                <View key={corner} style={[styles.frameCorner, styles[`frame_${corner}`], { borderColor: status.color }]} />
+              ))}
+            </View>}
+
+            {/* Bottom panel: status, frame meter, tips */}
+            <Animated.View style={[styles.setupBottom, { opacity: instructionAnim.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1] }) }]}>
+              <View style={styles.setupStatusRow}>
+                <View style={[styles.setupStatusPill, { backgroundColor: status.color }]}>
+                  <StatusIcon size={16} color="#FFFFFF" strokeWidth={3} />
+                  <Text style={styles.setupStatusText}>{status.label}</Text>
+                </View>
+                <Text style={styles.setupFramePct}>{framePct}%</Text>
+              </View>
+              <Text style={styles.setupHint}>{status.hint}</Text>
+              <View style={styles.setupMeterTrack}>
+                <View style={[styles.setupMeterFill, { width: `${Math.max(3, framePct)}%`, backgroundColor: status.color }]} />
+              </View>
+              {!compact && <View style={styles.setupTips}>
+                {[
+                  { Icon: Ruler, text: '5-7 ft away' },
+                  { Icon: Smartphone, text: 'Phone upright' },
+                  { Icon: Sun, text: 'Good light' },
+                ].map(({ Icon, text }) => (
+                  <View key={text} style={styles.setupTip}>
+                    <Icon size={13} color="rgba(255,255,255,0.8)" />
+                    <Text style={styles.setupTipText}>{text}</Text>
+                  </View>
+                ))}
+              </View>}
             </Animated.View>
           </View>
         );
@@ -1177,7 +1172,10 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
       {matchPhase === 'active_match' && visibility < 0.40 && (
         <View style={styles.activeLowVisibilityOverlay} pointerEvents="none">
           <View style={styles.activeLowVisibilityPill}>
-            <Text style={styles.activeLowVisibilityText}>⚠️ LOW VISIBILITY</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <AlertTriangle size={16} color="#FFFFFF" strokeWidth={2.6} />
+              <Text style={styles.activeLowVisibilityText}>LOW VISIBILITY</Text>
+            </View>
             <Text style={styles.activeLowVisibilitySub}>Step back into full camera frame to count reps</Text>
           </View>
         </View>
@@ -1196,11 +1194,9 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
               const isWin = isFFA ? myRank === 1 : selfScore > opponentScore;
               const isDraw = isFFA ? myRank > 1 && myRank <= 3 : selfScore === opponentScore;
 
-              const title = isWin
-                ? '🏆 VICTORY!'
-                : isDraw
-                ? isFFA ? `🥈 PODIUM #${myRank || 2}!` : '🤝 DRAW!'
-                : '💪 DEFEAT';
+              const title = isWin ? 'VICTORY!' : isDraw ? (isFFA ? `PODIUM #${myRank || 2}` : 'DRAW') : 'DEFEAT';
+              const resultColor = isWin ? '#F59E0B' : isDraw ? '#38BDF8' : '#E25822';
+              const ResultIcon = isWin ? Trophy : isDraw ? Equal : Dumbbell;
               const subtitle = isWin
                 ? isFFA ? `Rank #1 Champion with ${selfScore} reps!` : `Crushed it with ${selfScore} reps!`
                 : isDraw
@@ -1209,7 +1205,10 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
 
               return (
                 <View style={styles.matchEndedHeader}>
-                  <Text style={styles.matchEndedTitle}>{title}</Text>
+                  <View style={[styles.resultIconCircle, { backgroundColor: `${resultColor}22`, borderColor: resultColor }]}>
+                    <ResultIcon size={30} color={resultColor} />
+                  </View>
+                  <Text style={[styles.matchEndedTitle, { color: resultColor }]}>{title}</Text>
                   <Text style={styles.matchEndedSubtitle}>{subtitle}</Text>
                 </View>
               );
@@ -1938,6 +1937,29 @@ const PlayerBadge: React.FC<{
 };
 
 const styles = StyleSheet.create({
+  resultIconCircle: { width: 64, height: 64, borderRadius: 32, borderWidth: 2, alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
+  setupTipText: { color: 'rgba(255,255,255,0.8)', fontSize: 11.5, fontWeight: '700' },
+  setupTip: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  setupTips: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 14 },
+  setupMeterFill: { height: '100%', borderRadius: 4 },
+  setupMeterTrack: { height: 8, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.12)', overflow: 'hidden', marginTop: 12 },
+  setupHint: { color: 'rgba(255,255,255,0.8)', fontSize: 13, fontWeight: '600', marginTop: 10 },
+  setupFramePct: { color: '#FFFFFF', fontSize: 20, fontWeight: '900' },
+  setupStatusText: { color: '#FFFFFF', fontSize: 15, fontWeight: '900', letterSpacing: 1 },
+  setupStatusPill: { flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999 },
+  setupStatusRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  setupBottom: { padding: 18, borderRadius: 24, backgroundColor: 'rgba(13, 17, 26, 0.9)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
+  frame_br: { bottom: 0, right: 0, borderBottomWidth: 4, borderRightWidth: 4, borderBottomRightRadius: 16 },
+  frame_bl: { bottom: 0, left: 0, borderBottomWidth: 4, borderLeftWidth: 4, borderBottomLeftRadius: 16 },
+  frame_tr: { top: 0, right: 0, borderTopWidth: 4, borderRightWidth: 4, borderTopRightRadius: 16 },
+  frame_tl: { top: 0, left: 0, borderTopWidth: 4, borderLeftWidth: 4, borderTopLeftRadius: 16 },
+  frameCorner: { position: 'absolute', width: 38, height: 38, borderColor: '#FFFFFF' },
+  frameGuide: { position: 'absolute', top: '24%', bottom: '32%', left: '14%', right: '14%' },
+  setupCount: { color: '#FFFFFF', fontSize: 22, fontWeight: '900' },
+  setupTitle: { color: '#FFFFFF', fontSize: 18, fontWeight: '900', marginTop: 3 },
+  setupEyebrow: { color: '#E25822', fontSize: 10.5, fontWeight: '900', letterSpacing: 1.4 },
+  setupTopBar: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, paddingLeft: 18, paddingRight: 12, borderRadius: 24, backgroundColor: 'rgba(13, 17, 26, 0.88)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
+  setupOverlay: { position: 'absolute', justifyContent: 'space-between', paddingHorizontal: 16, zIndex: 40 },
   container: {
     flex: 1,
     backgroundColor: '#000',
