@@ -304,6 +304,9 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
     return calculateExerciseCalories(exId, reps, holdSecs);
   }, []);
 
+  // Tree Pose is scored by the longest unbroken hold (seconds), not reps/points.
+  const isTimedScore = exerciseId === '9';
+
   const getExerciseDisplayName = useCallback((exId?: string) => {
     switch (exId) {
       case '1': return 'Squats';
@@ -1167,6 +1170,7 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
           opponentAvatarUrl={opponentAvatarUrl}
           ffaLeaderboard={ffaLeaderboard}
           poseState={currentPoseState}
+          scoreSuffix={isTimedScore ? 's' : ''}
         />
       )}
 
@@ -1199,11 +1203,12 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
               const title = isWin ? 'VICTORY!' : isDraw ? (isFFA ? `PODIUM #${myRank || 2}` : 'DRAW') : 'DEFEAT';
               const resultColor = isWin ? '#F59E0B' : isDraw ? '#38BDF8' : '#E25822';
               const ResultIcon = isWin ? Trophy : isDraw ? Equal : Dumbbell;
+              const scoreText = isTimedScore ? `a ${selfScore}s best hold` : `${selfScore} reps`;
               const subtitle = isWin
-                ? isFFA ? `Rank #1 Champion with ${selfScore} reps!` : `Crushed it with ${selfScore} reps!`
+                ? isFFA ? `Rank #1 Champion with ${scoreText}!` : `Crushed it with ${scoreText}!`
                 : isDraw
-                ? `${selfScore} reps recorded`
-                : `${selfScore} reps - Great effort!`;
+                ? isTimedScore ? `Best hold: ${selfScore}s` : `${selfScore} reps recorded`
+                : isTimedScore ? `Best hold: ${selfScore}s - Great effort!` : `${selfScore} reps - Great effort!`;
 
               return (
                 <View style={styles.matchEndedHeader}>
@@ -1219,8 +1224,8 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
             {/* Score Comparison Badge */}
             <View style={styles.matchEndedScoreRow}>
               <View style={styles.matchEndedScoreBox}>
-                <Text style={styles.matchEndedScoreLabel}>YOUR SCORE</Text>
-                <Text style={styles.matchEndedScoreNum}>{selfScore}</Text>
+                <Text style={styles.matchEndedScoreLabel}>{isTimedScore ? 'YOUR BEST HOLD' : 'YOUR SCORE'}</Text>
+                <Text style={styles.matchEndedScoreNum}>{selfScore}{isTimedScore ? 's' : ''}</Text>
               </View>
               {mode !== 'ffa' && (
                 <>
@@ -1229,7 +1234,7 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
                     <Text style={styles.matchEndedScoreLabel}>
                       {mode === 'ai_battle' ? currentBot.name : opponentUsername?.toUpperCase() || 'RIVAL'}
                     </Text>
-                    <Text style={styles.matchEndedScoreNum}>{opponentScore}</Text>
+                    <Text style={styles.matchEndedScoreNum}>{opponentScore}{isTimedScore ? 's' : ''}</Text>
                   </View>
                 </>
               )}
@@ -1266,7 +1271,7 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
                 <View style={styles.matchStatIconCircle}>
                   <Dumbbell size={15} color="#38BDF8" />
                 </View>
-                <Text style={styles.matchWorkoutStatVal}>{selfScore}{exerciseId === '9' ? 's' : ''}</Text>
+                <Text style={styles.matchWorkoutStatVal}>{selfScore}{isTimedScore ? 's' : ''}</Text>
                 <Text style={styles.matchWorkoutStatLbl}>{exerciseId === '9' ? 'BEST HOLD' : 'TOTAL REPS'}</Text>
               </View>
 
@@ -1618,6 +1623,8 @@ const ScoreBoard: React.FC<{
   ffaLeaderboard?: FFALeaderboardPlayer[];
   poseState?: { text: string; color: string; bg: string; border: string };
   botAvatarIcon?: string;
+  /** 's' for Tree Pose, whose score is the best hold in seconds. */
+  scoreSuffix?: string;
 }> = ({
   mode = 'faceoff',
   selfScore,
@@ -1631,6 +1638,7 @@ const ScoreBoard: React.FC<{
   ffaLeaderboard = [],
   poseState,
   botAvatarIcon,
+  scoreSuffix = '',
 }) => {
   const selfScale = useBumpAnim(selfScore);
   const opponentScale = useBumpAnim(opponentScore);
@@ -1695,6 +1703,7 @@ const ScoreBoard: React.FC<{
             username={selfUsername}
             avatarUrl={selfAvatarUrl}
             score={selfScore}
+            suffix={scoreSuffix}
             color={SELF_COLOR}
             leading={myRank === 1}
             scale={selfScale}
@@ -1810,7 +1819,7 @@ const ScoreBoard: React.FC<{
                       {player.score}
                     </Text>
                     <Text style={[styles.ffaPlayerScoreUnit, isTop3 && { color: repColor, opacity: 0.85, fontWeight: '800' }]}>
-                      reps
+                      {scoreSuffix ? 'sec' : 'reps'}
                     </Text>
                   </View>
                 </View>
@@ -1830,6 +1839,7 @@ const ScoreBoard: React.FC<{
         username={selfUsername}
         avatarUrl={selfAvatarUrl}
         score={selfScore}
+        suffix={scoreSuffix}
         color={SELF_COLOR}
         leading={!ended && leader === 'self'}
         scale={selfScale}
@@ -1886,6 +1896,7 @@ const ScoreBoard: React.FC<{
         username={opponentUsername}
         avatarUrl={opponentAvatarUrl}
         score={opponentScore}
+        suffix={scoreSuffix}
         color={OPPONENT_COLOR}
         leading={!ended && leader === 'opponent'}
         scale={opponentScale}
@@ -1901,12 +1912,13 @@ const PlayerBadge: React.FC<{
   username: string;
   avatarUrl?: string | null;
   score: number;
+  suffix?: string;
   color: string;
   leading: boolean;
   scale: Animated.Value;
   botAvatarIcon?: string;
   isBot?: boolean;
-}> = ({ isSelf = false, label, username, avatarUrl, score, color, leading, scale, isBot }) => {
+}> = ({ isSelf = false, label, username, avatarUrl, score, suffix = '', color, leading, scale, isBot }) => {
   return (
     <View style={[styles.playerBadge, !isSelf && styles.playerBadgeReverse, leading && styles.playerBadgeLeading]}>
       <View style={styles.avatarWrap}>
@@ -1930,7 +1942,7 @@ const PlayerBadge: React.FC<{
               styles.playerScoreHighContrast,
             ]}
           >
-            {score}
+            {score}{suffix}
           </Text>
         </Animated.View>
       </View>

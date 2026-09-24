@@ -1568,6 +1568,7 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
   const [poseDetected, setPoseDetected] = useState<boolean>(false);
   const [repCount, setRepCount] = useState<number>(0);
   const [holdSeconds, setHoldSeconds] = useState<number>(0);
+  const [bestHoldSeconds, setBestHoldSeconds] = useState<number>(0);
   const [isModelLoading, setIsModelLoading] = useState<boolean>(true);
   const [visibility, setVisibility] = useState<number>(1);
   const [isVoiceMuted, setIsVoiceMuted] = useState<boolean>(false);
@@ -1602,7 +1603,7 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
     exerciseName.toLowerCase().includes('tree') ||
     exerciseName.toLowerCase().includes('vriksh') ||
     exerciseId === '9';
-  const countLabel = isLongestHold ? 'BEST' : isHoldPose ? 'POINTS' : isStepCount ? 'STEPS' : 'REPS';
+  const countLabel = isLongestHold ? 'BEST HOLD' : isHoldPose ? 'POINTS' : isStepCount ? 'STEPS' : 'REPS';
 
   const MOTIVATIONAL_PHRASES = [
     'Well done!',
@@ -1713,6 +1714,7 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
         const deltaHold = Math.max(0, holdSecs - prevSessionHoldRef.current);
         prevSessionHoldRef.current = holdSecs;
         setHoldSeconds(holdSecs);
+        if (typeof data.bestHoldSeconds === 'number') setBestHoldSeconds(data.bestHoldSeconds);
 
         if (deltaHold > 0) {
           useDailyChallengeStore.getState().addExerciseDelta(
@@ -1821,6 +1823,7 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
   const handleRestartSession = () => {
     setRepCount(0);
     setHoldSeconds(0);
+    setBestHoldSeconds(0);
     prevSessionRepsRef.current = 0;
     prevSessionHoldRef.current = 0;
     if (webViewRef.current) {
@@ -1937,7 +1940,7 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
                 { transform: [{ scale: repScaleAnim }] },
               ]}
             >
-              {repCount}{isLongestHold ? 's' : ''}
+              {isLongestHold ? `${bestHoldSeconds.toFixed(1)}s` : repCount}
             </Animated.Text>
           </View>
         </View>
