@@ -10,10 +10,10 @@ APP_ID="com.sankhyah.expocameratest"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 KIND="${1:-debug}"
 
-if [ "$KIND" = "release" ]; then
-  PROPS="$ROOT/android/keystore.properties"
-  if [ ! -f "$PROPS" ]; then KIND="debug"; fi
-fi
+# Debug builds are signed with the release key whenever it exists (see android/app/build.gradle),
+# so both kinds resolve to the same certificate on this machine.
+PROPS="$ROOT/android/keystore.properties"
+if [ -f "$PROPS" ]; then KIND="release"; else KIND="debug"; fi
 
 if [ "$KIND" = "release" ]; then
   get() { grep "^$1=" "$PROPS" | cut -d= -f2-; }

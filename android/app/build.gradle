@@ -123,7 +123,9 @@ android {
     }
     buildTypes {
         debug {
-            signingConfig signingConfigs.debug
+            // Same key as release when it's available, so the dev build and the release APK can
+            // replace each other on a device (Android rejects updates signed by a different key).
+            signingConfig hasReleaseKeystore ? signingConfigs.release : signingConfigs.debug
         }
         release {
             if (hasReleaseKeystore) {
