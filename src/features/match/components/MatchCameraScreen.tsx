@@ -1266,8 +1266,8 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
                 <View style={styles.matchStatIconCircle}>
                   <Dumbbell size={15} color="#38BDF8" />
                 </View>
-                <Text style={styles.matchWorkoutStatVal}>{selfScore}</Text>
-                <Text style={styles.matchWorkoutStatLbl}>TOTAL REPS</Text>
+                <Text style={styles.matchWorkoutStatVal}>{selfScore}{exerciseId === '9' ? 's' : ''}</Text>
+                <Text style={styles.matchWorkoutStatLbl}>{exerciseId === '9' ? 'BEST HOLD' : 'TOTAL REPS'}</Text>
               </View>
 
               <View style={styles.matchWorkoutStatDivider} />

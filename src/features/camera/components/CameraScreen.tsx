@@ -248,7 +248,7 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
       hipValues.length = 0;
       visibilityValues.length = 0;
       errorLandmarks.clear();
-      try { if (treeEngine) treeEngine.resetTimers(); } catch (e) {}
+      try { if (treeEngine) treeEngine.resetTimers(); treeHoldFrames = 0; treeBestFrames = 0; } catch (e) {}
     }
 
     function angle(a, b, c) {
@@ -901,6 +901,26 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
     const treeAi = { enabled: true, busy: false, lastAt: 0, failures: 0, verdictAt: 0, wrong: false };
     let treeEngine = null;
     let treeClassifyCanvas = null;
+    // Tree Pose is scored by the LONGEST unbroken hold: the current hold resets
+    // whenever balance/form breaks, and the score is the best hold in seconds.
+    let treeHoldFrames = 0;
+    let treeBestFrames = 0;
+
+    function postTreeHold() {
+      if (!window.ReactNativeWebView) return;
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'POSE_HOLD_TIME',
+        holdSeconds: parseFloat((treeHoldFrames / 25).toFixed(1)),
+        bestHoldSeconds: parseFloat((treeBestFrames / 25).toFixed(1)),
+        poseName: 'Tree Pose'
+      }));
+    }
+
+    function breakTreeHold() {
+      if (treeHoldFrames === 0) return;
+      treeHoldFrames = 0;
+      postTreeHold();
+    }
 
     function requestTreeClassification() {
       const now = Date.now();
@@ -977,14 +997,14 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
 
       if (currentSmoothVisibility < 0.40 || validation.state === 'UNCERTAIN') {
         renderState('LOW_VISIBILITY');
-        correctHoldFrames = 0;
+        breakTreeHold();
         return;
       }
 
       if (!features.isTreeStance || features.isSitting) {
         renderState('SETUP');
         setHint(features.isSitting ? 'Stand up to begin Tree Pose' : 'Stand tall, lift one foot onto your inner thigh & join hands', '#A7F3D0');
-        correctHoldFrames = Math.max(0, correctHoldFrames - 2);
+        breakTreeHold();
         return;
       }
 
@@ -998,7 +1018,7 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
         const reason = validation.issues && validation.issues[0];
         markTreeErrors(reason, features.standingSide);
         setHint(treeHint(reason || 'Adjust your Tree Pose'), '#FBBF24');
-        correctHoldFrames = Math.max(0, correctHoldFrames - 2);
+        breakTreeHold();
         return;
       }
 
@@ -1012,28 +1032,28 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
         renderState('ADJUST');
         markTreeErrors('LIFTED', features.standingSide);
         setHint('AI check: pose not quite right, press the foot into the inner thigh & stand tall', '#FBBF24');
-        correctHoldFrames = Math.max(0, correctHoldFrames - 2);
+        breakTreeHold();
         return;
       }
 
       renderState('PERFECT');
-      correctHoldFrames += 1;
-      const totalHoldSecs = (correctHoldFrames / 25).toFixed(1);
-      setHint((verdictFresh ? 'AI verified! ' : '') + 'Perfect Tree Pose! Hold: ' + totalHoldSecs + 's', '#34D399');
-      if (window.ReactNativeWebView && (correctHoldFrames % 5 === 0 || correctHoldFrames === 1)) {
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'POSE_HOLD_TIME',
-          holdSeconds: parseFloat(totalHoldSecs),
-          poseName: 'Tree Pose'
-        }));
-      }
-      if (correctHoldFrames % 75 === 0) {
-        repCount += 1;
+      treeHoldFrames += 1;
+      const prevBestSecs = Math.floor(treeBestFrames / 25);
+      if (treeHoldFrames > treeBestFrames) treeBestFrames = treeHoldFrames;
+      const holdSecs = (treeHoldFrames / 25).toFixed(1);
+      const isRecord = treeHoldFrames === treeBestFrames && treeBestFrames > 25;
+      setHint((verdictFresh ? 'AI verified! ' : '') + (isRecord ? 'New best! Hold: ' : 'Balance! Hold: ') + holdSecs + 's', '#34D399');
+      if (treeHoldFrames % 5 === 0 || treeHoldFrames === 1) postTreeHold();
+
+      // Each new whole second of best hold = +1 score, so score == best hold (s).
+      const bestSecs = Math.floor(treeBestFrames / 25);
+      if (bestSecs > prevBestSecs) {
+        repCount = bestSecs;
         if (window.ReactNativeWebView) {
           window.ReactNativeWebView.postMessage(JSON.stringify({
             type: 'SQUAT_REP',
-            repCount: repCount,
-            holdSeconds: Math.floor(correctHoldFrames / 25),
+            repCount: bestSecs,
+            bestHoldSeconds: bestSecs,
             poseName: 'Tree Pose'
           }));
         }
@@ -1254,7 +1274,7 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
             }
           } else {
             renderVisibility(0);
-            if (treeEngine) treeEngine.handleFrameWithoutPerson();
+            if (treeEngine) { treeEngine.handleFrameWithoutPerson(); breakTreeHold(); }
             if (window.ReactNativeWebView && Date.now() - lastVisMsgTime > 200) {
               lastVisMsgTime = Date.now();
               window.ReactNativeWebView.postMessage(JSON.stringify({
@@ -1467,7 +1487,12 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
     exerciseId === '8' ||
     exerciseId === '9';
 
-  const countLabel = isHoldPose ? 'POINTS' : isStepCount ? 'STEPS' : 'REPS';
+  // Tree Pose is a "who holds longest" pose: the score is the best unbroken hold.
+  const isLongestHold =
+    exerciseName.toLowerCase().includes('tree') ||
+    exerciseName.toLowerCase().includes('vriksh') ||
+    exerciseId === '9';
+  const countLabel = isLongestHold ? 'BEST' : isHoldPose ? 'POINTS' : isStepCount ? 'STEPS' : 'REPS';
 
   const MOTIVATIONAL_PHRASES = [
     'Well done!',
@@ -1802,7 +1827,7 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
                 { transform: [{ scale: repScaleAnim }] },
               ]}
             >
-              {repCount}
+              {repCount}{isLongestHold ? 's' : ''}
             </Animated.Text>
           </View>
         </View>

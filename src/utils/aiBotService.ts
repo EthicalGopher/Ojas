@@ -143,6 +143,12 @@ export class AIBattleSimulation {
   public currentQuote: string = '';
 
   private isHoldExercise: boolean = false;
+  // Tree Pose (id 9) is scored by the longest unbroken hold, so the opponent
+  // holds until it loses balance, then retries; its score is its best hold.
+  private isLongestHold: boolean = false;
+  private currentHoldSeconds: number = 0;
+  private balanceLimitSeconds: number = 0;
+  private recoverSeconds: number = 0;
   private lastTickMs: number = Date.now();
   private repElapsedSeconds: number = 0;
   private currentRepDuration: number = 3.0;
@@ -153,8 +159,20 @@ export class AIBattleSimulation {
   constructor(bot: AIBotProfile, exerciseId?: string) {
     this.bot = bot;
     this.isHoldExercise = ['3', '6', '8', '9'].includes(exerciseId || '1');
+    this.isLongestHold = exerciseId === '9';
+    this.balanceLimitSeconds = this.rollBalanceLimit();
     this.currentRepDuration = this.bot.baseRepSeconds;
     this.currentQuote = this.bot.quotes.greeting[Math.floor(Math.random() * this.bot.quotes.greeting.length)];
+  }
+
+  /** How long this opponent can balance in Tree Pose before wobbling out (seconds). */
+  private rollBalanceLimit(): number {
+    const [min, max] =
+      this.bot.tier === 'Beginner' ? [12, 30]
+      : this.bot.tier === 'Intermediate' ? [25, 50]
+      : this.bot.tier === 'Advanced' ? [40, 75]
+      : [60, 110];
+    return min + Math.random() * (max - min);
   }
 
   public update(deltaSec: number, humanScore: number, matchTimeRemainingSec: number): {
@@ -177,8 +195,29 @@ export class AIBattleSimulation {
 
     const effectiveRepDuration = Math.max(0.9, this.bot.baseRepSeconds * speedMultiplier);
 
-    // Handle isometric hold exercises (Cobra Pose, Triangle Pose, Child's Pose, Tree Pose)
-    if (this.isHoldExercise) {
+    if (this.isLongestHold) {
+      if (this.recoverSeconds > 0) {
+        // Lost balance: resetting the stance before the next attempt
+        this.recoverSeconds -= deltaSec;
+        this.currentPhase = 'pause';
+        this.phaseProgress = 0;
+      } else {
+        this.currentHoldSeconds += deltaSec;
+        this.totalHoldSeconds += deltaSec;
+        if (Math.floor(this.currentHoldSeconds) > this.score) {
+          this.score = Math.floor(this.currentHoldSeconds);
+          didScoreRep = true;
+        }
+        this.phaseProgress = Math.min(1, this.currentHoldSeconds / this.balanceLimitSeconds);
+        if (this.currentHoldSeconds >= this.balanceLimitSeconds) {
+          this.currentHoldSeconds = 0;
+          this.comboStreak = 0;
+          this.recoverSeconds = 3 + Math.random() * 3;
+          this.balanceLimitSeconds = this.rollBalanceLimit();
+        }
+      }
+    } else if (this.isHoldExercise) {
+      // Handle isometric hold exercises (Cobra Pose, Triangle Pose, Child's Pose)
       this.totalHoldSeconds += deltaSec;
       if (Math.floor(this.totalHoldSeconds) > this.score) {
         this.score = Math.floor(this.totalHoldSeconds);
