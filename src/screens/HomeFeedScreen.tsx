@@ -56,6 +56,7 @@ import { useGameStats } from '../hooks/useGameStats';
 import { isActiveDay, toDateKey, XP_PER_MATCH } from '../utils/gamification';
 import { exerciseCardThemes, makeStyles, radius, ThemeColors, useColors } from '../theme';
 
+import { CalorieIcon } from '../components/icons/CalorieIcon';
 export type { ExerciseItem };
 
 interface HomeFeedScreenProps {
@@ -471,7 +472,7 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
         <View style={styles.activityCol}>
           <View style={styles.statTile}>
             <View style={styles.statIcon}>
-              <Flame size={16} color={colors.flame} />
+              <CalorieIcon size={17} color={colors.flame} />
             </View>
             <Text style={styles.statLabel}>Energy burned</Text>
             <Text style={styles.statValue}>

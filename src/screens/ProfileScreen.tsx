@@ -81,6 +81,7 @@ import { supabase } from '../utils/supabase';
 import { useUserStore } from '../store/userStore';
 
 import { ThemedStatusBar } from '../components/ThemedStatusBar';
+import { CalorieIcon } from '../components/icons/CalorieIcon';
 interface ProfileScreenProps {
   currentUser: any;
   onBack: () => void;
@@ -403,7 +404,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
     { key: 'streak7', title: 'Unstoppable', hint: '7-day streak', Icon: Zap, unlocked: streak.best >= 7 },
     { key: 'social', title: 'Squad Up', hint: 'Add a friend', Icon: Users, unlocked: friends.length >= 1 },
     { key: 'level5', title: 'Rising Star', hint: 'Reach level 5', Icon: Star, unlocked: level.level >= 5 },
-    { key: 'kcal', title: 'Furnace', hint: 'Burn 1,000 kcal', Icon: Trophy, unlocked: totalCalories >= 1000 },
+    { key: 'kcal', title: 'Furnace', hint: 'Burn 1,000 kcal', Icon: CalorieIcon, unlocked: totalCalories >= 1000 },
   ];
   const unlockedCount = ACHIEVEMENTS.filter((a) => a.unlocked).length;
 
@@ -565,7 +566,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
               { label: 'TOTAL XP', value: level.totalXp.toLocaleString(), Icon: Star },
               { label: 'STREAK', value: `${streak.current}d`, Icon: Flame },
               { label: 'BEST', value: `${streak.best}d`, Icon: Trophy },
-              { label: 'KCAL', value: totalCalories.toLocaleString(), Icon: Activity },
+              { label: 'KCAL', value: totalCalories.toLocaleString(), Icon: CalorieIcon },
             ].map(({ label, value, Icon }) => (
               <View key={label} style={styles.statTile}>
                 <Icon size={14} color="#FFFFFF" />

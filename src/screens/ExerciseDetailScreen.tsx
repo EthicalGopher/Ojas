@@ -59,6 +59,7 @@ import {
   UserExerciseStats,
 } from '../utils/rankingService';
 import { fetchFriends, FriendshipItem } from '../utils/friendService';
+import { CalorieIcon } from '../components/icons/CalorieIcon';
 import {
   sendCustomBattleInvite,
   initBattleChannel,
@@ -674,7 +675,7 @@ export const ExerciseDetailScreen: React.FC<ExerciseDetailScreenProps> = ({
           <View>
             <View style={styles.infoCard}>
               <View style={styles.sectionLabelRow}>
-                <Flame size={14} color={colors.flame} />
+                <CalorieIcon size={15} color={colors.flame} />
                 <Text style={[styles.sectionLabel, { color: colors.text }]}>CALORIE COUNTING</Text>
               </View>
               <View style={styles.calPillRow}>
@@ -688,7 +689,7 @@ export const ExerciseDetailScreen: React.FC<ExerciseDetailScreenProps> = ({
                 </View>
               </View>
               {[
-                { Icon: Flame, title: 'Calculation', text: calorieInfo.formula },
+                { Icon: CalorieIcon, title: 'Calculation', text: calorieInfo.formula },
                 { Icon: Check, title: 'Valid movement', text: calorieInfo.technique },
                 { Icon: CalendarDays, title: 'Daily log', text: 'Saved automatically to your profile and home calendar.' },
               ].map(({ Icon, title, text }) => (
@@ -771,7 +772,7 @@ export const ExerciseDetailScreen: React.FC<ExerciseDetailScreenProps> = ({
 
             <View style={styles.modalCalorieBox}>
               <View style={styles.inlineRow}>
-                <Flame size={14} color={colors.accent} />
+                <CalorieIcon size={14} color={colors.accent} />
                 <Text style={styles.modalCalorieTitle}>
                   ~{calorieInfo.perRep} kcal per rep · {calorieInfo.met} METs
                 </Text>

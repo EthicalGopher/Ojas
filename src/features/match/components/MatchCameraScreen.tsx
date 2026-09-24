@@ -72,6 +72,7 @@ import { VersusIntro } from './VersusIntro';
 import { SimulatedOpponent } from '../../../utils/simulatedOpponent';
 import { getAvatarUri } from '../../../components/Avatar';
 
+import { CalorieIcon } from '../../../components/icons/CalorieIcon';
 export type MatchMode = 'faceoff' | 'quickjoin' | 'ffa' | 'ai_battle';
 
 type MatchPhase = 'loading_resources' | 'setup_countdown' | 'active_match' | 'match_ended';
@@ -1252,7 +1253,7 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
             <View style={styles.matchWorkoutStatsGrid}>
               <View style={styles.matchWorkoutStatItem}>
                 <View style={styles.matchStatIconCircle}>
-                  <Flame size={15} color="#FF6B35" />
+                  <CalorieIcon size={16} color="#FF6B35" />
                 </View>
                 <Text style={styles.matchWorkoutStatVal}>{calculateCalories(exerciseId, selfScore)}</Text>
                 <Text style={styles.matchWorkoutStatLbl}>KCAL BURNED</Text>
