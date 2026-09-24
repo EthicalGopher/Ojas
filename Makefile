@@ -12,17 +12,9 @@ DEBUG_APK     := $(ANDROID_DIR)/app/build/outputs/apk/debug/app-debug.apk
 KEYSTORE      := $(ANDROID_DIR)/app/ojas-release.keystore
 KEYSTORE_PROPS:= $(ANDROID_DIR)/keystore.properties
 KEY_ALIAS     := ojas
-# Build only for real phones (arm) by default: much smaller APK. Use ARCHS=all for emulators too.
-ARCHS         ?= arm
-# Phone-only builds are the "release" APK; ARCHS=all gets its own name so it never overwrites it.
-APK_NAME := ojas-v$(VERSION)-$(if $(filter all,$(ARCHS)),universal,release).apk
-ifeq ($(ARCHS),all)
-  ARCH_FLAG := -PreactNativeArchitectures=armeabi-v7a,arm64-v8a,x86,x86_64
-else ifeq ($(ARCHS),arm)
-  ARCH_FLAG := -PreactNativeArchitectures=armeabi-v7a,arm64-v8a
-else
-  ARCH_FLAG := -PreactNativeArchitectures=$(ARCHS)
-endif
+# One universal APK: runs on every Android phone and on x86 emulators.
+APK_NAME  := ojas-v$(VERSION)-universal.apk
+ARCH_FLAG := -PreactNativeArchitectures=armeabi-v7a,arm64-v8a,x86,x86_64
 
 .PHONY: db-check uninstall help install start android web typecheck doctor check \
         keystore apk apk-debug install-apk run-apk logs clean clean-android \
@@ -32,7 +24,6 @@ help: ## Show this help
 	@echo "Ojas v$(VERSION) - available commands:"
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
 	@echo ""
-	@echo "Options: ARCHS=arm (default) | all | arm64-v8a | x86_64   e.g. make apk ARCHS=all"
 
 # ---------- Development ----------
 
@@ -75,7 +66,7 @@ keystore: ## Create the production signing key (one time - BACK IT UP!)
 	echo "Created $(KEYSTORE) and $(KEYSTORE_PROPS)."; \
 	echo "IMPORTANT: back up BOTH files somewhere safe. Losing them means you can never update the app on Play Store."
 
-apk: ## Build the production release APK -> build_output/
+apk: ## Build the universal production APK -> build_output/
 	@if [ ! -f "$(KEYSTORE_PROPS)" ]; then echo "WARNING: no release key - APK will be signed with the DEBUG key. Run 'make keystore' first."; fi
 	cd $(ANDROID_DIR) && ./gradlew assembleRelease $(ARCH_FLAG)
 	@mkdir -p $(OUT_DIR)
@@ -87,11 +78,11 @@ apk-debug: ## Build a debug APK -> build_output/
 	@mkdir -p $(OUT_DIR)
 	cp $(DEBUG_APK) $(OUT_DIR)/ojas-v$(VERSION)-debug.apk
 
-install-apk: ## Install the release APK on the connected device (adb)
+install-apk: ## Install the universal APK on the connected device (adb)
 	@scripts/ensure-signature.sh release
 	adb install -r $(OUT_DIR)/$(APK_NAME)
 
-run-apk: install-apk ## Install and launch the release APK
+run-apk: install-apk ## Install and launch the universal APK
 	adb shell monkey -p $(APP_ID) -c android.intent.category.LAUNCHER 1 >/dev/null
 
 uninstall: ## Remove the app from the connected device
