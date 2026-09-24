@@ -53,7 +53,7 @@ import { DailyChallengesSection } from '../components/DailyChallengesSection';
 import { useDailyChallengeStore } from '../store/dailyChallengeStore';
 import { useGameStats } from '../hooks/useGameStats';
 import { isActiveDay, toDateKey, XP_PER_MATCH } from '../utils/gamification';
-import { colors, radius, shadow } from '../theme';
+import { cardThemes, colors, radius, shadow } from '../theme';
 
 export type { ExerciseItem };
 
@@ -356,10 +356,10 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
           <View style={[styles.streakChip, streak.activeToday && styles.streakChipLit]}>
             <Flame
               size={13}
-              color={streak.current > 0 ? colors.flame : colors.textDim}
-              fill={streak.activeToday ? colors.flame : 'transparent'}
+              color={streak.activeToday ? '#FFFFFF' : streak.current > 0 ? colors.flame : cardThemes.navy.sub}
+              fill={streak.activeToday ? '#FFFFFF' : 'transparent'}
             />
-            <Text style={[styles.streakChipText, streak.current === 0 && { color: colors.textMuted }]}>
+            <Text style={styles.streakChipText}>
               {streak.current} day streak
             </Text>
           </View>
@@ -402,7 +402,7 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
         <View style={styles.calendarCalorieRow}>
           <View style={styles.calendarCalorieLeft}>
             <View style={styles.calFlameIconCircle}>
-              <Activity size={16} color={colors.flame} />
+              <Activity size={17} color="#FFFFFF" />
             </View>
             <View>
               <Text style={styles.calBurnNumberText}>
@@ -481,7 +481,7 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
                 <Text style={styles.yesBtnText}>Yes</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.noBtn} activeOpacity={0.85} onPress={() => handleAnswerQuestion(false)}>
-                <X size={18} color={colors.text} strokeWidth={2.5} />
+                <X size={18} color={cardThemes.pink.text} strokeWidth={2.5} />
                 <Text style={styles.noBtnText}>No</Text>
               </TouchableOpacity>
             </View>
@@ -629,21 +629,24 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
       {/* 7. GUIDES */}
       <SectionHeader Icon={Lightbulb} title="GUIDES" right={<Text style={styles.sectionSubHint}>Tap for guide</Text>} />
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.guideRow}>
-        {TUTORIAL_CARDS.map(({ tutorial, tag, title, Icon, tint }) => (
-          <TouchableOpacity
-            key={tag}
-            style={styles.guideCard}
-            activeOpacity={0.88}
-            onPress={() => setSelectedTutorial(tutorial)}
-          >
-            <View style={[styles.guideIcon, { backgroundColor: `${tint}22` }]}>
-              <Icon size={18} color={tint} />
-            </View>
-            <Text style={[styles.guideTag, { color: tint }]}>{tag}</Text>
-            <Text style={styles.guideTitle}>{title}</Text>
-            <Text style={styles.guideDesc} numberOfLines={2}>{tutorial.subtitle}</Text>
-          </TouchableOpacity>
-        ))}
+        {TUTORIAL_CARDS.map(({ tutorial, tag, title, Icon }, i) => {
+          const theme = [cardThemes.lavender, cardThemes.pink, cardThemes.orange][i % 3];
+          return (
+            <TouchableOpacity
+              key={tag}
+              style={[styles.guideCard, { backgroundColor: theme.bg }]}
+              activeOpacity={0.88}
+              onPress={() => setSelectedTutorial(tutorial)}
+            >
+              <View style={[styles.guideIcon, { backgroundColor: theme.chip }]}>
+                <Icon size={18} color={theme.text} />
+              </View>
+              <Text style={[styles.guideTag, { color: theme.sub }]}>{tag}</Text>
+              <Text style={[styles.guideTitle, { color: theme.text }]}>{title}</Text>
+              <Text style={[styles.guideDesc, { color: theme.sub }]} numberOfLines={2}>{tutorial.subtitle}</Text>
+            </TouchableOpacity>
+          );
+        })}
       </ScrollView>
 
       {/* 8. SQUAD */}
@@ -738,123 +741,57 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
 
 const styles = StyleSheet.create({
   feedScrollView: { flex: 1, backgroundColor: colors.bg },
-  feedScrollContent: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 140 },
+  feedScrollContent: { paddingHorizontal: 18, paddingTop: 14, paddingBottom: 150 },
 
   // Calendar + streak
-  calendarCard: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  calendarHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  calendarMonthText: { color: colors.text, fontSize: 16, fontWeight: '800' },
-  streakChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    backgroundColor: colors.surfaceHi,
-    borderRadius: radius.pill,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
-  streakChipLit: { backgroundColor: 'rgba(226, 88, 34, 0.15)' },
-  streakChipText: { color: colors.flame, fontSize: 11, fontWeight: '900' },
+  calendarCard: { backgroundColor: cardThemes.navy.bg, borderRadius: radius.xl, padding: 20, marginBottom: 18 },
+  calendarHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+  calendarMonthText: { color: cardThemes.navy.text, fontSize: 17, fontWeight: '900' },
+  streakChip: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: cardThemes.navy.chip, borderRadius: radius.pill, paddingHorizontal: 11, paddingVertical: 6 },
+  streakChipLit: { backgroundColor: 'rgba(226, 88, 34, 0.9)' },
+  streakChipText: { color: cardThemes.navy.text, fontSize: 11.5, fontWeight: '900' },
   daysRow: { flexDirection: 'row', justifyContent: 'space-between' },
   dayItem: { alignItems: 'center', width: 38 },
-  dayLetter: { color: colors.textMuted, fontSize: 11, fontWeight: '700', marginBottom: 6 },
-  dayLetterActive: { color: colors.flame },
+  dayLetter: { color: cardThemes.navy.sub, fontSize: 11, fontWeight: '800', marginBottom: 8 },
+  dayLetterActive: { color: cardThemes.navy.text },
   dateCircle: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
-  dateCircleToday: { borderWidth: 1.5, borderColor: colors.flame },
+  dateCircleToday: { borderWidth: 2, borderColor: colors.flame },
   dateCircleSelected: { backgroundColor: colors.flame },
-  dateNumber: { color: '#CBD5E1', fontSize: 13, fontWeight: '700' },
+  dateNumber: { color: cardThemes.navy.text, fontSize: 13.5, fontWeight: '700' },
   dateNumberSelected: { color: colors.text, fontWeight: '900' },
   dayMarker: { height: 14, marginTop: 4, alignItems: 'center', justifyContent: 'center' },
-  streakMessage: { color: colors.textMuted, fontSize: 12, fontWeight: '600', marginTop: 8, lineHeight: 17 },
-  calendarCalorieRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
-    borderRadius: radius.md,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    marginTop: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
+  streakMessage: { color: cardThemes.navy.sub, fontSize: 12.5, fontWeight: '600', marginTop: 12, lineHeight: 18 },
+  calendarCalorieRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'rgba(0, 0, 0, 0.18)', borderRadius: radius.lg, paddingVertical: 14, paddingHorizontal: 16, marginTop: 16 },
   calendarCalorieLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flexShrink: 1 },
-  calFlameIconCircle: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: 'rgba(226, 88, 34, 0.15)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  calBurnNumberText: { color: colors.text, fontSize: 18, fontWeight: '900' },
-  calBurnUnitText: { color: colors.flame, fontSize: 12, fontWeight: '800' },
-  calBurnLabelText: { color: colors.textMuted, fontSize: 10, fontWeight: '700', marginTop: 1 },
+  calFlameIconCircle: { width: 38, height: 38, borderRadius: 19, backgroundColor: colors.flame, alignItems: 'center', justifyContent: 'center' },
+  calBurnNumberText: { color: cardThemes.navy.text, fontSize: 19, fontWeight: '900' },
+  calBurnUnitText: { color: '#FFB38A', fontSize: 12, fontWeight: '800' },
+  calBurnLabelText: { color: cardThemes.navy.sub, fontSize: 10.5, fontWeight: '700', marginTop: 2 },
   calendarCalorieStatsRight: { flexDirection: 'row', gap: 8 },
-  calMiniStatPill: {
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
-    borderRadius: 10,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    alignItems: 'center',
-    minWidth: 46,
-  },
-  calMiniStatVal: { color: '#CBD5E1', fontSize: 12, fontWeight: '800' },
-  calMiniStatLbl: { color: colors.textDim, fontSize: 8, fontWeight: '800', letterSpacing: 0.5 },
+  calMiniStatPill: { backgroundColor: cardThemes.navy.chip, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 6, alignItems: 'center', minWidth: 50 },
+  calMiniStatVal: { color: cardThemes.navy.text, fontSize: 13, fontWeight: '900' },
+  calMiniStatLbl: { color: cardThemes.navy.sub, fontSize: 8, fontWeight: '800', letterSpacing: 0.5 },
 
   // Level strip
-  levelStrip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    padding: 14,
-    borderRadius: radius.lg,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginBottom: 20,
-  },
-  levelStripBadge: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    backgroundColor: 'rgba(226, 88, 34, 0.12)',
-    borderWidth: 1,
-    borderColor: 'rgba(226, 88, 34, 0.35)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  levelStripBadgeLabel: { color: colors.textMuted, fontSize: 9, fontWeight: '900', letterSpacing: 0.5 },
-  levelStripBadgeText: { color: colors.accent, fontSize: 18, fontWeight: '900', lineHeight: 20 },
-  levelStripTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 },
-  levelStripTitle: { color: colors.text, fontSize: 15, fontWeight: '900' },
-  levelStripXp: { color: colors.textMuted, fontSize: 11, fontWeight: '700' },
-  levelTrack: { height: 8, borderRadius: 4, backgroundColor: colors.surfaceSunken, overflow: 'hidden' },
-  levelFill: { height: '100%', borderRadius: 4, backgroundColor: colors.accent },
+  levelStrip: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 18, borderRadius: radius.xl, backgroundColor: cardThemes.lavender.bg, marginBottom: 26 },
+  levelStripBadge: { width: 52, height: 52, borderRadius: 16, backgroundColor: cardThemes.lavender.chip, alignItems: 'center', justifyContent: 'center' },
+  levelStripBadgeLabel: { color: cardThemes.lavender.sub, fontSize: 9, fontWeight: '900', letterSpacing: 0.5 },
+  levelStripBadgeText: { color: cardThemes.lavender.text, fontSize: 20, fontWeight: '900', lineHeight: 22 },
+  levelStripTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 },
+  levelStripTitle: { color: cardThemes.lavender.text, fontSize: 16, fontWeight: '900' },
+  levelStripXp: { color: cardThemes.lavender.sub, fontSize: 11.5, fontWeight: '800' },
+  levelTrack: { height: 10, borderRadius: 5, backgroundColor: cardThemes.lavender.track, overflow: 'hidden' },
+  levelFill: { height: '100%', borderRadius: 5, backgroundColor: cardThemes.lavender.text },
 
   // Health question
-  questionCard: {
-    padding: 18,
-    borderRadius: radius.lg,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginBottom: 20,
-  },
+  questionCard: { padding: 20, borderRadius: radius.xl, backgroundColor: cardThemes.pink.bg, marginBottom: 26 },
   questionTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  questionTag: { backgroundColor: 'rgba(200, 182, 255, 0.15)', borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 5 },
-  questionTagText: { color: colors.lavender, fontSize: 10, fontWeight: '900', letterSpacing: 0.6 },
-  questionCounter: { color: colors.textDim, fontSize: 11, fontWeight: '900' },
-  questionPrompt: { color: colors.text, fontSize: 17, fontWeight: '900', lineHeight: 23, marginTop: 12 },
-  questionHint: { color: colors.textMuted, fontSize: 12, marginTop: 4 },
-  questionActions: { flexDirection: 'row', gap: 10, marginTop: 16 },
+  questionTag: { backgroundColor: cardThemes.pink.chip, borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 5 },
+  questionTagText: { color: cardThemes.pink.text, fontSize: 10, fontWeight: '900', letterSpacing: 0.6 },
+  questionCounter: { color: cardThemes.pink.sub, fontSize: 11, fontWeight: '900' },
+  questionPrompt: { color: cardThemes.pink.text, fontSize: 17, fontWeight: '900', lineHeight: 24, marginTop: 14 },
+  questionHint: { color: cardThemes.pink.sub, fontSize: 12.5, marginTop: 6 },
+  questionActions: { flexDirection: 'row', gap: 12, marginTop: 18 },
   yesBtn: {
     flex: 1,
     height: 48,
@@ -866,20 +803,11 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   yesBtnText: { color: colors.onAccent, fontSize: 15, fontWeight: '900' },
-  noBtn: {
-    flex: 1,
-    height: 48,
-    borderRadius: radius.pill,
-    backgroundColor: colors.surfaceHi,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-  },
-  noBtnText: { color: colors.text, fontSize: 15, fontWeight: '900' },
+  noBtn: { flex: 1, height: 48, borderRadius: radius.pill, backgroundColor: cardThemes.pink.chip, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
+  noBtnText: { color: cardThemes.pink.text, fontSize: 15, fontWeight: '900' },
 
   // Section headers
-  sectionHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, marginBottom: 12 },
+  sectionHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 6, marginBottom: 14 },
   headerLeftRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   sectionHeaderTitle: { color: colors.text, fontSize: 13, fontWeight: '900', letterSpacing: 0.8 },
   sectionSubHint: { color: colors.textDim, fontSize: 11.5, fontWeight: '700' },
@@ -896,16 +824,7 @@ const styles = StyleSheet.create({
   onlineBadgeText: { color: colors.success, fontSize: 11, fontWeight: '900' },
 
   // Game modes
-  arenaCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    backgroundColor: colors.flame,
-    borderRadius: radius.xl,
-    padding: 20,
-    marginBottom: 12,
-    ...shadow(6),
-  },
+  arenaCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.flame, borderRadius: radius.xl, padding: 22, marginBottom: 14, ...shadow(6) },
   modeTagRow: { flexDirection: 'row', gap: 6 },
   modeTag: { backgroundColor: 'rgba(17, 20, 26, 0.22)', borderRadius: radius.pill, paddingHorizontal: 9, paddingVertical: 4 },
   modeTagText: { color: colors.text, fontSize: 10, fontWeight: '900', letterSpacing: 0.6 },
@@ -925,8 +844,8 @@ const styles = StyleSheet.create({
     marginTop: 14,
   },
   playBtnText: { color: colors.text, fontSize: 12.5, fontWeight: '900' },
-  modeRow: { flexDirection: 'row', gap: 12, marginBottom: 20 },
-  modeCard: { flex: 1, borderRadius: radius.lg, padding: 16, minHeight: 165 },
+  modeRow: { flexDirection: 'row', gap: 14, marginBottom: 28 },
+  modeCard: { flex: 1, borderRadius: radius.xl, padding: 18, minHeight: 175 },
   modeIconCircle: {
     width: 42,
     height: 42,
@@ -947,7 +866,7 @@ const styles = StyleSheet.create({
   modeFooterText: { color: colors.textOnLight, fontSize: 10, fontWeight: '900', letterSpacing: 0.8 },
 
   // AI coach
-  tutorFlatListContent: { gap: 12, paddingBottom: 8, marginBottom: 16 },
+  tutorFlatListContent: { gap: 14, paddingBottom: 8, marginBottom: 26 },
   tutorCard: {
     width: 142,
     height: 142,
@@ -974,19 +893,12 @@ const styles = StyleSheet.create({
   tutorPlay: { width: 22, height: 22, borderRadius: 11, backgroundColor: colors.textOnLight, alignItems: 'center', justifyContent: 'center' },
 
   // Guides
-  guideRow: { gap: 12, paddingBottom: 8, marginBottom: 16 },
-  guideCard: {
-    width: 200,
-    padding: 14,
-    borderRadius: radius.lg,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  guideIcon: { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  guideTag: { fontSize: 9.5, fontWeight: '900', letterSpacing: 0.8, marginTop: 12 },
-  guideTitle: { color: colors.text, fontSize: 14.5, fontWeight: '900', marginTop: 3 },
-  guideDesc: { color: colors.textMuted, fontSize: 11.5, lineHeight: 16, marginTop: 4 },
+  guideRow: { gap: 14, paddingBottom: 8, marginBottom: 26 },
+  guideCard: { width: 210, padding: 18, borderRadius: radius.xl },
+  guideIcon: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  guideTag: { fontSize: 9.5, fontWeight: '900', letterSpacing: 0.8, marginTop: 14 },
+  guideTitle: { fontSize: 15, fontWeight: '900', marginTop: 4 },
+  guideDesc: { fontSize: 12, lineHeight: 17, marginTop: 6 },
 
   // Squad
   horizontalAvatarRow: { gap: 14, paddingBottom: 8, alignItems: 'flex-start' },

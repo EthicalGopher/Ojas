@@ -48,7 +48,7 @@ import { Avatar } from '../components/Avatar';
 import { ExerciseIcon } from '../components/ExerciseIcon';
 import { useUserStore } from '../store/userStore';
 import { TierIcon } from '../components/TierIcon';
-import { colors, radius } from '../theme';
+import { cardCycle, cardThemes, colors, radius } from '../theme';
 import {
   calculateLevel,
   LEVEL_TIERS,
@@ -379,47 +379,49 @@ export const ExerciseDetailScreen: React.FC<ExerciseDetailScreenProps> = ({
     }
   };
 
-  const renderModeRow = (mode: QueueMode) => {
+  const renderModeRow = (mode: QueueMode, index: number) => {
     const aiLocked = mode.kind === 'ai_duel' && !isSquat;
     const isOnline = mode.kind === 'queue' || mode.kind === 'friend';
     const locked = (isGuest && isOnline) || aiLocked;
     const { Icon } = mode;
+    // Colored cards in the same rhythm as the Train screen's workout cards.
+    const theme = cardCycle[index % cardCycle.length];
 
     return (
       <TouchableOpacity
         key={mode.id}
-        style={[styles.modeRow, locked && { opacity: 0.55 }]}
-        activeOpacity={0.85}
+        style={[styles.modeRow, { backgroundColor: theme.bg }, locked && { opacity: 0.6 }]}
+        activeOpacity={0.88}
         onPress={() => handleModePress(mode, locked, aiLocked)}
       >
-        <View style={[styles.modeIconTile, { backgroundColor: `${mode.tint}22` }]}>
-          <Icon size={20} color={locked ? colors.textDim : mode.tint} />
+        <View style={[styles.modeIconTile, { backgroundColor: theme.chip }]}>
+          <Icon size={22} color={theme.text} />
         </View>
 
         <View style={styles.modeInfo}>
-          <View style={styles.modeTitleRow}>
-            <Text style={styles.modeTitle} numberOfLines={1}>{mode.title}</Text>
-            <View style={styles.modeBadge}>
-              {locked && <Lock size={9} color={colors.textMuted} />}
-              <Text style={styles.modeBadgeText}>{aiLocked ? 'SQUATS ONLY' : locked ? 'LOCKED' : mode.badge}</Text>
-            </View>
+          <Text style={[styles.modeTitle, { color: theme.text }]} numberOfLines={1}>{mode.title}</Text>
+          <Text style={[styles.modeDesc, { color: theme.sub }]} numberOfLines={1}>{mode.description}</Text>
+          <View style={[styles.modeBadge, { backgroundColor: theme.chip }]}>
+            {locked && <Lock size={9} color={theme.text} />}
+            <Text style={[styles.modeBadgeText, { color: theme.text }]}>
+              {aiLocked ? 'SQUATS ONLY' : locked ? 'LOCKED' : mode.badge}
+            </Text>
           </View>
-          <Text style={styles.modeDesc} numberOfLines={1}>{mode.description}</Text>
         </View>
 
-        <View style={[styles.modeAction, locked && styles.modeActionLocked]}>
+        <View style={[styles.modeAction, { backgroundColor: theme.onDark ? '#FFFFFF' : '#11141A' }]}>
           {locked ? (
-            <Lock size={14} color={colors.textMuted} />
+            <Lock size={15} color={theme.onDark ? '#11141A' : '#FFFFFF'} />
           ) : (
-            <Play size={14} color={colors.onAccent} fill={colors.onAccent} />
+            <Play size={15} color={theme.onDark ? '#11141A' : '#FFFFFF'} fill={theme.onDark ? '#11141A' : '#FFFFFF'} />
           )}
         </View>
       </TouchableOpacity>
     );
   };
 
-  const SectionLabel = ({ Icon, title }: { Icon: IconType; title: string }) => (
-    <View style={styles.sectionLabelRow}>
+  const SectionLabel = ({ Icon, title, first }: { Icon: IconType; title: string; first?: boolean }) => (
+    <View style={[styles.sectionLabelRow, { marginTop: first ? 0 : 26 }]}>
       <Icon size={14} color={colors.accent} />
       <Text style={styles.sectionLabel}>{title}</Text>
     </View>
@@ -427,12 +429,12 @@ export const ExerciseDetailScreen: React.FC<ExerciseDetailScreenProps> = ({
 
   const PODIUM_COLORS = ['#F59E0B', '#C0C0C0', '#CD7F32'];
 
-  const RuleRow = ({ Icon, tint, points, text }: { Icon: IconType; tint: string; points: string; text: string }) => (
+  const RuleRow = ({ Icon, tint, points, text, onCard }: { Icon: IconType; tint: string; points: string; text: string; onCard?: boolean }) => (
     <View style={styles.ruleRow}>
       <View style={[styles.ruleIcon, { backgroundColor: `${tint}22` }]}>
         <Icon size={15} color={tint} />
       </View>
-      <Text style={styles.ruleText}>{text}</Text>
+      <Text style={[styles.ruleText, onCard && { color: cardThemes.pink.text }]}>{text}</Text>
       <Text style={[styles.rulePoints, { color: tint }]}>{points}</Text>
     </View>
   );
@@ -569,10 +571,10 @@ export const ExerciseDetailScreen: React.FC<ExerciseDetailScreenProps> = ({
       >
         {detailTab === 'workouts' ? (
           <>
-            <SectionLabel Icon={Dumbbell} title="TRAIN" />
-            {TRAIN_MODES.map(renderModeRow)}
+            <SectionLabel Icon={Dumbbell} title="TRAIN" first />
+            {TRAIN_MODES.map((m, i) => renderModeRow(m, i))}
             <SectionLabel Icon={Swords} title="COMPETE" />
-            {COMPETE_MODES.map(renderModeRow)}
+            {COMPETE_MODES.map((m, i) => renderModeRow(m, i + TRAIN_MODES.length))}
           </>
         ) : detailTab === 'leaderboard' ? (
           <View>
@@ -668,19 +670,19 @@ export const ExerciseDetailScreen: React.FC<ExerciseDetailScreenProps> = ({
           </View>
         ) : detailTab === 'how_to_play' ? (
           <View>
-            <View style={styles.infoCard}>
+            <View style={[styles.infoCard, { backgroundColor: cardThemes.sand.bg, borderWidth: 0 }]}>
               <View style={styles.sectionLabelRow}>
-                <Flame size={14} color={colors.accent} />
-                <Text style={styles.sectionLabel}>CALORIE COUNTING</Text>
+                <Flame size={14} color={cardThemes.sand.text} />
+                <Text style={[styles.sectionLabel, { color: cardThemes.sand.text }]}>CALORIE COUNTING</Text>
               </View>
               <View style={styles.calPillRow}>
-                <View style={styles.calPill}>
-                  <Text style={styles.calPillVal}>{calorieInfo.perRep}</Text>
-                  <Text style={styles.calPillSub}>kcal per rep</Text>
+                <View style={[styles.calPill, { backgroundColor: cardThemes.sand.chip }]}>
+                  <Text style={[styles.calPillVal, { color: colors.flame }]}>{calorieInfo.perRep}</Text>
+                  <Text style={[styles.calPillSub, { color: cardThemes.sand.sub }]}>kcal per rep</Text>
                 </View>
-                <View style={styles.calPill}>
-                  <Text style={styles.calPillVal}>{calorieInfo.met}</Text>
-                  <Text style={styles.calPillSub}>MET intensity</Text>
+                <View style={[styles.calPill, { backgroundColor: cardThemes.sand.chip }]}>
+                  <Text style={[styles.calPillVal, { color: colors.flame }]}>{calorieInfo.met}</Text>
+                  <Text style={[styles.calPillSub, { color: cardThemes.sand.sub }]}>MET intensity</Text>
                 </View>
               </View>
               {[
@@ -689,21 +691,23 @@ export const ExerciseDetailScreen: React.FC<ExerciseDetailScreenProps> = ({
                 { Icon: CalendarDays, title: 'Daily log', text: 'Saved automatically to your profile and home calendar.' },
               ].map(({ Icon, title, text }) => (
                 <View key={title} style={styles.bulletRow}>
-                  <Icon size={14} color={colors.textMuted} style={{ marginTop: 2 }} />
-                  <Text style={styles.bulletText}>
-                    <Text style={styles.bulletBold}>{title}: </Text>
+                  <Icon size={14} color={cardThemes.sand.sub} style={{ marginTop: 2 }} />
+                  <Text style={[styles.bulletText, { color: cardThemes.sand.sub }]}>
+                    <Text style={[styles.bulletBold, { color: cardThemes.sand.text }]}>{title}: </Text>
                     {text}
                   </Text>
                 </View>
               ))}
             </View>
 
-            <View style={styles.infoCard}>
+            <View style={[styles.infoCard, { backgroundColor: cardThemes.pink.bg, borderWidth: 0 }]}>
               <View style={styles.sectionLabelRow}>
-                <Zap size={14} color={colors.accent} />
-                <Text style={styles.sectionLabel}>MATCH SCORING</Text>
+                <Zap size={14} color={cardThemes.pink.text} />
+                <Text style={[styles.sectionLabel, { color: cardThemes.pink.text }]}>MATCH SCORING</Text>
               </View>
-              {scoringRules}
+              <RuleRow Icon={TrendingUp} tint="#047857" points="+10" text={`Win a ${exercise.name} duel`} onCard />
+              <RuleRow Icon={Equal} tint="#B45309" points="+5" text="Draw: both players earn points" onCard />
+              <RuleRow Icon={TrendingDown} tint="#B91C1C" points="-10" text="Defeat (never drops below 0)" onCard />
             </View>
 
             <View style={styles.infoCard}>
@@ -957,25 +961,9 @@ const styles = StyleSheet.create({
   topNavTitle: { flex: 1, textAlign: 'center', color: colors.text, fontSize: 17, fontWeight: '900', marginHorizontal: 12 },
 
   // Hero
-  heroCard: {
-    marginHorizontal: 16,
-    padding: 16,
-    borderRadius: radius.xl,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
+  heroCard: { marginHorizontal: 18, padding: 20, borderRadius: radius.xl, backgroundColor: cardThemes.navy.bg },
   heroTopRow: { flexDirection: 'row', alignItems: 'center' },
-  heroIconTile: {
-    width: 72,
-    height: 72,
-    borderRadius: 20,
-    backgroundColor: 'rgba(226, 88, 34, 0.12)',
-    borderWidth: 1,
-    borderColor: 'rgba(226, 88, 34, 0.3)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  heroIconTile: { width: 76, height: 76, borderRadius: 22, backgroundColor: 'rgba(255, 255, 255, 0.14)', alignItems: 'center', justifyContent: 'center' },
   tierRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   tierChip: {
     flexDirection: 'row',
@@ -987,108 +975,53 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   tierChipText: { fontSize: 9.5, fontWeight: '900', letterSpacing: 0.6 },
-  heroLevelText: { color: colors.textMuted, fontSize: 11, fontWeight: '900' },
+  heroLevelText: { color: cardThemes.navy.sub, fontSize: 11, fontWeight: '900' },
   heroTitle: { color: colors.text, fontSize: 22, fontWeight: '900', marginTop: 4 },
-  heroPoints: { color: colors.textMuted, fontSize: 12, fontWeight: '700', marginTop: 1 },
-  heroPointsNum: { color: colors.accent, fontWeight: '900', fontSize: 14 },
-  progressLabelRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 16, marginBottom: 6 },
+  heroPoints: { color: cardThemes.navy.sub, fontSize: 12.5, fontWeight: '700', marginTop: 2 },
+  heroPointsNum: { color: '#FFB38A', fontWeight: '900', fontSize: 15 },
+  progressLabelRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 20, marginBottom: 8 },
   progressLabel: { color: colors.text, fontSize: 11.5, fontWeight: '800' },
-  progressSubLabel: { color: colors.textMuted, fontSize: 11, fontWeight: '700' },
-  rankProgressTrack: { height: 8, borderRadius: 4, backgroundColor: colors.surfaceSunken, overflow: 'hidden' },
+  progressSubLabel: { color: cardThemes.navy.sub, fontSize: 11, fontWeight: '700' },
+  rankProgressTrack: { height: 9, borderRadius: 5, backgroundColor: 'rgba(0, 0, 0, 0.25)', overflow: 'hidden' },
   rankProgressFill: { height: '100%', borderRadius: 4, backgroundColor: colors.accent },
-  statGrid: { flexDirection: 'row', gap: 8, marginTop: 14 },
-  statTile: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 10,
-    borderRadius: radius.md,
-    backgroundColor: colors.surfaceSunken,
-  },
+  statGrid: { flexDirection: 'row', gap: 10, marginTop: 18 },
+  statTile: { flex: 1, alignItems: 'center', paddingVertical: 12, borderRadius: radius.md, backgroundColor: 'rgba(0, 0, 0, 0.2)' },
   statValue: { color: colors.text, fontSize: 16, fontWeight: '900', marginTop: 4 },
-  statLabel: { color: colors.textDim, fontSize: 8.5, fontWeight: '900', letterSpacing: 0.6, marginTop: 1 },
+  statLabel: { color: cardThemes.navy.sub, fontSize: 8.5, fontWeight: '900', letterSpacing: 0.6, marginTop: 2 },
 
   // Tabs
-  tabBar: {
-    flexDirection: 'row',
-    marginHorizontal: 16,
-    marginTop: 12,
-    padding: 4,
-    borderRadius: radius.pill,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  tabItem: {
-    flex: 1,
-    height: 36,
-    borderRadius: radius.pill,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 5,
-  },
+  tabBar: { flexDirection: 'row', marginHorizontal: 18, marginTop: 18, padding: 5, borderRadius: radius.pill, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
+  tabItem: { flex: 1, height: 38, borderRadius: radius.pill, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5 },
   tabItemActive: { backgroundColor: colors.accent },
   tabText: { color: colors.textMuted, fontSize: 12, fontWeight: '900' },
   tabTextActive: { color: colors.onAccent },
 
   detailScrollView: { flex: 1 },
-  detailScrollContent: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 120 },
+  detailScrollContent: { paddingHorizontal: 18, paddingTop: 20, paddingBottom: 140 },
 
   // Mode list
   sectionLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   sectionLabel: { color: colors.text, fontSize: 12.5, fontWeight: '900', letterSpacing: 0.8 },
-  modeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
-    borderRadius: radius.lg,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginTop: 10,
-  },
-  modeIconTile: { width: 46, height: 46, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  modeInfo: { flex: 1, marginHorizontal: 12 },
+  modeRow: { flexDirection: 'row', alignItems: 'center', padding: 16, borderRadius: radius.xl, marginTop: 14 },
+  modeIconTile: { width: 50, height: 50, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  modeInfo: { flex: 1, marginHorizontal: 14 },
   modeTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  modeTitle: { color: colors.text, fontSize: 15, fontWeight: '900', flexShrink: 1 },
-  modeBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-    backgroundColor: colors.surfaceHi,
-  },
-  modeBadgeText: { color: colors.textMuted, fontSize: 8.5, fontWeight: '900', letterSpacing: 0.5 },
-  modeDesc: { color: colors.textMuted, fontSize: 12, marginTop: 3 },
-  modeAction: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: colors.accent,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  modeTitle: { fontSize: 16, fontWeight: '900' },
+  modeBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, alignSelf: 'flex-start', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 7, marginTop: 8 },
+  modeBadgeText: { fontSize: 9, fontWeight: '900', letterSpacing: 0.5 },
+  modeDesc: { fontSize: 12, marginTop: 3 },
+  modeAction: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center' },
   modeActionLocked: { backgroundColor: colors.surfaceHi },
 
   // Leaderboard
   inlineRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  myRankCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 14,
-    borderRadius: radius.lg,
-    backgroundColor: 'rgba(226, 88, 34, 0.1)',
-    borderWidth: 1,
-    borderColor: 'rgba(226, 88, 34, 0.35)',
-  },
+  myRankCard: { flexDirection: 'row', alignItems: 'center', padding: 16, borderRadius: radius.xl, backgroundColor: colors.flame },
   myRankInfo: { flex: 1, marginLeft: 12 },
   myRankName: { color: colors.text, fontSize: 15, fontWeight: '900', marginBottom: 3 },
-  myRankTier: { color: colors.textMuted, fontSize: 11.5, fontWeight: '700' },
+  myRankTier: { color: 'rgba(255,255,255,0.85)', fontSize: 11.5, fontWeight: '700' },
   myRankRight: { alignItems: 'flex-end' },
-  myRankPoints: { color: colors.accent, fontSize: 22, fontWeight: '900' },
-  myRankSub: { color: colors.textMuted, fontSize: 10.5, fontWeight: '700' },
+  myRankPoints: { color: '#FFFFFF', fontSize: 22, fontWeight: '900' },
+  myRankSub: { color: 'rgba(255,255,255,0.85)', fontSize: 10.5, fontWeight: '700' },
   standingsHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 18, marginBottom: 4 },
   refreshBtn: {
     width: 32,
@@ -1098,16 +1031,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  leaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 10,
-    borderRadius: radius.md,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginTop: 8,
-  },
+  leaderRow: { flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: radius.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, marginTop: 10 },
   leaderRowMe: { borderColor: colors.accent },
   rankBox: { width: 36, alignItems: 'center', marginRight: 6 },
   podiumCircle: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
@@ -1131,15 +1055,8 @@ const styles = StyleSheet.create({
   emptyTitle: { color: colors.text, fontSize: 15, fontWeight: '900' },
 
   // Rules
-  infoCard: {
-    padding: 16,
-    borderRadius: radius.lg,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginBottom: 12,
-  },
-  calPillRow: { flexDirection: 'row', gap: 10, marginTop: 12, marginBottom: 6 },
+  infoCard: { padding: 20, borderRadius: radius.xl, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, marginBottom: 16 },
+  calPillRow: { flexDirection: 'row', gap: 12, marginTop: 14, marginBottom: 8 },
   calPill: {
     flex: 1,
     padding: 12,
@@ -1149,10 +1066,10 @@ const styles = StyleSheet.create({
   },
   calPillVal: { color: colors.accent, fontSize: 20, fontWeight: '900' },
   calPillSub: { color: colors.textMuted, fontSize: 10.5, fontWeight: '700', marginTop: 1 },
-  bulletRow: { flexDirection: 'row', gap: 8, marginTop: 10 },
+  bulletRow: { flexDirection: 'row', gap: 10, marginTop: 12 },
   bulletText: { flex: 1, color: colors.textMuted, fontSize: 12.5, lineHeight: 18 },
   bulletBold: { color: colors.text, fontWeight: '800' },
-  ruleRow: { flexDirection: 'row', alignItems: 'center', marginTop: 12 },
+  ruleRow: { flexDirection: 'row', alignItems: 'center', marginTop: 14 },
   ruleIcon: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   ruleText: { flex: 1, color: colors.text, fontSize: 13, fontWeight: '600', marginLeft: 10 },
   rulePoints: { fontSize: 15, fontWeight: '900' },

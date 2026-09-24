@@ -21,7 +21,7 @@ import {
   DailyChallengeSummary,
 } from '../utils/dailyChallengeService';
 import { useDailyChallengeStore } from '../store/dailyChallengeStore';
-import { colors, radius } from '../theme';
+import { cardThemes, colors, radius } from '../theme';
 
 interface DailyChallengesSectionProps {
   exercises: ExerciseItem[];
@@ -134,7 +134,7 @@ export const DailyChallengesSection: React.FC<DailyChallengesSectionProps> = ({
               styles.totalProgressBarFill,
               {
                 width: isAllCompleted ? '100%' : `${Math.max(totalOverallPct > 0 ? 6 : 0, totalOverallPct)}%`,
-                backgroundColor: isAllCompleted ? colors.success : colors.accent,
+                backgroundColor: isAllCompleted ? colors.success : colors.flame,
               },
             ]}
           />
@@ -264,15 +264,8 @@ export const DailyChallengesSection: React.FC<DailyChallengesSectionProps> = ({
 };
 
 const styles = StyleSheet.create({
-  container: {
-    marginBottom: 20,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
+  container: { marginBottom: 28 },
+  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -321,70 +314,29 @@ const styles = StyleSheet.create({
     fontSize: 10.5,
     fontWeight: '800',
   },
-  totalProgressCard: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    padding: 14,
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  totalProgressTopRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
+  totalProgressCard: { backgroundColor: cardThemes.sand.bg, borderRadius: radius.xl, padding: 18, marginBottom: 16 },
+  totalProgressTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   totalProgressLeft: {
     flex: 1,
     marginRight: 10,
   },
-  totalProgressTitle: {
-    color: '#FFFFFF',
-    fontSize: 13.5,
-    fontWeight: '800',
-  },
-  totalProgressSubtitle: {
-    color: '#8E95A0',
-    fontSize: 11,
-    marginTop: 2,
-    fontWeight: '600',
-  },
-  totalPercentPill: {
-    backgroundColor: 'rgba(226, 88, 34, 0.12)',
-    borderRadius: 10,
-    paddingHorizontal: 9,
-    paddingVertical: 4,
-    borderWidth: 1,
-    borderColor: 'rgba(226, 88, 34, 0.25)',
-  },
+  totalProgressTitle: { color: cardThemes.sand.text, fontSize: 14.5, fontWeight: '900' },
+  totalProgressSubtitle: { color: cardThemes.sand.sub, fontSize: 11.5, marginTop: 3, fontWeight: '600' },
+  totalPercentPill: { backgroundColor: cardThemes.sand.chip, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 5 },
   totalPercentPillDone: {
     backgroundColor: 'rgba(16, 185, 129, 0.15)',
     borderColor: 'rgba(16, 185, 129, 0.35)',
   },
-  totalPercentText: {
-    color: colors.accent,
-    fontSize: 12,
-    fontWeight: '900',
-  },
+  totalPercentText: { color: cardThemes.sand.text, fontSize: 13, fontWeight: '900' },
   totalPercentTextDone: {
     color: '#10B981',
   },
-  totalProgressBarTrack: {
-    height: 8,
-    width: '100%',
-    backgroundColor: colors.surfaceSunken,
-    borderRadius: 4,
-    overflow: 'hidden',
-  },
+  totalProgressBarTrack: { height: 10, width: '100%', backgroundColor: cardThemes.sand.track, borderRadius: 5, overflow: 'hidden' },
   totalProgressBarFill: {
     height: '100%',
     borderRadius: 3,
   },
-  flatListContent: {
-    gap: 12,
-    paddingBottom: 2,
-  },
+  flatListContent: { gap: 14 },
   challengeCard: {
     width: 215,
     borderRadius: 22,

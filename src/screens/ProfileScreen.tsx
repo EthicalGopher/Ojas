@@ -46,7 +46,7 @@ import {
 } from 'lucide-react-native';
 import { ProgressRing } from '../components/ui/ProgressRing';
 import { useGameStats } from '../hooks/useGameStats';
-import { colors, radius } from '../theme';
+import { cardThemes, colors, radius } from '../theme';
 
 type IconType = React.ComponentType<{ size?: number; color?: string; strokeWidth?: number }>;
 import { Avatar } from '../components/Avatar';
@@ -595,7 +595,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
         {activeTab === 'profile' ? (
           <>
             {/* ACHIEVEMENTS */}
-            <View style={styles.sectionCard}>
+            <View style={[styles.sectionCard, { backgroundColor: cardThemes.lavender.bg }]}>
               <View style={styles.sectionHeaderRow}>
                 <View style={styles.sectionTitleRow}>
                   <Award size={15} color={colors.accent} />
@@ -609,7 +609,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                     <View style={[styles.achievementIcon, unlocked && { backgroundColor: colors.accent }]}>
                       {unlocked ? <Icon size={18} color={colors.onAccent} /> : <Lock size={15} color={colors.textDim} />}
                     </View>
-                    <Text style={[styles.achievementTitle, !unlocked && { color: colors.textMuted }]} numberOfLines={1}>
+                    <Text style={[styles.achievementTitle, !unlocked && { color: cardThemes.lavender.sub }]} numberOfLines={1}>
                       {title}
                     </Text>
                     <Text style={styles.achievementHint} numberOfLines={1}>{hint}</Text>
@@ -619,7 +619,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
             </View>
 
             {/* DETAILS */}
-            <View style={styles.sectionCard}>
+            <View style={[styles.sectionCard, { backgroundColor: cardThemes.sand.bg }]}>
               <View style={styles.sectionTitleRow}>
                 <User size={15} color={colors.accent} />
                 <Text style={styles.sectionHeader}>PERSONAL DETAILS</Text>
@@ -665,7 +665,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
             </View>
 
             {/* HEALTH */}
-            <View style={styles.sectionCard}>
+            <View style={[styles.sectionCard, { backgroundColor: cardThemes.mint.bg }]}>
               <View style={styles.sectionHeaderRow}>
                 <View style={styles.sectionTitleRow}>
                   <HeartPulse size={15} color={colors.accent} />
@@ -886,7 +886,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           </View>
         ) : (
           <View>
-            <View style={styles.sectionCard}>
+            <View style={[styles.sectionCard, { backgroundColor: cardThemes.pink.bg }]}>
               <View style={styles.sectionTitleRow}>
                 <UserPlus size={15} color={colors.accent} />
                 <Text style={styles.sectionHeader}>ADD A FRIEND</Text>
@@ -974,86 +974,34 @@ const styles = StyleSheet.create({
   editButtonText: { color: colors.text, fontSize: 13, fontWeight: '800' },
 
   scrollContent: { flex: 1 },
-  scrollContainer: { paddingHorizontal: 16, paddingBottom: 130 },
+  scrollContainer: { paddingHorizontal: 18, paddingBottom: 150 },
 
   // Hero
-  heroCard: {
-    padding: 18,
-    borderRadius: radius.xl,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
+  heroCard: { padding: 22, borderRadius: radius.xl, backgroundColor: cardThemes.navy.bg },
   heroTopRow: { flexDirection: 'row', alignItems: 'center' },
-  cameraBadge: {
-    position: 'absolute',
-    right: -2,
-    top: 2,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: colors.accent,
-    borderWidth: 2,
-    borderColor: colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  cameraBadge: { position: 'absolute', right: -2, top: 2, width: 30, height: 30, borderRadius: 15, backgroundColor: colors.accent, borderWidth: 2, borderColor: cardThemes.navy.bg, alignItems: 'center', justifyContent: 'center' },
   levelBadgeRow: { position: 'absolute', left: 0, right: 0, bottom: -6, alignItems: 'center' },
-  levelBadge: {
-    paddingHorizontal: 8,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: colors.accent,
-    borderWidth: 2,
-    borderColor: colors.surface,
-    justifyContent: 'center',
-  },
+  levelBadge: { paddingHorizontal: 8, height: 20, borderRadius: 10, backgroundColor: colors.accent, borderWidth: 2, borderColor: cardThemes.navy.bg, justifyContent: 'center' },
   levelBadgeText: { color: colors.onAccent, fontSize: 10, fontWeight: '900' },
   heroInfo: { flex: 1, marginLeft: 16 },
   heroName: { color: colors.text, fontSize: 21, fontWeight: '900' },
-  heroUsername: { color: colors.textMuted, fontSize: 13, fontWeight: '600', marginTop: 2 },
-  titleChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    alignSelf: 'flex-start',
-    marginTop: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: radius.pill,
-    backgroundColor: 'rgba(226, 88, 34, 0.14)',
-  },
-  titleChipText: { color: colors.accent, fontSize: 11, fontWeight: '900', letterSpacing: 0.4 },
-  heroBio: { color: colors.textMuted, fontSize: 13, lineHeight: 19, marginTop: 14 },
-  xpLabelRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 18, marginBottom: 6 },
+  heroUsername: { color: cardThemes.navy.sub, fontSize: 13, fontWeight: '600', marginTop: 3 },
+  titleChip: { flexDirection: 'row', alignItems: 'center', gap: 5, alignSelf: 'flex-start', marginTop: 10, paddingHorizontal: 10, paddingVertical: 5, borderRadius: radius.pill, backgroundColor: cardThemes.navy.chip },
+  titleChipText: { color: '#FFFFFF', fontSize: 11, fontWeight: '900', letterSpacing: 0.4 },
+  heroBio: { color: cardThemes.navy.sub, fontSize: 13, lineHeight: 19, marginTop: 16 },
+  xpLabelRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 20, marginBottom: 8 },
   xpLabel: { color: colors.text, fontSize: 12, fontWeight: '800' },
-  xpNext: { color: colors.textMuted, fontSize: 11, fontWeight: '700' },
-  xpTrack: { height: 8, borderRadius: 4, backgroundColor: colors.surfaceSunken, overflow: 'hidden' },
+  xpNext: { color: cardThemes.navy.sub, fontSize: 11, fontWeight: '700' },
+  xpTrack: { height: 9, borderRadius: 5, backgroundColor: 'rgba(0, 0, 0, 0.25)', overflow: 'hidden' },
   xpFill: { height: '100%', borderRadius: 4, backgroundColor: colors.accent },
-  statGrid: { flexDirection: 'row', gap: 8, marginTop: 14 },
-  statTile: { flex: 1, alignItems: 'center', paddingVertical: 10, borderRadius: radius.md, backgroundColor: colors.surfaceSunken },
+  statGrid: { flexDirection: 'row', gap: 10, marginTop: 18 },
+  statTile: { flex: 1, alignItems: 'center', paddingVertical: 12, borderRadius: radius.md, backgroundColor: 'rgba(0, 0, 0, 0.2)' },
   statValue: { color: colors.text, fontSize: 15, fontWeight: '900', marginTop: 4 },
-  statLabel: { color: colors.textDim, fontSize: 8.5, fontWeight: '900', letterSpacing: 0.6, marginTop: 1 },
+  statLabel: { color: cardThemes.navy.sub, fontSize: 8.5, fontWeight: '900', letterSpacing: 0.6, marginTop: 2 },
 
   // Tabs
-  subTabBar: {
-    flexDirection: 'row',
-    marginVertical: 14,
-    padding: 4,
-    borderRadius: radius.pill,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  subTabItem: {
-    flex: 1,
-    height: 36,
-    borderRadius: radius.pill,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-  },
+  subTabBar: { flexDirection: 'row', marginVertical: 20, padding: 5, borderRadius: radius.pill, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
+  subTabItem: { flex: 1, height: 38, borderRadius: radius.pill, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4 },
   subTabItemActive: { backgroundColor: colors.accent },
   subTabText: { color: colors.textMuted, fontSize: 11.5, fontWeight: '900' },
   subTabTextActive: { color: colors.onAccent },
@@ -1069,67 +1017,27 @@ const styles = StyleSheet.create({
   badgeCountText: { color: '#fff', fontSize: 9, fontWeight: '900' },
 
   // Sections
-  sectionCard: {
-    padding: 16,
-    borderRadius: radius.lg,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginBottom: 12,
-  },
+  sectionCard: { padding: 20, borderRadius: radius.xl, marginBottom: 18 },
   sectionHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   sectionTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
-  sectionHeader: { color: colors.text, fontSize: 12.5, fontWeight: '900', letterSpacing: 0.8 },
-  sectionMeta: { color: colors.textMuted, fontSize: 11, fontWeight: '700' },
+  sectionHeader: { color: '#11141A', fontSize: 12.5, fontWeight: '900', letterSpacing: 0.8 },
+  sectionMeta: { color: '#374151', fontSize: 11, fontWeight: '800' },
 
   // Achievements
-  achievementGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
-  achievement: {
-    width: '31.5%',
-    flexGrow: 1,
-    alignItems: 'center',
-    padding: 10,
-    borderRadius: radius.md,
-    backgroundColor: colors.surfaceSunken,
-    borderWidth: 1,
-    borderColor: 'transparent',
-  },
-  achievementUnlocked: { borderColor: 'rgba(226, 88, 34, 0.4)', backgroundColor: 'rgba(226, 88, 34, 0.08)' },
-  achievementIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: colors.surfaceHi,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  achievementTitle: { color: colors.text, fontSize: 11.5, fontWeight: '900', marginTop: 6 },
-  achievementHint: { color: colors.textDim, fontSize: 9.5, fontWeight: '700', marginTop: 1 },
+  achievementGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 16 },
+  achievement: { width: '30%', flexGrow: 1, alignItems: 'center', paddingVertical: 12, paddingHorizontal: 8, borderRadius: radius.lg, backgroundColor: 'rgba(17, 20, 26, 0.08)' },
+  achievementUnlocked: { backgroundColor: '#FFFFFF' },
+  achievementIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(17, 20, 26, 0.1)', alignItems: 'center', justifyContent: 'center' },
+  achievementTitle: { color: '#11141A', fontSize: 11.5, fontWeight: '900', marginTop: 8 },
+  achievementHint: { color: '#374151', fontSize: 9.5, fontWeight: '700', marginTop: 2 },
 
   // Details
-  detailRow: { flexDirection: 'row', gap: 12, marginTop: 14 },
-  detailIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    backgroundColor: 'rgba(226, 88, 34, 0.12)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  detailRow: { flexDirection: 'row', gap: 14, marginTop: 16 },
+  detailIcon: { width: 34, height: 34, borderRadius: 11, backgroundColor: 'rgba(17, 20, 26, 0.08)', alignItems: 'center', justifyContent: 'center' },
   detailLabelRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  detailLabel: { color: colors.textDim, fontSize: 10.5, fontWeight: '900', letterSpacing: 0.6, textTransform: 'uppercase' },
-  detailValue: { color: colors.text, fontSize: 14.5, fontWeight: '700', marginTop: 3 },
-  input: {
-    marginTop: 6,
-    backgroundColor: colors.surfaceSunken,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.borderStrong,
-    color: colors.text,
-    fontSize: 14,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
+  detailLabel: { color: '#374151', fontSize: 10.5, fontWeight: '900', letterSpacing: 0.6, textTransform: 'uppercase' },
+  detailValue: { color: '#11141A', fontSize: 15, fontWeight: '700', marginTop: 3 },
+  input: { marginTop: 6, backgroundColor: '#FFFFFF', borderRadius: radius.md, borderWidth: 1, borderColor: 'rgba(17, 20, 26, 0.12)', color: '#11141A', fontSize: 14, paddingHorizontal: 12, paddingVertical: 10 },
   textArea: { minHeight: 80, textAlignVertical: 'top' },
   randomizeBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   randomizeBtnText: { color: colors.accent, fontSize: 11, fontWeight: '800' },
@@ -1137,57 +1045,25 @@ const styles = StyleSheet.create({
   // Health
   linkBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   linkBtnText: { color: colors.accent, fontSize: 12, fontWeight: '800' },
-  healthSectionDesc: { color: colors.textMuted, fontSize: 12.5, lineHeight: 18, marginTop: 10 },
+  healthSectionDesc: { color: '#374151', fontSize: 12.5, lineHeight: 18, marginTop: 10 },
   conditionChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
-  conditionChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: radius.pill,
-    backgroundColor: 'rgba(226, 88, 34, 0.12)',
-    borderWidth: 1,
-    borderColor: 'rgba(226, 88, 34, 0.35)',
-  },
+  conditionChip: { paddingHorizontal: 11, paddingVertical: 6, borderRadius: radius.pill, backgroundColor: '#FFFFFF' },
   conditionChipText: { color: colors.accent, fontSize: 12, fontWeight: '800' },
-  healthItem: {
-    marginTop: 10,
-    padding: 12,
-    borderRadius: radius.md,
-    backgroundColor: colors.surfaceSunken,
-    borderWidth: 1,
-    borderColor: 'transparent',
-  },
+  healthItem: { marginTop: 12, padding: 14, borderRadius: radius.lg, backgroundColor: 'rgba(255, 255, 255, 0.6)', borderWidth: 1, borderColor: 'transparent' },
   healthItemSelected: { borderColor: 'rgba(226, 88, 34, 0.5)' },
   healthItemTop: { flexDirection: 'row', alignItems: 'center' },
-  healthTitle: { color: colors.text, fontSize: 14, fontWeight: '900' },
-  healthSubtitle: { color: colors.textDim, fontSize: 11, fontWeight: '700', marginTop: 1 },
-  healthQuestion: { color: colors.textMuted, fontSize: 12, lineHeight: 17, marginTop: 8 },
+  healthTitle: { color: '#11141A', fontSize: 14, fontWeight: '900' },
+  healthSubtitle: { color: '#374151', fontSize: 11, fontWeight: '700', marginTop: 1 },
+  healthQuestion: { color: '#374151', fontSize: 12, lineHeight: 17, marginTop: 8 },
   healthToggleRow: { flexDirection: 'row', gap: 6 },
-  healthToggleBtn: {
-    width: 36,
-    height: 32,
-    borderRadius: 10,
-    backgroundColor: colors.surfaceHi,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  healthToggleBtn: { width: 38, height: 34, borderRadius: 11, backgroundColor: 'rgba(17, 20, 26, 0.08)', alignItems: 'center', justifyContent: 'center' },
   healthYesActive: { backgroundColor: colors.accent },
   healthNoActive: { backgroundColor: '#334155' },
   healthRecBadges: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 },
-  healthRecBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, backgroundColor: colors.surfaceHi },
-  healthRecBadgeText: { color: colors.text, fontSize: 11, fontWeight: '700' },
+  healthRecBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, backgroundColor: '#FFFFFF' },
+  healthRecBadgeText: { color: '#11141A', fontSize: 11, fontWeight: '700' },
 
-  logoutButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    height: 50,
-    marginTop: 4,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: 'rgba(239, 68, 68, 0.4)',
-    backgroundColor: 'rgba(239, 68, 68, 0.08)',
-  },
+  logoutButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 52, marginTop: 6, borderRadius: radius.pill, borderWidth: 1, borderColor: 'rgba(239, 68, 68, 0.4)', backgroundColor: 'rgba(239, 68, 68, 0.08)' },
   logoutButtonText: { color: colors.danger, fontSize: 14.5, fontWeight: '900' },
   cancelEditBtn: {
     height: 48,
@@ -1212,16 +1088,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.accent,
   },
   pillBtnText: { color: colors.onAccent, fontSize: 12, fontWeight: '800' },
-  friendRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
-    marginTop: 8,
-    borderRadius: radius.md,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
+  friendRow: { flexDirection: 'row', alignItems: 'center', padding: 14, marginTop: 10, borderRadius: radius.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
   friendInfoBox: { flex: 1, marginLeft: 12 },
   friendName: { color: colors.text, fontSize: 14.5, fontWeight: '800' },
   friendUsername: { color: colors.textMuted, fontSize: 12, marginTop: 1 },
@@ -1295,19 +1162,8 @@ const styles = StyleSheet.create({
 
   // Add friend
   searchRow: { flexDirection: 'row', gap: 8, marginTop: 14 },
-  searchInputWrapper: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    height: 46,
-    paddingHorizontal: 14,
-    borderRadius: radius.pill,
-    backgroundColor: colors.surfaceSunken,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  searchInput: { flex: 1, color: colors.text, fontSize: 14 },
+  searchInputWrapper: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, height: 48, paddingHorizontal: 14, borderRadius: radius.pill, backgroundColor: '#FFFFFF' },
+  searchInput: { flex: 1, color: '#11141A', fontSize: 14 },
   sendRequestBtn: {
     width: 46,
     height: 46,

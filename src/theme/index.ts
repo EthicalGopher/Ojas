@@ -40,3 +40,31 @@ export const shadow = (elevation: number = 6) => ({
   shadowRadius: elevation * 1.5,
   elevation,
 });
+
+/**
+ * Colored card styles, matching the workout cards on the Train (Exercises) screen.
+ * Light cards use dark text; orange/navy cards use white text.
+ */
+export interface CardTheme {
+  bg: string;
+  text: string;
+  sub: string;
+  chip: string;
+  track: string;
+  onDark: boolean;
+}
+
+const LIGHT_TEXT = { text: '#11141A', sub: '#374151', chip: 'rgba(17, 20, 26, 0.08)', track: 'rgba(17, 20, 26, 0.12)', onDark: false };
+const DARK_TEXT = { text: '#FFFFFF', sub: 'rgba(255, 255, 255, 0.82)', chip: 'rgba(255, 255, 255, 0.18)', track: 'rgba(255, 255, 255, 0.2)', onDark: true };
+
+export const cardThemes = {
+  lavender: { bg: '#C8B6FF', ...LIGHT_TEXT },
+  pink: { bg: '#FFD6E0', ...LIGHT_TEXT },
+  mint: { bg: '#A7F3D0', ...LIGHT_TEXT, sub: '#065F46' },
+  sand: { bg: '#E8D5C4', ...LIGHT_TEXT },
+  orange: { bg: '#E25822', ...DARK_TEXT },
+  navy: { bg: '#354394', ...DARK_TEXT },
+} satisfies Record<string, CardTheme>;
+
+/** Rotating order used for lists of cards (same rhythm as the Exercises screen). */
+export const cardCycle: CardTheme[] = [cardThemes.lavender, cardThemes.pink, cardThemes.orange, cardThemes.navy, cardThemes.mint];
