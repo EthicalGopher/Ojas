@@ -23,6 +23,7 @@ import {
   searchQueueWithBotFallback,
 } from '../utils/matchmaking';
 import { useGameStats } from '../hooks/useGameStats';
+import { getNotifications, scheduleStreakReminders } from '../utils/streakReminders';
 import type { SimulatedOpponent } from '../utils/simulatedOpponent';
 import { supabase } from '../utils/supabase';
 import { useUserStore } from '../store/userStore';
@@ -62,7 +63,25 @@ export default function AppShell() {
   const [soloExerciseName, setSoloExerciseName] = useState<string>('Squats');
   const [isAiTutorMode, setIsAiTutorMode] = useState<boolean>(false);
   const { activeTab, setActiveTab, setUser } = useUserStore();
-  const playerLevel = useGameStats().level.level;
+  const { level: playerLevelInfo, streak } = useGameStats();
+  const playerLevel = playerLevelInfo.level;
+
+  // Keep tomorrow's streak reminders in step with today's activity.
+  useEffect(() => {
+    if (!currentUser) return;
+    scheduleStreakReminders(streak).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser?.id, streak.current, streak.activeToday]);
+
+  // Tapping a reminder opens the Train tab.
+  useEffect(() => {
+    const Notifications = getNotifications();
+    if (!Notifications) return;
+    const sub = Notifications.addNotificationResponseReceivedListener((response) => {
+      if (response.notification.request.content.data?.screen === 'workouts') setActiveTab('workouts');
+    });
+    return () => sub.remove();
+  }, [setActiveTab]);
 
   // Listen for incoming 1v1 battle invites from friends
   useEffect(() => {

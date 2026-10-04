@@ -214,7 +214,7 @@ export const HealthAssessmentModal: React.FC<HealthAssessmentModalProps> = ({
                   {isSelected && (
                     <View style={styles.recPreviewContainer}>
                       <Text style={styles.recPreviewLabel}>
-                        🎯 Recommended AI Focus:
+                        Recommended AI focus:
                       </Text>
                       <View style={styles.recBadgesRow}>
                         {cond.recommendedExerciseNames.map((name) => (

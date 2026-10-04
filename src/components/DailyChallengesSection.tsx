@@ -196,7 +196,7 @@ export const DailyChallengesSection: React.FC<DailyChallengesSectionProps> = ({
               <View style={styles.iconContainer}>
                 <ExerciseIcon
                   imageUrl={item.exercise.image_url}
-                  icon={item.exercise.icon || '🧘'}
+                  icon={item.exercise.icon || ''}
                   size={54}
                   fontSize={30}
                 />
@@ -206,7 +206,7 @@ export const DailyChallengesSection: React.FC<DailyChallengesSectionProps> = ({
               <View style={styles.progressSection}>
                 <View style={styles.progressInfoRow}>
                   <Text style={[styles.progressCountLabel, { color: palette.subColor }]}>
-                    {isDone ? '✓ Goal Reached' : liveCountText}
+                    {isDone ? 'Goal reached' : liveCountText}
                   </Text>
                   <Text style={[styles.progressPercentLabel, { color: palette.textColor }]}>
                     {isDone ? '100%' : `${progressPct}%`}

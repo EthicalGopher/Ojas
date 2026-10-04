@@ -3,7 +3,8 @@ import { supabase } from '../utils/supabase';
 import { UserProfile, getOrCreateUserProfile } from '../utils/profileService';
 import { useDailyChallengeStore } from './dailyChallengeStore';
 
-export type MainTab = 'home' | 'explore' | 'workouts' | 'social' | 'profile';
+export type MainTab = 'home' | 'explore' | 'workouts' | 'shop' | 'social' | 'profile';
+export type ShopFilter = 'all' | 'owned';
 export type HomeSubTab = 'feed' | 'news';
 
 export interface MatchSummaryStats {
@@ -28,6 +29,7 @@ interface UserState {
   selectedExerciseId: string | null;
   isGuest: boolean;
   lastMatchSummary: MatchSummaryStats | null;
+  shopFilter: ShopFilter;
   setUser: (user: any | null) => void;
   setProfile: (profile: UserProfile | null) => void;
   setActiveTab: (tab: MainTab) => void;
@@ -37,6 +39,9 @@ interface UserState {
   setSelectedExerciseId: (id: string | null) => void;
   setIsGuest: (isGuest: boolean) => void;
   setLastMatchSummary: (summary: MatchSummaryStats | null) => void;
+  setShopFilter: (filter: ShopFilter) => void;
+  /** Jump to the Shop tab, optionally showing only the avatars the user owns. */
+  openShop: (filter?: ShopFilter) => void;
   refreshProfile: () => Promise<UserProfile | null>;
 }
 
@@ -48,6 +53,7 @@ export const useUserStore = create<UserState>((set, get) => ({
   selectedExerciseId: null,
   isGuest: false,
   lastMatchSummary: null,
+  shopFilter: 'all',
   setUser: (user) => {
     set({ user, isGuest: user?.isGuest || false });
     if (user && !user?.isGuest) {
@@ -85,6 +91,8 @@ export const useUserStore = create<UserState>((set, get) => ({
   setSelectedExerciseId: (selectedExerciseId) => set({ selectedExerciseId }),
   setIsGuest: (isGuest) => set({ isGuest }),
   setLastMatchSummary: (lastMatchSummary) => set({ lastMatchSummary }),
+  setShopFilter: (shopFilter) => set({ shopFilter }),
+  openShop: (shopFilter = 'all') => set({ activeTab: 'shop', shopFilter, selectedExerciseId: null }),
   refreshProfile: async () => {
     const { user, isGuest } = get();
     if (!user || isGuest) return null;

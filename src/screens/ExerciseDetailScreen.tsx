@@ -27,13 +27,10 @@ import {
   Gamepad2,
   Info,
   Lock,
-  Medal,
-  Palette,
   Play,
   RefreshCw,
   Search,
   Send,
-  ShoppingBag,
   Swords,
   Target,
   TrendingDown,
@@ -48,6 +45,9 @@ import { Avatar } from '../components/Avatar';
 import { ExerciseIcon } from '../components/ExerciseIcon';
 import { useUserStore } from '../store/userStore';
 import { TierIcon } from '../components/TierIcon';
+import { ProgressRing } from '../components/ui/ProgressRing';
+import { RankEmblem, RankTier, TIER_NAMES, TIER_PALETTES, clampTier } from '../components/RankEmblem';
+import { GlowSpot, GradientFill } from '../features/squad/components/SquadUI';
 import { exerciseCardThemes, makeStyles, radius, ThemeColors, useColors } from '../theme';
 import {
   calculateLevel,
@@ -94,10 +94,10 @@ interface QueueMode {
 
 interface ExerciseDetailScreenProps {
   exercise: ExerciseItem;
-  detailTab: 'workouts' | 'shop' | 'leaderboard' | 'how_to_play';
+  detailTab: 'workouts' | 'leaderboard' | 'how_to_play';
   onBack: () => void;
   onJoinQueue: (exercise: ExerciseItem, queue: 'faceoff' | 'quick_start' | 'ffa') => void;
-  onDetailTabChange: (tab: 'workouts' | 'shop' | 'leaderboard' | 'how_to_play') => void;
+  onDetailTabChange: (tab: 'workouts' | 'leaderboard' | 'how_to_play') => void;
   onStartCustomMatch?: (
     opponent: string,
     mode: 'faceoff' | 'quickjoin' | 'ffa',
@@ -338,7 +338,6 @@ export const ExerciseDetailScreen: React.FC<ExerciseDetailScreenProps> = ({
     { key: 'workouts', label: 'Play', Icon: Gamepad2, requiresAuth: false },
     { key: 'leaderboard', label: 'Ranks', Icon: Trophy, requiresAuth: true },
     { key: 'how_to_play', label: 'Rules', Icon: BookOpen, requiresAuth: false },
-    { key: 'shop', label: 'Shop', Icon: ShoppingBag, requiresAuth: true },
   ];
 
   const TRAIN_MODES: QueueMode[] = [
@@ -429,21 +428,24 @@ export const ExerciseDetailScreen: React.FC<ExerciseDetailScreenProps> = ({
 
   const PODIUM_COLORS = ['#F59E0B', '#C0C0C0', '#CD7F32'];
 
-  const RuleRow = ({ Icon, tint, points, text, onCard }: { Icon: IconType; tint: string; points: string; text: string; onCard?: boolean }) => (
-    <View style={styles.ruleRow}>
-      <View style={[styles.ruleIcon, { backgroundColor: `${tint}22` }]}>
-        <Icon size={15} color={tint} />
-      </View>
-      <Text style={[styles.ruleText, onCard && { color: colors.text }]}>{text}</Text>
-      <Text style={[styles.rulePoints, { color: tint }]}>{points}</Text>
-    </View>
-  );
-
   const scoringRules = (
     <>
-      <RuleRow Icon={TrendingUp} tint={colors.success} points="+10" text={`Win a ${exercise.name} duel`} />
-      <RuleRow Icon={Equal} tint={colors.gold} points="+5" text="Draw: both players earn points" />
-      <RuleRow Icon={TrendingDown} tint={colors.danger} points="-10" text="Defeat (never drops below 0)" />
+      <View style={styles.scoreBoard}>
+        {[
+          { label: 'WIN', points: '+10', tint: colors.success },
+          { label: 'DRAW', points: '+5', tint: colors.gold },
+          { label: 'LOSS', points: '-10', tint: colors.danger },
+        ].map(({ label, points, tint }, i) => (
+          <View key={label} style={[styles.scoreCell, i > 0 && styles.scoreCellDivider]}>
+            <View style={[styles.scoreCellBar, { backgroundColor: tint }]} />
+            <Text style={[styles.scorePoints, { color: tint }]}>{points}</Text>
+            <Text style={styles.scoreLabel}>{label}</Text>
+          </View>
+        ))}
+      </View>
+      <Text style={styles.scoreFootnote}>
+        Points are per {exercise.name} duel. Both players score on a draw, and your total never drops below 0.
+      </Text>
     </>
   );
 
@@ -489,54 +491,62 @@ export const ExerciseDetailScreen: React.FC<ExerciseDetailScreenProps> = ({
           <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.accent} colors={[colors.accent]} />
         }
       >
-        {/* HERO (orange, like the home banner) */}
-        <View style={styles.heroCard}>
-          <View style={styles.heroTopRow}>
-            <View style={{ flex: 1 }}>
-              <View style={styles.tierRow}>
-                <View style={styles.tierChip}>
-                  <TierIcon level={levelInfo.level} size={12} color="#FFFFFF" />
-                  <Text style={styles.tierChipText}>{levelInfo.tier.toUpperCase()}</Text>
+        {/* RANK CARD: tier emblem is the hero */}
+        {(() => {
+          const tier = clampTier(levelInfo.level);
+          const pal = TIER_PALETTES[tier];
+          const nextTier = tier < 6 ? TIER_NAMES[(tier + 1) as RankTier] : null;
+          return (
+            <View style={styles.heroCard}>
+              <GradientFill colors={['#2A2470', '#14112B']} />
+              <GlowSpot color={pal.base} size={260} style={{ right: -50, top: -60 }} />
+              <View style={styles.heroTopRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.heroEyebrow}>{exercise.name.toUpperCase()} RANK</Text>
+                  <Text style={[styles.heroTitle, { color: pal.light }]}>{TIER_NAMES[tier]}</Text>
+                  <Text style={styles.heroPoints}>
+                    <Text style={styles.heroPointsNum}>{exercisePoints.toLocaleString()}</Text> rank points
+                  </Text>
                 </View>
-                <Text style={styles.heroLevelText}>LVL {levelInfo.level}</Text>
+                <RankEmblem tier={tier} size={112} />
               </View>
-              <Text style={styles.heroTitle}>{levelInfo.title}</Text>
-              <Text style={styles.heroPoints}>
-                <Text style={styles.heroPointsNum}>{exercisePoints}</Text> points
-              </Text>
-            </View>
-            <View style={styles.heroVisual}>
-              <ExerciseIcon imageUrl={exercise.image_url} icon={exercise.icon} size={96} fontSize={52} />
-            </View>
-          </View>
 
-          <View style={styles.progressLabelRow}>
-            <Text style={styles.progressLabel}>Mastery {levelInfo.progressPercent}%</Text>
-            <Text style={styles.progressSubLabel}>
-              {levelInfo.level < 6 ? `${levelInfo.pointsToNext || 90} pts to LVL ${levelInfo.level + 1}` : 'Max level reached'}
-            </Text>
-          </View>
-          <View style={styles.rankProgressTrack}>
-            <View style={[styles.rankProgressFill, { width: `${Math.min(100, Math.max(2, levelInfo.progressPercent))}%` }]} />
-          </View>
-        </View>
+              <View style={styles.progressLabelRow}>
+                <Text style={styles.progressLabel}>{levelInfo.progressPercent}%</Text>
+                <Text style={styles.progressSubLabel}>
+                  {nextTier ? `${levelInfo.pointsToNext || 0} pts to ${nextTier}` : 'Top rank reached'}
+                </Text>
+              </View>
+              <View style={styles.rankProgressTrack}>
+                <View
+                  style={[
+                    styles.rankProgressFill,
+                    { width: `${Math.min(100, Math.max(2, levelInfo.progressPercent))}%`, backgroundColor: pal.base },
+                  ]}
+                />
+              </View>
+            </View>
+          );
+        })()}
 
         {/* STATS */}
-        <View style={styles.statGrid}>
-          {[
-            { label: 'Matches', value: exerciseMatchesPlayed, Icon: Swords },
-            { label: 'Wins', value: exerciseMatchesWon, Icon: Trophy },
-            { label: 'Win rate', value: `${winRate}%`, Icon: Target },
-            { label: 'Reps', value: exerciseReps, Icon: Activity },
-          ].map(({ label, value, Icon }) => (
-            <View key={label} style={styles.statTile}>
-              <View style={styles.statIcon}>
-                <Icon size={19} color={colors.flame} />
+        <View style={styles.recordCard}>
+          <ProgressRing size={78} strokeWidth={7} progress={winRate / 100} color={colors.success} trackColor={colors.surfaceHi}>
+            <Text style={styles.recordRingValue}>{winRate}%</Text>
+            <Text style={styles.recordRingLabel}>WIN RATE</Text>
+          </ProgressRing>
+          <View style={styles.recordCols}>
+            {[
+              { label: 'MATCHES', value: exerciseMatchesPlayed },
+              { label: 'WINS', value: exerciseMatchesWon },
+              { label: 'REPS', value: exerciseReps },
+            ].map(({ label, value }, i) => (
+              <View key={label} style={[styles.recordCol, i > 0 && styles.recordColDivider]}>
+                <Text style={styles.statValue}>{Number(value).toLocaleString()}</Text>
+                <Text style={styles.statLabel}>{label}</Text>
               </View>
-              <Text style={styles.statValue}>{value}</Text>
-              <Text style={styles.statLabel}>{label}</Text>
-            </View>
-          ))}
+            ))}
+          </View>
         </View>
 
         {/* TABS */}
@@ -596,7 +606,7 @@ export const ExerciseDetailScreen: React.FC<ExerciseDetailScreenProps> = ({
                 </Text>
                 <View style={styles.inlineRow}>
                   <TierIcon level={levelInfo.level} size={12} color={levelInfo.color} />
-                  <Text style={styles.myRankTier}>LVL {levelInfo.level} · {levelInfo.title}</Text>
+                  <Text style={styles.myRankTier}>{TIER_NAMES[clampTier(levelInfo.level)]} · {exercisePoints} pts</Text>
                 </View>
               </View>
               <View style={styles.myRankRight}>
@@ -607,7 +617,7 @@ export const ExerciseDetailScreen: React.FC<ExerciseDetailScreenProps> = ({
 
             <View style={styles.standingsHeaderRow}>
               <View style={styles.sectionLabelRow}>
-                <Trophy size={14} color={colors.accent} />
+                <View style={styles.sectionAccent} />
                 <Text style={styles.sectionLabel}>{exercise.name.toUpperCase()} STANDINGS</Text>
               </View>
               <TouchableOpacity style={styles.refreshBtn} activeOpacity={0.7} onPress={loadLeaderboardData}>
@@ -646,7 +656,7 @@ export const ExerciseDetailScreen: React.FC<ExerciseDetailScreenProps> = ({
                     <View style={styles.rankBox}>
                       {podiumColor ? (
                         <View style={[styles.podiumCircle, { backgroundColor: `${podiumColor}22` }]}>
-                          <Medal size={16} color={podiumColor} />
+                          <Text style={[styles.podiumRankText, { color: podiumColor }]}>{index + 1}</Text>
                         </View>
                       ) : (
                         <Text style={styles.rankNumberText}>#{index + 1}</Text>
@@ -658,9 +668,9 @@ export const ExerciseDetailScreen: React.FC<ExerciseDetailScreenProps> = ({
                         {entry.full_name || entry.username}{isMe ? ' (You)' : ''}
                       </Text>
                       <View style={styles.inlineRow}>
-                        <TierIcon level={entryLevel.level} size={11} color={entryLevel.color} />
+                        <TierIcon level={entryLevel.level} size={14} />
                         <Text style={styles.leaderSub}>
-                          LVL {entryLevel.level} · {entry.matches_won}W · {entry.reps_completed} reps
+                          {TIER_NAMES[clampTier(entryLevel.level)]} · {entry.matches_won}W · {entry.reps_completed} reps
                         </Text>
                       </View>
                     </View>
@@ -673,52 +683,58 @@ export const ExerciseDetailScreen: React.FC<ExerciseDetailScreenProps> = ({
               })
             )}
           </View>
-        ) : detailTab === 'how_to_play' ? (
+        ) : (
           <View>
             <View style={styles.infoCard}>
               <View style={styles.sectionLabelRow}>
-                <CalorieIcon width={15} height={15} color={colors.flame} />
+                <View style={styles.sectionAccent} />
                 <Text style={[styles.sectionLabel, { color: colors.text }]}>CALORIE COUNTING</Text>
               </View>
-              <View style={styles.calPillRow}>
-                <View style={[styles.calPill, { backgroundColor: 'rgba(226, 88, 34, 0.12)' }]}>
-                  <Text style={[styles.calPillVal, { color: colors.flame }]}>{calorieInfo.perRep}</Text>
-                  <Text style={[styles.calPillSub, { color: colors.textMuted }]}>kcal per rep</Text>
-                </View>
-                <View style={[styles.calPill, { backgroundColor: 'rgba(226, 88, 34, 0.12)' }]}>
-                  <Text style={[styles.calPillVal, { color: colors.flame }]}>{calorieInfo.met}</Text>
-                  <Text style={[styles.calPillSub, { color: colors.textMuted }]}>MET intensity</Text>
-                </View>
-              </View>
-              {[
-                { Icon: ({ size, color }: { size?: number; color?: string }) => <CalorieIcon width={size} height={size} color={color} />, title: 'Calculation', text: calorieInfo.formula },
-                { Icon: Check, title: 'Valid movement', text: calorieInfo.technique },
-                { Icon: CalendarDays, title: 'Daily log', text: 'Saved automatically to your profile and home calendar.' },
-              ].map(({ Icon, title, text }) => (
-                <View key={title} style={styles.bulletRow}>
-                  <Icon size={14} color={colors.textMuted} style={{ marginTop: 2 }} />
-                  <Text style={[styles.bulletText, { color: colors.textMuted }]}>
-                    <Text style={[styles.bulletBold, { color: colors.text }]}>{title}: </Text>
-                    {text}
-                  </Text>
-                </View>
-              ))}
+              {(() => {
+                const isHold = /hold/i.test(calorieInfo.formula);
+                const unit = isHold ? 'hold' : 'rep';
+                const per100 = Math.round(parseFloat(calorieInfo.perRep) * 100);
+                return (
+                  <>
+                    <View style={styles.calStrip}>
+                      {[
+                        { value: calorieInfo.perRep, label: `KCAL / ${unit.toUpperCase()}` },
+                        { value: calorieInfo.met, label: 'MET INTENSITY' },
+                        { value: `~${per100}`, label: `KCAL / 100 ${unit.toUpperCase()}S` },
+                      ].map(({ value, label }, i) => (
+                        <View key={label} style={[styles.calCell, i > 0 && styles.scoreCellDivider]}>
+                          <Text style={styles.calCellValue}>{value}</Text>
+                          <Text style={styles.scoreLabel}>{label}</Text>
+                        </View>
+                      ))}
+                    </View>
+                    {[
+                      { title: 'HOW IT IS CALCULATED', text: calorieInfo.formula },
+                      { title: isHold ? 'WHAT COUNTS AS A HOLD' : 'WHAT COUNTS AS A REP', text: calorieInfo.technique },
+                      { title: 'TRACKING', text: 'Saved automatically to your profile and home calendar.' },
+                    ].map(({ title, text }, i) => (
+                      <View key={title} style={[styles.ruleItem, i === 0 && { borderTopWidth: 0, marginTop: 6 }]}>
+                        <Text style={styles.ruleItemTitle}>{title}</Text>
+                        <Text style={styles.ruleItemText}>{text}</Text>
+                      </View>
+                    ))}
+                  </>
+                );
+              })()}
             </View>
 
             <View style={styles.infoCard}>
               <View style={styles.sectionLabelRow}>
-                <Zap size={14} color={colors.flame} />
+                <View style={styles.sectionAccent} />
                 <Text style={[styles.sectionLabel, { color: colors.text }]}>MATCH SCORING</Text>
               </View>
-              <RuleRow Icon={TrendingUp} tint={colors.success} points="+10" text={`Win a ${exercise.name} duel`} onCard />
-              <RuleRow Icon={Equal} tint={colors.gold} points="+5" text="Draw: both players earn points" onCard />
-              <RuleRow Icon={TrendingDown} tint={colors.danger} points="-10" text="Defeat (never drops below 0)" onCard />
+              {scoringRules}
             </View>
 
             <View style={styles.infoCard}>
               <View style={styles.sectionLabelRow}>
-                <Award size={14} color={colors.accent} />
-                <Text style={styles.sectionLabel}>LEVEL TIERS</Text>
+                <View style={styles.sectionAccent} />
+                <Text style={styles.sectionLabel}>RANK TIERS</Text>
               </View>
               <View style={styles.tierGrid}>
                 {LEVEL_TIERS.map((tier) => {
@@ -728,10 +744,8 @@ export const ExerciseDetailScreen: React.FC<ExerciseDetailScreenProps> = ({
                       key={tier.level}
                       style={[styles.tierCard, isCurrent && { borderColor: tier.color, backgroundColor: `${tier.color}14` }]}
                     >
-                      <View style={[styles.tierIconCircle, { backgroundColor: `${tier.color}22` }]}>
-                        <TierIcon level={tier.level} size={16} color={tier.color} />
-                      </View>
-                      <Text style={styles.tierCardName}>{tier.title}</Text>
+                      <TierIcon level={tier.level} size={36} />
+                      <Text style={styles.tierCardName}>{tier.tier}</Text>
                       <Text style={styles.tierCardRange}>
                         {tier.level === 6 ? `${tier.minPoints.toLocaleString()}+ pts` : `${tier.minPoints}-${tier.maxPoints} pts`}
                       </Text>
@@ -740,19 +754,6 @@ export const ExerciseDetailScreen: React.FC<ExerciseDetailScreenProps> = ({
                   );
                 })}
               </View>
-            </View>
-          </View>
-        ) : (
-          <View style={styles.infoCard}>
-            <View style={styles.shopIconCircle}>
-              <Palette size={26} color={colors.accent} />
-            </View>
-            <Text style={styles.shopTitle}>Upgrades & Avatars</Text>
-            <Text style={styles.shopBody}>
-              Unlock custom avatar themes and special battle trails as you climb the {exercise.name} mastery tiers.
-            </Text>
-            <View style={styles.comingSoonPill}>
-              <Text style={styles.comingSoonText}>COMING SOON</Text>
             </View>
           </View>
         )}
@@ -764,7 +765,6 @@ export const ExerciseDetailScreen: React.FC<ExerciseDetailScreenProps> = ({
           <View style={styles.modalCard}>
             <View style={styles.modalHeader}>
               <View style={styles.sectionLabelRow}>
-                <Info size={16} color={colors.accent} />
                 <Text style={styles.modalTitle}>{exercise.name} scoring</Text>
               </View>
               <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setShowRulesInfoModal(false)}>
@@ -806,7 +806,6 @@ export const ExerciseDetailScreen: React.FC<ExerciseDetailScreenProps> = ({
           <View style={styles.sheetCard}>
             <View style={styles.modalHeader}>
               <View style={[styles.sectionLabelRow, { flex: 1 }]}>
-                <Swords size={16} color={colors.accent} />
                 <Text style={styles.modalTitle} numberOfLines={1}>Challenge a friend</Text>
               </View>
               <TouchableOpacity
@@ -945,7 +944,6 @@ export const ExerciseDetailScreen: React.FC<ExerciseDetailScreenProps> = ({
 const useStyles = makeStyles((colors: ThemeColors) =>
   StyleSheet.create({
   sectionTitle: { color: colors.text, fontSize: 19, fontWeight: '900', marginBottom: 2 },
-  statIcon: { height: 22, justifyContent: 'center', alignItems: 'flex-start' },
   heroVisual: { width: 100, alignItems: 'center', justifyContent: 'center', marginLeft: 8 },
   detailScreenContainer: { flex: 1, backgroundColor: colors.bg },
 
@@ -970,25 +968,31 @@ const useStyles = makeStyles((colors: ThemeColors) =>
   topNavTitle: { flex: 1, textAlign: 'center', color: colors.text, fontSize: 17, fontWeight: '900', marginHorizontal: 12 },
 
   // Hero
-  heroCard: { padding: 22, borderRadius: radius.xl, backgroundColor: colors.flame },
+  heroCard: { padding: 22, borderRadius: radius.xl, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
+  heroEyebrow: { color: 'rgba(255,255,255,0.6)', fontSize: 11, fontWeight: '900', letterSpacing: 1.6 },
   heroTopRow: { flexDirection: 'row', alignItems: 'center' },
   heroIconTile: { width: 76, height: 76, borderRadius: 22, backgroundColor: 'rgba(255, 255, 255, 0.14)', alignItems: 'center', justifyContent: 'center' },
   tierRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   tierChip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 9, paddingVertical: 4, borderRadius: radius.pill, backgroundColor: 'rgba(0, 0, 0, 0.18)' },
   tierChipText: { color: '#FFFFFF', fontSize: 9.5, fontWeight: '900', letterSpacing: 0.6 },
   heroLevelText: { color: 'rgba(255,255,255,0.85)', fontSize: 11, fontWeight: '900' },
-  heroTitle: { color: '#FFFFFF', fontSize: 28, fontWeight: '900', marginTop: 8 },
+  heroTitle: { color: '#FFFFFF', fontSize: 34, fontWeight: '900', marginTop: 4, letterSpacing: 0.5 },
   heroPoints: { color: 'rgba(255,255,255,0.88)', fontSize: 13, fontWeight: '700', marginTop: 2 },
   heroPointsNum: { color: '#FFFFFF', fontWeight: '900', fontSize: 16 },
   progressLabelRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 18, marginBottom: 8 },
   progressLabel: { color: '#FFFFFF', fontSize: 12, fontWeight: '800' },
   progressSubLabel: { color: 'rgba(255,255,255,0.85)', fontSize: 11, fontWeight: '700' },
-  rankProgressTrack: { height: 9, borderRadius: 5, backgroundColor: 'rgba(0, 0, 0, 0.2)', overflow: 'hidden' },
+  rankProgressTrack: { height: 9, borderRadius: 5, backgroundColor: 'rgba(255, 255, 255, 0.1)', overflow: 'hidden' },
   rankProgressFill: { height: '100%', borderRadius: 5, backgroundColor: '#FFFFFF' },
-  statGrid: { flexDirection: 'row', gap: 10, marginTop: 14 },
-  statTile: { flex: 1, padding: 12, borderRadius: radius.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
-  statValue: { color: colors.text, fontSize: 18, fontWeight: '900', marginTop: 8 },
-  statLabel: { color: colors.textMuted, fontSize: 10.5, fontWeight: '700', marginTop: 1 },
+  recordCard: { flexDirection: 'row', alignItems: 'center', gap: 16, marginTop: 14, padding: 16, borderRadius: radius.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
+  recordRingValue: { color: colors.text, fontSize: 17, fontWeight: '900' },
+  recordRingLabel: { color: colors.textMuted, fontSize: 7.5, fontWeight: '900', letterSpacing: 0.8 },
+  recordCols: { flex: 1, flexDirection: 'row' },
+  recordCol: { flex: 1, alignItems: 'center' },
+  recordColDivider: { borderLeftWidth: 1, borderLeftColor: colors.border },
+  sectionAccent: { width: 4, height: 16, borderRadius: 2, backgroundColor: colors.accent },
+  statValue: { color: colors.text, fontSize: 20, fontWeight: '900' },
+  statLabel: { color: colors.textMuted, fontSize: 9.5, fontWeight: '900', letterSpacing: 0.8, marginTop: 2 },
 
   // Tabs
   tabBar: { flexDirection: 'row', marginTop: 18, marginBottom: 6, padding: 5, borderRadius: radius.pill, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
@@ -1056,24 +1060,20 @@ const useStyles = makeStyles((colors: ThemeColors) =>
   emptyTitle: { color: colors.text, fontSize: 15, fontWeight: '900' },
 
   // Rules
+  scoreBoard: { flexDirection: 'row', marginTop: 14, borderRadius: radius.lg, backgroundColor: colors.surfaceSunken, overflow: 'hidden' },
+  scoreCell: { flex: 1, alignItems: 'center', paddingTop: 14, paddingBottom: 12 },
+  scoreCellDivider: { borderLeftWidth: 1, borderLeftColor: colors.border },
+  scoreCellBar: { position: 'absolute', top: 0, left: 0, right: 0, height: 3 },
+  scorePoints: { fontSize: 26, fontWeight: '900' },
+  scoreLabel: { color: colors.textMuted, fontSize: 9.5, fontWeight: '900', letterSpacing: 1, marginTop: 2, textAlign: 'center' },
+  scoreFootnote: { color: colors.textMuted, fontSize: 12, lineHeight: 17, marginTop: 12 },
+  calStrip: { flexDirection: 'row', marginTop: 14, borderRadius: radius.lg, backgroundColor: colors.surfaceSunken },
+  calCell: { flex: 1, alignItems: 'center', paddingVertical: 14, paddingHorizontal: 4 },
+  calCellValue: { color: colors.flame, fontSize: 22, fontWeight: '900' },
+  ruleItem: { paddingTop: 12, marginTop: 12, borderTopWidth: 1, borderTopColor: colors.border },
+  ruleItemTitle: { color: colors.textMuted, fontSize: 10, fontWeight: '900', letterSpacing: 1.1 },
+  ruleItemText: { color: colors.text, fontSize: 13.5, lineHeight: 19, fontWeight: '600', marginTop: 4 },
   infoCard: { padding: 20, borderRadius: radius.xl, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, marginBottom: 16 },
-  calPillRow: { flexDirection: 'row', gap: 12, marginTop: 14, marginBottom: 8 },
-  calPill: {
-    flex: 1,
-    padding: 12,
-    borderRadius: radius.md,
-    backgroundColor: 'rgba(226, 88, 34, 0.1)',
-    alignItems: 'center',
-  },
-  calPillVal: { color: colors.accent, fontSize: 20, fontWeight: '900' },
-  calPillSub: { color: colors.textMuted, fontSize: 10.5, fontWeight: '700', marginTop: 1 },
-  bulletRow: { flexDirection: 'row', gap: 10, marginTop: 12 },
-  bulletText: { flex: 1, color: colors.textMuted, fontSize: 12.5, lineHeight: 18 },
-  bulletBold: { color: colors.text, fontWeight: '800' },
-  ruleRow: { flexDirection: 'row', alignItems: 'center', marginTop: 14 },
-  ruleIcon: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  ruleText: { flex: 1, color: colors.text, fontSize: 13, fontWeight: '600', marginLeft: 10 },
-  rulePoints: { fontSize: 15, fontWeight: '900' },
   tierGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
   tierCard: {
     width: '31.5%',
@@ -1085,32 +1085,11 @@ const useStyles = makeStyles((colors: ThemeColors) =>
     borderWidth: 1,
     borderColor: 'transparent',
   },
-  tierIconCircle: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
+  podiumRankText: { fontSize: 16, fontWeight: '900' },
   tierCardName: { color: colors.text, fontSize: 12, fontWeight: '900', marginTop: 6 },
   tierCardRange: { color: colors.textDim, fontSize: 10, fontWeight: '700', marginTop: 2 },
   tierCurrent: { fontSize: 8.5, fontWeight: '900', letterSpacing: 0.8, marginTop: 4 },
 
-  // Shop
-  shopIconCircle: {
-    alignSelf: 'center',
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: 'rgba(226, 88, 34, 0.12)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  shopTitle: { color: colors.text, fontSize: 17, fontWeight: '900', textAlign: 'center', marginTop: 12 },
-  shopBody: { color: colors.textMuted, fontSize: 13, lineHeight: 19, textAlign: 'center', marginTop: 6 },
-  comingSoonPill: {
-    alignSelf: 'center',
-    marginTop: 14,
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: radius.pill,
-    backgroundColor: colors.surfaceHi,
-  },
-  comingSoonText: { color: colors.textMuted, fontSize: 10, fontWeight: '900', letterSpacing: 1 },
 
   // Modals
   modalOverlay: { flex: 1, backgroundColor: 'rgba(5, 8, 14, 0.82)', justifyContent: 'center', padding: 20 },

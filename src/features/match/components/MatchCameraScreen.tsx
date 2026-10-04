@@ -485,7 +485,7 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
         if (currentPhase === 'loading_resources' || currentPhase === 'setup_countdown') {
           // Camera adjustment / setup phase: Redirect without rating penalty
           Alert.alert(
-            'Opponent Left 🚪',
+            'Opponent Left',
             `@${opponentUsername} left during setup. Returning to exercise details.`,
             [{ text: 'OK', onPress: () => handleClose() }]
           );
@@ -498,7 +498,7 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
             await refreshProfile();
           }
           Alert.alert(
-            'Victory by Forfeit! 🏆',
+            'Victory by Forfeit',
             `@${opponentUsername} forfeited the match! You won (+10 pts).`,
             [{ text: 'Great!', onPress: () => handleClose() }]
           );
@@ -519,7 +519,7 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
           }
         };
         Alert.alert(
-          'Rematch Request! ⚔️',
+          'Rematch Request',
           `@${opponentUsername} wants to rematch in ${getExerciseTitle(exerciseId)}!`,
           [
             {
@@ -530,7 +530,7 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
               },
             },
             {
-              text: 'Accept ⚡',
+              text: 'Accept',
               onPress: () => {
                 sendMatchMessage({ type: 'rematch_accepted', sender: selfUsername });
                 resetMatchState();
@@ -541,7 +541,7 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
       }
 
       if (msg.type === 'rematch_accepted') {
-        Alert.alert('Rematch Accepted! 🔥', `@${opponentUsername} accepted the rematch! Starting now.`);
+        Alert.alert('Rematch Accepted', `@${opponentUsername} accepted the rematch! Starting now.`);
         resetMatchState();
       }
 
@@ -769,7 +769,7 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
     // If leaving during an active match, confirm defeat (-10 pts)
     if (!force && currentPhase === 'active_match' && !matchEndedRef.current) {
       Alert.alert(
-        'Forfeit Match? ⚠️',
+        'Forfeit Match?',
         'Leaving now counts as a Defeat (-10 pts) and awards victory to your opponent (+10 pts).',
         [
           { text: 'Stay & Fight', style: 'cancel' },
@@ -882,7 +882,7 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
       return;
     }
     sendMatchMessage({ type: 'rematch_request', sender: selfUsername });
-    Alert.alert('Rematch Sent ⚔️', `Rematch request sent to @${opponentUsername}. Waiting for response...`);
+    Alert.alert('Rematch Sent', `Rematch request sent to @${opponentUsername}. Waiting for response...`);
   };
 
   const handleChallengeSamePlayer = async () => {
@@ -907,9 +907,9 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
         'Squats',
         mode === 'faceoff' ? 'faceoff' : 'quickjoin'
       );
-      Alert.alert('Challenge Sent ⚔️', `Direct 1v1 battle invite sent to @${opponentUsername}!`);
+      Alert.alert('Challenge Sent', `Direct 1v1 battle invite sent to @${opponentUsername}!`);
     } catch (e: any) {
-      Alert.alert('Challenge Sent ⚔️', `Direct challenge sent to @${opponentUsername}!`);
+      Alert.alert('Challenge Sent', `Direct challenge sent to @${opponentUsername}!`);
     }
   };
 
@@ -921,7 +921,7 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
     try {
       const res = await sendFriendRequest(user.id, opponentUsername);
       if (res.success) {
-        Alert.alert('Friend Request Sent! 🎉', `Sent a friend request to @${opponentUsername}.`);
+        Alert.alert('Friend Request Sent', `Sent a friend request to @${opponentUsername}.`);
       } else {
         Alert.alert('Friend Request', res.error || 'Friend request already pending or sent.');
       }
@@ -1358,7 +1358,7 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
                   }}
                 >
                   <Swords size={16} color="#11141A" />
-                  <Text style={styles.matchEndedNextBtnText}>Next Battle ⚡</Text>
+                  <Text style={styles.matchEndedNextBtnText}>Next Battle</Text>
                 </TouchableOpacity>
               )}
             </View>

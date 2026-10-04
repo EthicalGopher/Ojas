@@ -1,10 +1,10 @@
 import React, { useEffect, useRef } from 'react';
 import { Alert, Animated, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Dumbbell, Home, Lock, User, Users } from 'lucide-react-native';
+import { Dumbbell, Home, Lock, ShoppingBag, User, Users } from 'lucide-react-native';
 import { makeStyles, radius, shadow, ThemeColors, useColors } from '../theme';
 
-export type TabBarItem = 'home' | 'explore' | 'workouts' | 'social' | 'profile';
+export type TabBarItem = 'home' | 'explore' | 'workouts' | 'shop' | 'social' | 'profile';
 
 interface TabBarProps {
   activeTab: TabBarItem;
@@ -18,6 +18,7 @@ const TAB_ITEMS = [
   { key: 'home' as const, label: 'Home', icon: Home, requiresAuth: false },
   { key: 'explore' as const, label: 'Squad', icon: Users, requiresAuth: true },
   { key: 'workouts' as const, label: 'Train', icon: Dumbbell, requiresAuth: true },
+  { key: 'shop' as const, label: 'Shop', icon: ShoppingBag, requiresAuth: false },
   { key: 'profile' as const, label: 'Me', icon: User, requiresAuth: true },
 ];
 

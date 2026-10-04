@@ -392,3 +392,70 @@ export async function uploadCommunityLogo(
     return { error: e.message || 'Failed to upload logo' };
   }
 }
+
+// ---------- Squad power & level (game layer) ----------
+
+/** Every active member adds this much power on top of their ranked match points. */
+export const POWER_PER_MEMBER = 50;
+
+export interface SquadPower {
+  power: number;
+  /** Ranked match points per member, summed across exercises. */
+  memberPoints: Record<string, number>;
+}
+
+/**
+ * Squad Power = sum of members' ranked match points (all exercises) + 50 per active member.
+ * Two queries for any number of squads; missing data counts as 0.
+ */
+export async function fetchSquadPowers(communityIds: string[]): Promise<Record<string, SquadPower>> {
+  const result: Record<string, SquadPower> = {};
+  if (communityIds.length === 0) return result;
+
+  try {
+    const { data: members, error } = await supabase
+      .from('community_members')
+      .select('community_id, user_id')
+      .in('community_id', communityIds)
+      .in('status', ['active', 'joined']);
+    if (error || !members) return result;
+
+    const userIds = [...new Set(members.map((m) => m.user_id))];
+    const pointsByUser: Record<string, number> = {};
+    if (userIds.length > 0) {
+      const { data: stats } = await supabase
+        .from('user_exercise_stats')
+        .select('user_id, points')
+        .in('user_id', userIds);
+      for (const s of stats || []) pointsByUser[s.user_id] = (pointsByUser[s.user_id] || 0) + (s.points || 0);
+    }
+
+    for (const m of members) {
+      const entry = (result[m.community_id] ??= { power: 0, memberPoints: {} });
+      const pts = pointsByUser[m.user_id] || 0;
+      entry.memberPoints[m.user_id] = pts;
+      entry.power += pts + POWER_PER_MEMBER;
+    }
+    return result;
+  } catch (err) {
+    console.warn('Exception in fetchSquadPowers:', err);
+    return result;
+  }
+}
+
+export interface SquadLevel {
+  level: number;
+  progress: number;
+  powerIntoLevel: number;
+  powerForNextLevel: number;
+}
+
+/** Level n needs 150 * (n-1) * n / 2 power (lvl 2 = 150, lvl 3 = 450, lvl 4 = 900 ...). */
+export function squadLevelFromPower(power: number): SquadLevel {
+  const reach = (lvl: number) => (150 * (lvl - 1) * lvl) / 2;
+  let level = 1;
+  while (power >= reach(level + 1)) level++;
+  const floor = reach(level);
+  const span = reach(level + 1) - floor;
+  return { level, progress: (power - floor) / span, powerIntoLevel: power - floor, powerForNextLevel: span };
+}

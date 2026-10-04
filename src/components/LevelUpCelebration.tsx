@@ -1,9 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { Trophy } from 'lucide-react-native';
 import { useGameStats } from '../hooks/useGameStats';
 import { useUserStore } from '../store/userStore';
-import { makeStyles, radius, shadow, ThemeColors, useColors } from '../theme';
+import { makeStyles, radius, shadow, ThemeColors } from '../theme';
+import { RankEmblem, rankTierFromTitle, tierNameFromTitle } from './RankEmblem';
 
 // Kept at module level: this component unmounts while the camera/match screens are open,
 // which is exactly when level-ups happen, so a ref would lose the baseline.
@@ -11,7 +11,6 @@ const baseline: { profileId: string | null; level: number | null } = { profileId
 
 /** Pops a celebration whenever the athlete's level goes up during this session. */
 export const LevelUpCelebration: React.FC = () => {
-  const colors = useColors();
   const styles = useStyles();
   const profile = useUserStore((s) => s.profile);
   const { level } = useGameStats();
@@ -45,14 +44,12 @@ export const LevelUpCelebration: React.FC = () => {
     <Modal visible transparent animationType="fade" onRequestClose={() => setShownLevel(null)}>
       <View style={styles.overlay}>
         <Animated.View style={[styles.card, { transform: [{ scale }] }]}>
-          <View style={styles.trophyCircle}>
-            <Trophy size={22} color={colors.onAccent} />
-          </View>
+          <RankEmblem tier={rankTierFromTitle(level.title)} size={96} />
           <Text style={styles.eyebrow}>LEVEL UP</Text>
           <View style={styles.levelCircle}>
             <Text style={styles.levelNumber}>{shownLevel}</Text>
           </View>
-          <Text style={styles.title}>{level.title}</Text>
+          <Text style={styles.title}>{tierNameFromTitle(level.title)} Rank</Text>
           <Text style={styles.sub}>Your grind is paying off. Keep the streak alive to climb higher.</Text>
           <TouchableOpacity style={styles.btn} activeOpacity={0.9} onPress={() => setShownLevel(null)}>
             <Text style={styles.btnText}>LET'S GO</Text>
@@ -76,15 +73,6 @@ const useStyles = makeStyles((colors: ThemeColors) =>
     borderWidth: 1,
     borderColor: 'rgba(226, 88, 34, 0.3)',
     ...shadow(16),
-  },
-  trophyCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: colors.accent,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 12,
   },
   eyebrow: { color: colors.accent, fontSize: 13, fontWeight: '900', letterSpacing: 3 },
   levelCircle: {

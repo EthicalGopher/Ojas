@@ -15,6 +15,7 @@ import { generateRandomUsername } from '../../../utils/usernameGenerator';
 import { signInWithGoogleOAuth } from '../../../utils/googleAuth';
 
 import { makeStyles, ThemeColors, useColors } from '../../../theme';
+import { MailCheck, X } from 'lucide-react-native';
 interface AuthModalProps {
   visible: boolean;
   onClose: () => void;
@@ -206,7 +207,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onUserCh
               </Text>
             </View>
             <TouchableOpacity onPress={onClose} style={styles.closeBtn} activeOpacity={0.7}>
-              <Text style={styles.closeBtnText}>✕</Text>
+              <X size={18} color="#E8D5C4" />
             </TouchableOpacity>
           </View>
 
@@ -241,7 +242,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onUserCh
           ) : step === 'verify_email' ? (
             <View style={styles.verifyContainer}>
               <View style={styles.verifyIconBadge}>
-                <Text style={{ fontSize: 30 }}>📬</Text>
+                <MailCheck size={30} color="#E25822" />
               </View>
               <Text style={styles.verifyTitle}>Check Your Inbox</Text>
               <Text style={styles.verifyDescription}>
@@ -298,7 +299,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onUserCh
                         {fetchingUsername ? (
                           <ActivityIndicator size="small" color="#E8D5C4" />
                         ) : (
-                          <Text style={styles.randomizeBtnText}>⚡ Randomize</Text>
+                          <Text style={styles.randomizeBtnText}>Randomize</Text>
                         )}
                       </TouchableOpacity>
                     </View>

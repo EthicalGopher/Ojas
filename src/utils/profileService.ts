@@ -31,6 +31,11 @@ export interface UserProfile {
   health_conditions_completed?: boolean;
   health_conditions?: Record<string, boolean>;
   daily_challenges?: Record<string, { completedIds: string[]; progress: Record<string, { reps: number; holdSeconds: number }> }>;
+  owned_avatar_ids?: string[]; // 3D avatar shop: set server-side by purchase_avatar()
+  equipped_avatar_id?: string;
+  /** Per-character loadout: { [characterId]: { outfit?, hair?, accessory? } } */
+  equipped_items?: Record<string, Record<string, string>>;
+  coins_spent?: number;
   created_at?: string;
   updated_at?: string;
 }

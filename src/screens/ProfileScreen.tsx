@@ -10,6 +10,7 @@ import {
   Alert,
   StatusBar,
   RefreshControl,
+  Switch,
 } from 'react-native';
 import {
   Activity,
@@ -23,7 +24,6 @@ import {
   Dumbbell,
   Edit3,
   Flame,
-  HeartPulse,
   Info,
   Lock,
   LogOut,
@@ -31,7 +31,6 @@ import {
   Save,
   Search,
   Send,
-  ShieldCheck,
   Shuffle,
   Star,
   Swords,
@@ -45,8 +44,10 @@ import {
   Zap,
   Sun,
   Moon,
-  SunMoon,
   Smartphone,
+  Coins,
+  PersonStanding,
+  ShoppingBag,
 } from 'lucide-react-native';
 import { ProgressRing } from '../components/ui/ProgressRing';
 import { useGameStats } from '../hooks/useGameStats';
@@ -79,9 +80,25 @@ import {
 import { generateRandomUsername } from '../utils/usernameGenerator';
 import { supabase } from '../utils/supabase';
 import { useUserStore } from '../store/userStore';
+import { AvatarViewer3D } from '../features/avatar/components/AvatarViewer3D';
+import { CoinDot, RARITY_COLORS } from '../features/avatar/components/AvatarShopScreen';
+import {
+  AvatarModel,
+  BUNDLED_AVATARS,
+  fetchAvatarCatalog,
+  findAvatar,
+  getEquippedAvatarId,
+  getLoadout,
+  isAvatarOwned,
+  loadoutItems,
+} from '../utils/avatarShopService';
+import { computeCoinBalance } from '../utils/gamification';
+import { areRemindersEnabled, setRemindersEnabled } from '../utils/streakReminders';
 
 import { ThemedStatusBar } from '../components/ThemedStatusBar';
 import CalorieIcon from '../../assets/icons/calorie.svg';
+import { RankEmblem, rankTierFromTitle, tierNameFromTitle } from '../components/RankEmblem';
+import { AchievementBadge, MedalMark, MedalMetal } from '../components/AchievementBadge';
 interface ProfileScreenProps {
   currentUser: any;
   onBack: () => void;
@@ -126,6 +143,32 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const { level, streak } = useGameStats();
   const themeMode = useThemeStore((s) => s.mode);
   const setThemeMode = useThemeStore((s) => s.setMode);
+
+  // 3D avatar
+  const storeProfile = useUserStore((s) => s.profile);
+  const [avatarCatalog, setAvatarCatalog] = useState<AvatarModel[]>(BUNDLED_AVATARS);
+  const openShop = useUserStore((s) => s.openShop);
+  const equippedAvatar = findAvatar(avatarCatalog, getEquippedAvatarId(storeProfile));
+  const equippedItems = loadoutItems(avatarCatalog, getLoadout(storeProfile, equippedAvatar.id), equippedAvatar.id);
+  const ownedAvatarCount = avatarCatalog.filter((m) => isAvatarOwned(storeProfile, m)).length;
+  const coinBalance = computeCoinBalance(storeProfile);
+
+  useEffect(() => {
+    fetchAvatarCatalog().then(setAvatarCatalog);
+  }, []);
+
+  const [remindersOn, setRemindersOn] = useState<boolean>(true);
+  useEffect(() => {
+    areRemindersEnabled().then(setRemindersOn);
+  }, []);
+  const handleToggleReminders = async (on: boolean) => {
+    setRemindersOn(on);
+    const granted = await setRemindersEnabled(on, streak).catch(() => false);
+    if (on && !granted) {
+      setRemindersOn(false);
+      Alert.alert('Notifications are off', 'Allow notifications for Ojas in your phone settings to get streak reminders.');
+    }
+  };
 
   const loadProfileData = useCallback(async () => {
     if (!currentUser) return;
@@ -398,15 +441,16 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const totalCalories = Math.round(profile?.total_calories || 0);
   const activeConditions = HEALTH_CONDITIONS.filter((c) => healthConditions[c.key]);
 
-  const ACHIEVEMENTS: { key: string; title: string; hint: string; Icon: IconType; unlocked: boolean }[] = [
-    { key: 'first', title: 'First Rep', hint: 'Finish a workout', Icon: Dumbbell, unlocked: streak.best >= 1 || level.totalXp > 0 },
-    { key: 'streak3', title: 'On Fire', hint: '3-day streak', Icon: Flame, unlocked: streak.best >= 3 },
-    { key: 'streak7', title: 'Unstoppable', hint: '7-day streak', Icon: Zap, unlocked: streak.best >= 7 },
-    { key: 'social', title: 'Squad Up', hint: 'Add a friend', Icon: Users, unlocked: friends.length >= 1 },
-    { key: 'level5', title: 'Rising Star', hint: 'Reach level 5', Icon: Star, unlocked: level.level >= 5 },
-    { key: 'kcal', title: 'Furnace', hint: 'Burn 1,000 kcal', Icon: ({ size, color }: { size?: number; color?: string }) => <CalorieIcon width={size} height={size} color={color} />, unlocked: totalCalories >= 1000 },
+  // Each medal tracks real progress toward its goal; locked ones show how close you are.
+  const ACHIEVEMENTS: { key: string; title: string; metal: MedalMetal; mark: MedalMark; have: number; need: number; unit: string }[] = [
+    { key: 'first', title: 'First Rep', metal: 'bronze', mark: { kind: 'text', value: '1' }, have: level.totalXp > 0 ? 1 : 0, need: 1, unit: 'workout' },
+    { key: 'streak3', title: 'On Fire', metal: 'bronze', mark: { kind: 'flame', value: '3' }, have: streak.best, need: 3, unit: 'days' },
+    { key: 'streak7', title: 'Unstoppable', metal: 'gold', mark: { kind: 'flame', value: '7' }, have: streak.best, need: 7, unit: 'days' },
+    { key: 'social', title: 'Squad Up', metal: 'silver', mark: { kind: 'duo' }, have: friends.length, need: 1, unit: 'friend' },
+    { key: 'level5', title: 'Rising Star', metal: 'silver', mark: { kind: 'star' }, have: level.level, need: 5, unit: 'level' },
+    { key: 'kcal', title: 'Furnace', metal: 'gold', mark: { kind: 'text', value: '1K' }, have: Math.round(totalCalories), need: 1000, unit: 'kcal' },
   ];
-  const unlockedCount = ACHIEVEMENTS.filter((a) => a.unlocked).length;
+  const unlockedCount = ACHIEVEMENTS.filter((a) => a.have >= a.need).length;
 
   const PROFILE_TABS: { key: ProfileTab; label: string; Icon: IconType; badge?: number }[] = [
     { key: 'profile', label: 'Profile', Icon: User },
@@ -417,7 +461,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
   // Called as a function (not as <Component />) so inputs keep focus while typing.
   const renderDetailField = ({
-    Icon,
+    first,
     label,
     value,
     onChangeText,
@@ -427,7 +471,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
     autoCapitalize,
     right,
   }: {
-    Icon: IconType;
+    /** First row of the list: no divider above it. */
+    first?: boolean;
     label: string;
     value: string;
     onChangeText: (t: string) => void;
@@ -437,10 +482,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
     autoCapitalize?: 'none' | 'sentences';
     right?: React.ReactNode;
   }) => (
-    <View key={label} style={styles.detailRow}>
-      <View style={styles.detailIcon}>
-        <Icon size={15} color={colors.accent} />
-      </View>
+    <View key={label} style={[styles.detailRow, first && styles.detailRowFirst]}>
       <View style={{ flex: 1 }}>
         <View style={styles.detailLabelRow}>
           <Text style={styles.detailLabel}>{label}</Text>
@@ -543,8 +585,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
               <Text style={styles.heroName} numberOfLines={1}>{fullName || username || 'Ojas Athlete'}</Text>
               <Text style={styles.heroUsername} numberOfLines={1}>@{username || 'athlete'}</Text>
               <View style={styles.titleChip}>
-                <ShieldCheck size={12} color="#FFFFFF" />
-                <Text style={styles.titleChipText}>{level.title}</Text>
+                <RankEmblem tier={rankTierFromTitle(level.title)} size={22} />
+                <Text style={styles.titleChipText}>{tierNameFromTitle(level.title).toUpperCase()}</Text>
               </View>
             </View>
           </View>
@@ -563,13 +605,12 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
           <View style={styles.statGrid}>
             {[
-              { label: 'TOTAL XP', value: level.totalXp.toLocaleString(), Icon: Star },
-              { label: 'STREAK', value: `${streak.current}d`, Icon: Flame },
-              { label: 'BEST', value: `${streak.best}d`, Icon: Trophy },
-              { label: 'KCAL', value: totalCalories.toLocaleString(), Icon: ({ size, color }: { size?: number; color?: string }) => <CalorieIcon width={size} height={size} color={color} /> },
-            ].map(({ label, value, Icon }) => (
+              { label: 'TOTAL XP', value: level.totalXp.toLocaleString() },
+              { label: 'STREAK', value: `${streak.current}d` },
+              { label: 'BEST', value: `${streak.best}d` },
+              { label: 'KCAL', value: totalCalories.toLocaleString() },
+            ].map(({ label, value }) => (
               <View key={label} style={styles.statTile}>
-                <Icon size={14} color="#FFFFFF" />
                 <Text style={styles.statValue}>{value}</Text>
                 <Text style={styles.statLabel}>{label}</Text>
               </View>
@@ -604,39 +645,87 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
         {activeTab === 'profile' ? (
           <>
+            {/* 3D AVATAR */}
+            {!isEditing && (
+              <View style={styles.sectionCard}>
+                <View style={styles.sectionHeaderRow}>
+                  <View style={styles.sectionTitleRow}>
+                    <View style={styles.sectionAccent} />
+                    <Text style={styles.sectionHeader}>3D AVATAR</Text>
+                  </View>
+                  <View style={styles.coinChip}>
+                    <CoinDot size={12} />
+                    <Text style={styles.coinChipText}>{coinBalance.toLocaleString()}</Text>
+                  </View>
+                </View>
+                <View style={styles.avatarStage}>
+                  <AvatarViewer3D model={equippedAvatar} items={equippedItems} style={{ flex: 1 }} interactive={false} />
+                </View>
+                <View style={styles.avatarInfoRow}>
+                  <Text style={styles.avatarName} numberOfLines={1}>{equippedAvatar.name}</Text>
+                  <Text style={[styles.avatarRarity, { color: RARITY_COLORS[equippedAvatar.rarity] }]}>
+                    {equippedAvatar.rarity}
+                  </Text>
+                  <Text style={styles.sectionMeta}>{ownedAvatarCount} owned</Text>
+                </View>
+                <View style={styles.avatarActions}>
+                  <TouchableOpacity style={styles.avatarSecondaryBtn} activeOpacity={0.85} onPress={() => openShop('owned')}>
+                    <PersonStanding size={14} color={colors.text} />
+                    <Text style={styles.avatarSecondaryText}>Change</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.avatarPrimaryBtn} activeOpacity={0.85} onPress={() => openShop('all')}>
+                    <ShoppingBag size={14} color={colors.onAccent} />
+                    <Text style={styles.avatarPrimaryText}>Avatar Shop</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+
             {/* ACHIEVEMENTS */}
             <View style={styles.sectionCard}>
               <View style={styles.sectionHeaderRow}>
                 <View style={styles.sectionTitleRow}>
-                  <Award size={15} color={colors.accent} />
+                  <View style={styles.sectionAccent} />
                   <Text style={styles.sectionHeader}>ACHIEVEMENTS</Text>
                 </View>
                 <Text style={styles.sectionMeta}>{unlockedCount}/{ACHIEVEMENTS.length} unlocked</Text>
               </View>
               <View style={styles.achievementGrid}>
-                {ACHIEVEMENTS.map(({ key, title, hint, Icon, unlocked }) => (
-                  <View key={key} style={[styles.achievement, unlocked && styles.achievementUnlocked]}>
-                    <View style={[styles.achievementIcon, unlocked && { backgroundColor: colors.accent }]}>
-                      {unlocked ? <Icon size={18} color={colors.onAccent} /> : <Lock size={15} color={colors.textDim} />}
+                {ACHIEVEMENTS.map(({ key, title, metal, mark, have, need, unit }) => {
+                  const unlocked = have >= need;
+                  return (
+                    <View key={key} style={[styles.achievement, unlocked && styles.achievementUnlocked]}>
+                      <AchievementBadge metal={metal} mark={mark} unlocked={unlocked} size={58} />
+                      <Text style={[styles.achievementTitle, !unlocked && { color: colors.textMuted }]} numberOfLines={1}>
+                        {title}
+                      </Text>
+                      {unlocked ? (
+                        <Text style={styles.achievementDone}>EARNED</Text>
+                      ) : (
+                        <>
+                          <View style={styles.achievementTrack}>
+                            <View style={[styles.achievementFill, { width: `${Math.max(4, (Math.min(have, need) / need) * 100)}%` }]} />
+                          </View>
+                          <Text style={styles.achievementHint} numberOfLines={1}>
+                            {Math.min(have, need).toLocaleString()} / {need.toLocaleString()} {unit}
+                          </Text>
+                        </>
+                      )}
                     </View>
-                    <Text style={[styles.achievementTitle, !unlocked && { color: colors.textMuted }]} numberOfLines={1}>
-                      {title}
-                    </Text>
-                    <Text style={styles.achievementHint} numberOfLines={1}>{hint}</Text>
-                  </View>
-                ))}
+                  );
+                })}
               </View>
             </View>
 
             {/* DETAILS */}
             <View style={styles.sectionCard}>
               <View style={styles.sectionTitleRow}>
-                <User size={15} color={colors.accent} />
+                <View style={styles.sectionAccent} />
                 <Text style={styles.sectionHeader}>PERSONAL DETAILS</Text>
               </View>
 
               {renderDetailField({
-                Icon: AtSign,
+                first: true,
                 label: 'Username',
                 value: username,
                 onChangeText: setUsername,
@@ -660,12 +749,11 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                   </TouchableOpacity>
                 ) : undefined,
               })}
-              {renderDetailField({ Icon: User, label: 'Full name', value: fullName, onChangeText: setFullName, placeholder: 'e.g. Alex Johnson' })}
-              {renderDetailField({ Icon: Phone, label: 'Phone', value: phoneNumber, onChangeText: setPhoneNumber, placeholder: 'e.g. +91 98765 43210', keyboardType: 'phone-pad' })}
-              {renderDetailField({ Icon: Target, label: 'Fitness focus', value: fitnessGoal, onChangeText: setFitnessGoal, placeholder: 'e.g. Strength, Calisthenics' })}
+              {renderDetailField({ label: 'Full name', value: fullName, onChangeText: setFullName, placeholder: 'e.g. Alex Johnson' })}
+              {renderDetailField({ label: 'Phone', value: phoneNumber, onChangeText: setPhoneNumber, placeholder: 'e.g. +91 98765 43210', keyboardType: 'phone-pad' })}
+              {renderDetailField({ label: 'Fitness focus', value: fitnessGoal, onChangeText: setFitnessGoal, placeholder: 'e.g. Strength, Calisthenics' })}
               {isEditing &&
                 renderDetailField({
-                  Icon: Info,
                   label: 'Bio',
                   value: bio,
                   onChangeText: setBio,
@@ -678,7 +766,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
             <View style={styles.sectionCard}>
               <View style={styles.sectionHeaderRow}>
                 <View style={styles.sectionTitleRow}>
-                  <HeartPulse size={15} color={colors.accent} />
+                  <View style={styles.sectionAccent} />
                   <Text style={styles.sectionHeader}>HEALTH & POSTURE</Text>
                 </View>
                 {!isEditing && (
@@ -759,8 +847,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
             {!isEditing && (
               <View style={styles.sectionCard}>
                 <View style={styles.sectionTitleRow}>
-                  <SunMoon size={15} color={colors.accent} />
-                  <Text style={styles.sectionHeader}>APPEARANCE</Text>
+                  <View style={styles.sectionAccent} />
+                  <Text style={styles.sectionHeader}>SETTINGS</Text>
                 </View>
                 <View style={styles.themeSwitch}>
                   {([
@@ -781,6 +869,19 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                       </TouchableOpacity>
                     );
                   })}
+                </View>
+
+                <View style={styles.reminderRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.reminderTitle}>Streak reminders</Text>
+                    <Text style={styles.reminderSub}>A nudge at 7:00 PM and 9:30 PM when today's streak is still open.</Text>
+                  </View>
+                  <Switch
+                    value={remindersOn}
+                    onValueChange={handleToggleReminders}
+                    trackColor={{ false: colors.surfaceHi, true: colors.accent }}
+                    thumbColor="#FFFFFF"
+                  />
                 </View>
               </View>
             )}
@@ -928,7 +1029,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           <View>
             <View style={styles.sectionCard}>
               <View style={styles.sectionTitleRow}>
-                <UserPlus size={15} color={colors.accent} />
+                <View style={styles.sectionAccent} />
                 <Text style={styles.sectionHeader}>ADD A FRIEND</Text>
               </View>
               <Text style={styles.healthSectionDesc}>Enter the exact username of the athlete you want to connect with.</Text>
@@ -975,10 +1076,24 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
 const useStyles = makeStyles((colors: ThemeColors) =>
   StyleSheet.create({
+  coinChip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 9, paddingVertical: 4, borderRadius: radius.pill, backgroundColor: colors.surfaceHi },
+  coinChipText: { color: colors.text, fontSize: 11.5, fontWeight: '900' },
+  avatarStage: { height: 280, marginTop: 14, borderRadius: radius.lg, backgroundColor: colors.surfaceSunken, overflow: 'hidden' },
+  avatarInfoRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 14 },
+  avatarName: { flexShrink: 1, color: colors.text, fontSize: 16, fontWeight: '900' },
+  avatarRarity: { flex: 1, fontSize: 11, fontWeight: '800', textTransform: 'capitalize' },
+  avatarActions: { flexDirection: 'row', gap: 10, marginTop: 14 },
+  avatarSecondaryBtn: { flex: 1, height: 42, borderRadius: radius.pill, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: colors.surfaceHi },
+  avatarSecondaryText: { color: colors.text, fontSize: 13, fontWeight: '800' },
+  avatarPrimaryBtn: { flex: 1.4, height: 42, borderRadius: radius.pill, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: colors.accent },
+  avatarPrimaryText: { color: colors.onAccent, fontSize: 13, fontWeight: '900' },
   themeOptionTextActive: { color: colors.onAccent },
   themeOptionText: { color: colors.textMuted, fontSize: 13, fontWeight: '800' },
   themeOptionActive: { backgroundColor: colors.accent },
   themeOption: { flex: 1, height: 40, borderRadius: radius.pill, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
+  reminderRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: colors.border },
+  reminderTitle: { color: colors.text, fontSize: 14, fontWeight: '800' },
+  reminderSub: { color: colors.textMuted, fontSize: 12, lineHeight: 17, marginTop: 2 },
   themeSwitch: { flexDirection: 'row', gap: 8, marginTop: 14, padding: 4, borderRadius: radius.pill, backgroundColor: colors.surfaceSunken },
   container: { flex: 1, backgroundColor: colors.bg },
   loadingContainer: { flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center', gap: 12 },
@@ -1042,7 +1157,7 @@ const useStyles = makeStyles((colors: ThemeColors) =>
   xpFill: { height: '100%', borderRadius: 5, backgroundColor: '#FFFFFF' },
   statGrid: { flexDirection: 'row', gap: 10, marginTop: 18 },
   statTile: { flex: 1, alignItems: 'center', paddingVertical: 12, borderRadius: radius.md, backgroundColor: 'rgba(0, 0, 0, 0.18)' },
-  statValue: { color: '#FFFFFF', fontSize: 15, fontWeight: '900', marginTop: 4 },
+  statValue: { color: '#FFFFFF', fontSize: 18, fontWeight: '900' },
   statLabel: { color: 'rgba(255,255,255,0.85)', fontSize: 8.5, fontWeight: '900', letterSpacing: 0.6, marginTop: 2 },
 
   // Tabs
@@ -1067,19 +1182,22 @@ const useStyles = makeStyles((colors: ThemeColors) =>
   sectionHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   sectionTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   sectionHeader: { color: colors.text, fontSize: 12.5, fontWeight: '900', letterSpacing: 0.8 },
+  sectionAccent: { width: 4, height: 16, borderRadius: 2, backgroundColor: colors.accent },
   sectionMeta: { color: colors.textMuted, fontSize: 11, fontWeight: '800' },
 
   // Achievements
   achievementGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 16 },
   achievement: { width: '30%', flexGrow: 1, alignItems: 'center', paddingVertical: 12, paddingHorizontal: 8, borderRadius: radius.lg, backgroundColor: colors.surfaceHi, borderWidth: 1, borderColor: 'transparent' },
-  achievementUnlocked: { backgroundColor: 'rgba(226, 88, 34, 0.12)', borderColor: 'rgba(226, 88, 34, 0.4)' },
-  achievementIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
-  achievementTitle: { color: colors.text, fontSize: 11.5, fontWeight: '900', marginTop: 8 },
-  achievementHint: { color: colors.textMuted, fontSize: 9.5, fontWeight: '700', marginTop: 2 },
+  achievementUnlocked: { backgroundColor: 'rgba(245, 169, 11, 0.08)', borderColor: 'rgba(245, 169, 11, 0.35)' },
+  achievementTitle: { color: colors.text, fontSize: 12, fontWeight: '900', marginTop: 6 },
+  achievementHint: { color: colors.textMuted, fontSize: 9.5, fontWeight: '800', marginTop: 4 },
+  achievementDone: { color: colors.success, fontSize: 9.5, fontWeight: '900', letterSpacing: 1, marginTop: 4 },
+  achievementTrack: { alignSelf: 'stretch', height: 4, borderRadius: 2, marginTop: 7, marginHorizontal: 6, backgroundColor: colors.surface, overflow: 'hidden' },
+  achievementFill: { height: '100%', borderRadius: 2, backgroundColor: colors.accent },
 
   // Details
-  detailRow: { flexDirection: 'row', gap: 14, marginTop: 16 },
-  detailIcon: { width: 34, height: 34, borderRadius: 11, backgroundColor: 'rgba(226, 88, 34, 0.12)', alignItems: 'center', justifyContent: 'center' },
+  detailRow: { flexDirection: 'row', paddingVertical: 13, borderTopWidth: 1, borderTopColor: colors.border },
+  detailRowFirst: { borderTopWidth: 0, marginTop: 4 },
   detailLabelRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   detailLabel: { color: colors.textMuted, fontSize: 10.5, fontWeight: '900', letterSpacing: 0.6, textTransform: 'uppercase' },
   detailValue: { color: colors.text, fontSize: 15, fontWeight: '700', marginTop: 3 },

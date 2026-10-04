@@ -6,6 +6,8 @@ export const XP_PER_REP = 1;
 export const XP_PER_MATCH = 25;
 export const XP_PER_KCAL = 2;
 export const XP_PER_CHALLENGE = 50;
+/** Shop coins: 1 coin per 10 XP. Must match profile_coins_earned() in the avatar shop migration. */
+export const XP_PER_COIN = 10;
 
 export interface LevelProgress {
   level: number;
@@ -141,4 +143,14 @@ export function computeStreak(profile: UserProfile | null, liveActiveToday: bool
     activeToday,
     atRisk: !activeToday && current > 0,
   };
+}
+
+/**
+ * Coins available in the avatar shop. Uses only synced activity (no live calories),
+ * so it matches the balance purchase_avatar() checks on the server.
+ */
+export function computeCoinBalance(profile: UserProfile | null): number {
+  if (!profile) return 0;
+  const earned = Math.floor(computeTotalXp(profile, 0) / XP_PER_COIN);
+  return Math.max(0, earned - (profile.coins_spent ?? 0));
 }

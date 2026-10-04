@@ -1,16 +1,14 @@
 import React from 'react';
-import { Award, Crown, Gem, Medal, Shield, Zap } from 'lucide-react-native';
+import { RankEmblem, clampTier } from './RankEmblem';
 
-// One icon per ranking level (see LEVEL_TIERS in rankingService), used instead of emoji badges.
-const TIER_ICONS = [Shield, Medal, Award, Gem, Crown, Zap];
-
+// Ranking level (see LEVEL_TIERS in rankingService) shown as its custom rank emblem.
 interface TierIconProps {
   level: number;
   size?: number;
-  color: string;
+  /** Kept for existing call sites; emblems carry their own tier colours. */
+  color?: string;
 }
 
-export const TierIcon: React.FC<TierIconProps> = ({ level, size = 16, color }) => {
-  const Icon = TIER_ICONS[Math.min(TIER_ICONS.length, Math.max(1, level)) - 1];
-  return <Icon size={size} color={color} />;
-};
+export const TierIcon: React.FC<TierIconProps> = ({ level, size = 16 }) => (
+  <RankEmblem tier={clampTier(level)} size={Math.round(size * 1.5)} />
+);

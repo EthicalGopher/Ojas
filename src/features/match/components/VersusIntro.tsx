@@ -3,6 +3,7 @@ import { ActivityIndicator, Animated, Easing, StyleSheet, Text, TouchableOpacity
 import { Bot, Swords, Users, Zap } from 'lucide-react-native';
 import { Avatar, getAvatarUri } from '../../../components/Avatar';
 import { TierIcon } from '../../../components/TierIcon';
+import { RankEmblem, rankTierFromTitle, tierNameFromTitle } from '../../../components/RankEmblem';
 import { useGameStats } from '../../../hooks/useGameStats';
 import { useUserStore } from '../../../store/userStore';
 import { colors, radius } from '../../../theme';
@@ -213,8 +214,8 @@ export const VersusIntro: React.FC<VersusIntroProps> = ({
             <Text style={styles.youTag}>YOU</Text>
             <Text style={styles.fighterName} numberOfLines={1}>{selfName}</Text>
             <View style={styles.levelChip}>
-              <TierIcon level={Math.min(6, Math.ceil(level.level / 3))} size={12} color={colors.text} />
-              <Text style={styles.levelChipText}>LV {level.level} · {level.title}</Text>
+              <RankEmblem tier={rankTierFromTitle(level.title)} size={18} />
+              <Text style={styles.levelChipText}>LV {level.level} · {tierNameFromTitle(level.title)}</Text>
             </View>
           </View>
         </Animated.View>

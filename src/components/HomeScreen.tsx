@@ -9,7 +9,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { Flame, X, Dumbbell, Trophy } from 'lucide-react-native';
+import { Flame, X, Dumbbell, Trophy, Wrench } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { ModelComplexity } from '../utils/deviceSpecs';
 import { getDeviceInfo, getRecommendedModel } from '../utils/deviceSpecs';
@@ -37,15 +37,16 @@ import { HumanVsAIModal } from './HumanVsAIModal';
 import { MatchMode } from '../features/match/components/MatchCameraScreen';
 import { AIBotProfile } from '../utils/aiBotService';
 import { NewsScreen } from '../screens/NewsScreen';
+import { AvatarShopScreen } from '../features/avatar/components/AvatarShopScreen';
 import { LevelUpCelebration } from './LevelUpCelebration';
 import { StreakSplash } from './StreakSplash';
 import { selectUnreadCount, useNewsStore } from '../store/newsStore';
 import { makeStyles, radius, ThemeColors, useColors } from '../theme';
 
 import { ThemedStatusBar } from './ThemedStatusBar';
-export type MainTab = 'home' | 'explore' | 'workouts' | 'social' | 'profile';
+export type MainTab = 'home' | 'explore' | 'workouts' | 'shop' | 'social' | 'profile';
 
-type DetailSubTab = 'workouts' | 'shop' | 'leaderboard' | 'how_to_play';
+type DetailSubTab = 'workouts' | 'leaderboard' | 'how_to_play';
 type ExerciseCategory = 'all' | 'strength' | 'cardio' | 'flexibility';
 
 interface HomeScreenProps {
@@ -288,7 +289,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const renderUnderDevelopment = (featureName: string) => (
     <View style={styles.devContainer}>
       <View style={styles.devCard}>
-        <View style={styles.devIconBadge}><Text style={styles.devIconText}>🚧</Text></View>
+        <View style={styles.devIconBadge}><Wrench size={26} color="#E25822" /></View>
         <Text style={styles.devTitle}>{featureName}</Text>
         <View style={styles.devPillTag}><Text style={styles.devPillTagText}>Under Development</Text></View>
         <Text style={styles.devSubtitle}>We are working hard to bring you the {featureName} module. Stay tuned for upcoming updates!</Text>
@@ -340,6 +341,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           onLogout={onLogout || (() => {})}
         />
       );
+    }
+
+    if (activeTab === 'shop') {
+      return <AvatarShopScreen onBack={() => onTabChange('home')} />;
     }
 
     if (activeTab === 'explore') {
@@ -430,15 +435,15 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>⚙️ Settings & Model Choice</Text>
+              <Text style={styles.modalTitle}>Settings & Model Choice</Text>
               <TouchableOpacity onPress={() => setShowSettingsModal(false)}>
-                <Text style={styles.modalCloseIconText}>✕</Text>
+                <X size={16} color="#FFFFFF" />
               </TouchableOpacity>
             </View>
 
             <ScrollView style={{ maxHeight: 320 }}>
               <View style={styles.specCard}>
-                <Text style={styles.specCardTitle}>📱 Detected Device Specs</Text>
+                <Text style={styles.specCardTitle}>Detected Device Specs</Text>
                 <Text style={styles.specDetailText}>Model: <Text style={styles.specHighlightText}>{deviceName}</Text> | Memory: <Text style={styles.specHighlightText}>{totalRamGb} GB RAM</Text></Text>
                 <Text style={styles.specDetailText}>Hardware Recommendation: <Text style={styles.specRecommendText}>{getModelTitle(recommendedModel)}</Text></Text>
               </View>
@@ -463,8 +468,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               ))}
 
               <View style={styles.specCard}>
-                <Text style={styles.specCardTitle}>🚧 3D VR Avatar System</Text>
-                <Text style={styles.specDetailText}>3D VRM Kalidokit full-body rigging is currently <Text style={{ color: '#F59E0B', fontWeight: '700' }}>Under Development</Text> for a future release.</Text>
+                <Text style={styles.specCardTitle}>3D Avatar System</Text>
+                <Text style={styles.specDetailText}>3D avatars are live in Profile and the Shop. Live full-body motion mirroring is <Text style={{ color: '#F59E0B', fontWeight: '700' }}>in development</Text>.</Text>
               </View>
             </ScrollView>
 

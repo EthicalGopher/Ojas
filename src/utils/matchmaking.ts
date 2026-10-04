@@ -129,10 +129,10 @@ export const connectMatchSocket = (userId?: string, roomIdOrExerciseId?: string,
         const msg: MatchMessage = JSON.parse(event.data);
         if (msg.type === 'matched') {
           currentMatchRoomId = msg.room_id || msg.match_id;
-          console.log(`[Matchmaking] ⚔️ Matched in Room #${msg.room_number || msg.match_id} (ID: ${currentMatchRoomId}) against @${msg.opponent}`);
+          console.log(`[Matchmaking] Matched in Room #${msg.room_number || msg.match_id} (ID: ${currentMatchRoomId}) against @${msg.opponent}`);
         } else if (msg.type === 'ffa_matched') {
           currentMatchRoomId = msg.room_id || msg.match_id;
-          console.log(`[Matchmaking] 👑 Matched in FFA Room #${msg.room_number || msg.match_id} (ID: ${currentMatchRoomId}) with ${msg.player_count} athletes`);
+          console.log(`[Matchmaking] Matched in FFA Room #${msg.room_number || msg.match_id} (ID: ${currentMatchRoomId}) with ${msg.player_count} athletes`);
         }
         messageListeners.forEach((cb) => cb(msg));
       } catch (e) {

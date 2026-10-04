@@ -57,6 +57,7 @@ import { isActiveDay, toDateKey, XP_PER_MATCH } from '../utils/gamification';
 import { exerciseCardThemes, makeStyles, radius, ThemeColors, useColors } from '../theme';
 
 import CalorieIcon from '../../assets/icons/calorie.svg';
+import { RankEmblem, rankTierFromTitle, tierNameFromTitle } from '../components/RankEmblem';
 export type { ExerciseItem };
 
 interface HomeFeedScreenProps {
@@ -163,7 +164,7 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
     id: '1',
     name: 'Squats',
     category: 'strength',
-    icon: '🏋️',
+    icon: '',
     isFavorite: true,
     description: 'AI Real-time MediaPipe Pose Tracker for Parallel Depth & Rep Counting',
   };
@@ -344,7 +345,7 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
       sub: 'Live camera battle. Most clean reps wins.',
       cta: isGuest ? 'Sign in to play' : 'Play now',
       CtaIcon: isGuest ? Lock : Play,
-      visual: <ExerciseIcon imageUrl={activeExercise.image_url} icon={activeExercise.icon || '🏋️‍♂️'} size={110} fontSize={60} />,
+      visual: <ExerciseIcon imageUrl={activeExercise.image_url} icon={activeExercise.icon || ''} size={110} fontSize={60} />,
       onPress: openArena,
     },
     {
@@ -521,12 +522,10 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
 
       {/* 3. LEVEL */}
       <TouchableOpacity style={styles.levelStrip} activeOpacity={0.85} onPress={() => onNavigateToTab?.('profile')}>
-        <View style={styles.levelBadge}>
-          <Text style={styles.levelBadgeText}>LV {level.level}</Text>
-        </View>
+        <RankEmblem tier={rankTierFromTitle(level.title)} size={44} />
         <View style={{ flex: 1 }}>
           <View style={styles.levelTopRow}>
-            <Text style={styles.levelTitle}>{level.title}</Text>
+            <Text style={styles.levelTitle}>LV {level.level} · {tierNameFromTitle(level.title)}</Text>
             <Text style={styles.levelXp}>{level.xpForNextLevel - level.xpIntoLevel} XP to level {level.level + 1}</Text>
           </View>
           <View style={styles.levelTrack}>

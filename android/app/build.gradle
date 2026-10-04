@@ -151,7 +151,7 @@ android {
     androidResources {
         ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:!CVS:!thumbs.db:!picasa.ini:!*~'
         // Stored uncompressed so LocalAssetServer streams them with an exact Content-Length.
-        noCompress 'onnx', 'wasm'
+        noCompress 'onnx', 'wasm', 'vrm', 'glb'
     }
 }
 

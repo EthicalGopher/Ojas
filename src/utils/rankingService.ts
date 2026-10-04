@@ -4,7 +4,6 @@ import { AvatarConfig } from '../components/Avatar';
 export interface LevelInfo {
   level: number;
   title: string;
-  badge: string;
   tier: string;
   color: string;
   minPoints: number;
@@ -44,22 +43,21 @@ export interface UserExerciseStats {
 export const LEVEL_TIERS: {
   level: number;
   title: string;
-  badge: string;
   tier: string;
   color: string;
   minPoints: number;
   maxPoints: number;
 }[] = [
-  { level: 1, title: 'Rookie', badge: '🥉', tier: 'Bronze', color: '#CD7F32', minPoints: 0, maxPoints: 99 },
-  { level: 2, title: 'Challenger', badge: '🥈', tier: 'Silver', color: '#C0C0C0', minPoints: 100, maxPoints: 249 },
-  { level: 3, title: 'Warrior', badge: '🥇', tier: 'Gold', color: '#F59E0B', minPoints: 250, maxPoints: 499 },
-  { level: 4, title: 'Master', badge: '💎', tier: 'Platinum', color: '#38BDF8', minPoints: 500, maxPoints: 999 },
-  { level: 5, title: 'Champion', badge: '👑', tier: 'Diamond', color: '#A855F7', minPoints: 1000, maxPoints: 1999 },
-  { level: 6, title: 'Grandmaster', badge: '⚡', tier: 'Immortal', color: '#EF4444', minPoints: 2000, maxPoints: 999999 },
+  { level: 1, title: 'Rookie', tier: 'Bronze', color: '#CD7F32', minPoints: 0, maxPoints: 99 },
+  { level: 2, title: 'Challenger', tier: 'Silver', color: '#C0C0C0', minPoints: 100, maxPoints: 249 },
+  { level: 3, title: 'Warrior', tier: 'Gold', color: '#F59E0B', minPoints: 250, maxPoints: 499 },
+  { level: 4, title: 'Master', tier: 'Platinum', color: '#38BDF8', minPoints: 500, maxPoints: 999 },
+  { level: 5, title: 'Champion', tier: 'Diamond', color: '#A855F7', minPoints: 1000, maxPoints: 1999 },
+  { level: 6, title: 'Grandmaster', tier: 'Immortal', color: '#EF4444', minPoints: 2000, maxPoints: 999999 },
 ];
 
 /**
- * Calculates current level, title, badge, and progress based on points.
+ * Calculates current level, title and progress based on points.
  * Rules: Win = +10, Draw = +5, Defeat = -10.
  */
 export function calculateLevel(points: number = 0, exerciseName: string = 'Athlete'): LevelInfo {
@@ -79,7 +77,6 @@ export function calculateLevel(points: number = 0, exerciseName: string = 'Athle
       return {
         level: tier.level,
         title: tier.title,
-        badge: tier.badge,
         tier: tier.tier,
         color: tier.color,
         minPoints: tier.minPoints,
@@ -93,7 +90,7 @@ export function calculateLevel(points: number = 0, exerciseName: string = 'Athle
   return {
     level: 1,
     title: 'Rookie',
-    badge: '🥉',
+   
     tier: 'Bronze',
     color: '#CD7F32',
     minPoints: 0,

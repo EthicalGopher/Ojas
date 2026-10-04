@@ -166,7 +166,7 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
   <div id="container">
     <div id="loader-overlay">
       <div class="spinner" id="loader-spinner"></div>
-      <div class="loader-icon" id="loader-icon">⚠️</div>
+      <div class="loader-icon" id="loader-icon"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#F87171" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg></div>
       <div class="loader-title">Loading ${exerciseTitle} AI</div>
       <div class="loader-status" id="loader-status-text">Setting things up…</div>
 
@@ -357,7 +357,7 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
     function renderVisibility(value) {
       currentSmoothVisibility = value;
       if (value < 0.40) {
-        setHint('⚠️ Low Visibility: Step back into full frame', '#F87171');
+        setHint('Low visibility: step back into full frame', '#F87171');
       } else if (lastSentHint && lastSentHint.includes('Low Visibility')) {
         setHint(null);
       }
@@ -1780,10 +1780,10 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
             : selectedModel === 'high'
             ? 'High Model'
             : 'Medium Model';
-        setPoseStatus(`🧍 MediaPipe Active (${label})`);
+        setPoseStatus(`MediaPipe active (${label})`);
         setPoseDetected(true);
       } else if (data.type === 'NO_PERSON') {
-        setPoseStatus('🔍 Searching for Person in Frame...');
+        setPoseStatus('Searching for person in frame...');
         setPoseDetected(false);
         setVisibility(0);
       }

@@ -68,6 +68,29 @@
 
 ---
 
+### 6. 3D Avatars & Shop
+- Your 3D character is shown in Profile wearing its current outfit, hair and accessory.
+- The **Shop** tab sells **Characters**, **Outfits**, **Hair** and **Accessories** for coins (1 coin per 10 XP). Tap any item to try it on the 3D model before buying.
+- Each character keeps its own loadout. Purchases and equips are checked on the server (`purchase_avatar()`, `equip_avatar()`, `unequip_avatar_slot()`).
+
+**Adding items (admins)** — every item is a row in `avatar_models`; upload files to the `avatar-models` bucket first.
+
+| category | what it needs | `config` |
+|---|---|---|
+| `character` | `model_url` to a VRM 0.x or GLB (embedded textures, no Draco; include an `idle` clip for GLB) | `{}` |
+| `outfit` (recolour) | `character_id` | `{"recolor": {"Tops": "#C2283A"}, "swatch": ["#C2283A"]}` — keys match part of a material name |
+| `outfit` (mesh) | `character_id`; clothing GLB rigged to the same skeleton (same bone names) | `{"model_url": "https://…/jacket.glb", "hide": ["Tops"]}` |
+| `hair` | `character_id` | `{"recolor": {"HAIR": "#3A3A46"}}` |
+| `accessory` | `character_id` or NULL for every character | `{"builtin": "cap", "color": "#2A2470"}` or `{"model_url": "https://…/glasses.glb", "bone": "head", "position": [0, 0.08, 0.09]}` |
+
+```sql
+INSERT INTO public.avatar_models (id, name, description, rarity, price_coins, category, character_id, config, sort_order)
+VALUES ('aiko_hoodie_violet', 'Violet Hoodie', 'Limited drop.', 'rare', 280, 'outfit', 'starter_aiko',
+        '{"recolor": {"Tops": "#7C3AED"}, "swatch": ["#7C3AED", "#FFFFFF"]}', 14);
+```
+
+---
+
 ## Supported Exercises
 
 | Exercise | What the AI Checks |

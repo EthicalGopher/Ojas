@@ -8,6 +8,7 @@ import { useUserStore } from '../store/userStore';
 import { useGameStats } from '../hooks/useGameStats';
 import { makeStyles, radius, ThemeColors, useColors } from '../theme';
 import { selectUnreadCount, useNewsStore } from '../store/newsStore';
+import { RankEmblem, rankTierFromTitle, tierNameFromTitle } from './RankEmblem';
 
 export interface HeaderProps {
   title?: string;
@@ -97,7 +98,8 @@ export const Header: React.FC<HeaderProps> = ({
           {activeUsername}
         </Text>
         <View style={styles.xpRow}>
-          <Text style={styles.titleText}>{level.title}</Text>
+          <RankEmblem tier={rankTierFromTitle(level.title)} size={18} />
+          <Text style={styles.titleText}>{tierNameFromTitle(level.title)}</Text>
           <View style={styles.xpTrack}>
             <View style={[styles.xpFill, { width: `${Math.max(4, level.progress * 100)}%` }]} />
           </View>

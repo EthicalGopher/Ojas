@@ -12,6 +12,7 @@ import {
 import { SvgXml } from 'react-native-svg';
 
 import { CHILD_POSE_SVG_XML } from '../assets/svg/childPoseSvg';
+import { Dumbbell } from 'lucide-react-native';
 
 export interface ExerciseIconProps {
   imageUrl?: string;
@@ -48,7 +49,7 @@ const svgCache: Record<string, string> = {
 
 export const ExerciseIcon: React.FC<ExerciseIconProps> = ({
   imageUrl,
-  icon = '🏋️',
+  icon = '',
   size = 40,
   fontSize,
   containerStyle,
@@ -168,12 +169,10 @@ export const ExerciseIcon: React.FC<ExerciseIconProps> = ({
     }
   }
 
-  // Fallback to emoji icon
+  // No artwork: draw a vector glyph rather than the emoji stored in `icon`
   return (
     <View style={[styles.container, { width: size, height: size }, containerStyle]}>
-      <Text style={[styles.emojiText, { fontSize: calculatedFontSize }, textStyle]}>
-        {icon}
-      </Text>
+      <Dumbbell size={Math.round(size * 0.55)} color={StyleSheet.flatten(textStyle)?.color as string || '#E25822'} strokeWidth={2.2} />
     </View>
   );
 };
