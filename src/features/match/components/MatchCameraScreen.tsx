@@ -41,6 +41,8 @@ import {
   Ruler,
   ScanLine,
   Sun,
+  Video,
+  VideoOff,
 } from 'lucide-react-native';
 import { ProgressRing } from '../../../components/ui/ProgressRing';
 import {
@@ -166,6 +168,10 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
   const [timeLeft, setTimeLeft] = useState(120); // 2 mins duel match timer
   const [matchEnded, setMatchEnded] = useState(false);
   const [isSkeletonVisible, setIsSkeletonVisible] = useState(true);
+  // AI squat duel: the 3D AI fills the screen. The player's camera keeps running (it counts the
+  // reps) behind it, or in a small corner window when switched on from the floating widget.
+  const aiFullscreen = mode === 'ai_battle' && exerciseId === '1';
+  const [showSelfCam, setShowSelfCam] = useState(false);
 
   // Animated values for setup phase choreography
   const setupPositionAnim = useRef(new Animated.Value(0)).current; // 0 = center (large), 1 = top (small)
@@ -975,14 +981,16 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
           <View
             style={[
               styles.opponentContainer,
-              {
-                width: isLandscape ? '50%' : '100%',
-                height: isLandscape ? '100%' : '50%',
-                borderRightWidth: isLandscape ? 2 : 0,
-                borderRightColor: 'rgba(255, 255, 255, 0.15)',
-                borderBottomWidth: isLandscape ? 0 : 2,
-                borderBottomColor: 'rgba(255, 255, 255, 0.15)',
-              },
+              aiFullscreen
+                ? styles.opponentContainerFull
+                : {
+                    width: isLandscape ? '50%' : '100%',
+                    height: isLandscape ? '100%' : '50%',
+                    borderRightWidth: isLandscape ? 2 : 0,
+                    borderRightColor: 'rgba(255, 255, 255, 0.15)',
+                    borderBottomWidth: isLandscape ? 0 : 2,
+                    borderBottomColor: 'rgba(255, 255, 255, 0.15)',
+                  },
             ]}
           >
             {mode === 'ai_battle' ? (
@@ -991,6 +999,7 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
                 botState={aiBotState}
                 exerciseId={exerciseId}
                 isMatchActive={matchPhase === 'active_match'}
+                isMatchEnded={matchPhase === 'match_ended'}
               />
             ) : (
               <>
@@ -1021,10 +1030,17 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
           <View
             style={[
               styles.yourContainer,
-              {
-                width: isLandscape ? '50%' : '100%',
-                height: isLandscape ? '100%' : '50%',
-              },
+              aiFullscreen
+                ? [
+                    styles.selfCamWidget,
+                    isLandscape ? styles.selfCamWidgetLandscape : null,
+                    // Hidden = kept running underneath the opaque AI view, so pose tracking never stops.
+                    { zIndex: showSelfCam ? 2 : 0, elevation: showSelfCam ? 6 : 0 },
+                  ]
+                : {
+                    width: isLandscape ? '50%' : '100%',
+                    height: isLandscape ? '100%' : '50%',
+                  },
             ]}
           >
             <WebView
@@ -1091,8 +1107,8 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
         const StatusIcon = status.Icon;
         // Split modes (AI duel / faceoff) only cover the player's own camera half; keep clear of
         // the floating action bar at the bottom.
-        const isSplit = mode !== 'quickjoin' && mode !== 'ffa';
-        const compact = isSplit || isLandscape;
+        const isSplit = mode !== 'quickjoin' && mode !== 'ffa' && !aiFullscreen;
+        const compact = isSplit || isLandscape || aiFullscreen;
         const region = isSplit
           ? isLandscape
             ? { top: 0, bottom: 0, left: windowWidth / 2, right: 0 }
@@ -1374,6 +1390,8 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
         onToggleOrientation={handleToggleOrientation}
         onToggleSkeleton={handleToggleSkeleton}
         isSkeletonVisible={isSkeletonVisible}
+        onToggleSelfCam={aiFullscreen ? () => setShowSelfCam((v) => !v) : undefined}
+        isSelfCamVisible={showSelfCam}
         onTryAgain={handleRestartMatch}
         onToggleAutoRematch={toggleAutoRematch}
         autoRematch={autoRematch}
@@ -1401,6 +1419,9 @@ interface DraggableWidgetProps {
   onToggleOrientation: () => void;
   onToggleSkeleton?: () => void;
   isSkeletonVisible?: boolean;
+  /** Shows / hides the player's camera window (AI squat duel only). */
+  onToggleSelfCam?: () => void;
+  isSelfCamVisible?: boolean;
   onTryAgain: () => void;
   onToggleAutoRematch: () => void;
   autoRematch: boolean;
@@ -1416,6 +1437,8 @@ const DraggableActionsWidget: React.FC<DraggableWidgetProps> = ({
   onToggleOrientation,
   onToggleSkeleton,
   isSkeletonVisible = true,
+  onToggleSelfCam,
+  isSelfCamVisible = false,
   onTryAgain,
   onToggleAutoRematch,
   autoRematch,
@@ -1509,6 +1532,21 @@ const DraggableActionsWidget: React.FC<DraggableWidgetProps> = ({
                   <Eye size={16} color="#38BDF8" />
                 ) : (
                   <EyeOff size={16} color="#94A3B8" />
+                )}
+              </TouchableOpacity>
+            )}
+
+            {/* Your camera window on / off (AI squat duel) */}
+            {onToggleSelfCam && (
+              <TouchableOpacity
+                style={[styles.widgetActionBtn, !isSelfCamVisible && styles.mutedActionBtn]}
+                activeOpacity={0.75}
+                onPress={onToggleSelfCam}
+              >
+                {isSelfCamVisible ? (
+                  <Video size={16} color="#38BDF8" />
+                ) : (
+                  <VideoOff size={16} color="#94A3B8" />
                 )}
               </TouchableOpacity>
             )}
@@ -2009,6 +2047,28 @@ const styles = StyleSheet.create({
     backgroundColor: '#0C0F14',
     borderBottomWidth: 2,
     borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  opponentContainerFull: {
+    ...StyleSheet.absoluteFill,
+    zIndex: 1,
+    borderBottomWidth: 0,
+  },
+  selfCamWidget: {
+    position: 'absolute',
+    top: 140, // below the setup card and the scoreboard
+    right: 14,
+    width: 108,
+    height: 150,
+    flex: 0,
+    borderRadius: 14,
+    overflow: 'hidden',
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.85)',
+  },
+  selfCamWidgetLandscape: {
+    top: 96,
+    width: 160,
+    height: 112,
   },
   opponentContainerLandscape: {
     borderBottomWidth: 0,

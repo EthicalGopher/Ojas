@@ -58,6 +58,7 @@ import { exerciseCardThemes, makeStyles, radius, ThemeColors, useColors } from '
 
 import CalorieIcon from '../../assets/icons/calorie.svg';
 import { RankEmblem, rankTierFromTitle, tierNameFromTitle } from '../components/RankEmblem';
+import { TourTarget } from '../features/tour/TourTarget';
 export type { ExerciseItem };
 
 interface HomeFeedScreenProps {
@@ -417,6 +418,7 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
       showsVerticalScrollIndicator={false}
     >
       {/* 1. FEATURED HERO CAROUSEL */}
+      <TourTarget id="home-carousel">
       <ScrollView
         ref={heroRef}
         horizontal
@@ -441,6 +443,7 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
           </TouchableOpacity>
         ))}
       </ScrollView>
+      </TourTarget>
       <View style={styles.dotsRow}>
         {HERO_SLIDES.map((s, i) => (
           <View key={s.key} style={[styles.dot, i === heroIndex && styles.dotActive]} />
@@ -469,6 +472,7 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
         })}
       </View>
 
+      <TourTarget id="home-activity">
       <View style={styles.activityGrid}>
         <View style={styles.activityCol}>
           <View style={styles.statTile}>
@@ -519,6 +523,8 @@ export const HomeFeedScreen: React.FC<HomeFeedScreenProps> = ({
           </TouchableOpacity>
         </View>
       </View>
+
+      </TourTarget>
 
       {/* 3. LEVEL */}
       <TouchableOpacity style={styles.levelStrip} activeOpacity={0.85} onPress={() => onNavigateToTab?.('profile')}>

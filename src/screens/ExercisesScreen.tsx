@@ -18,6 +18,7 @@ import {
   fetchExercisesFromSupabase,
   ExerciseItem,
 } from '../utils/exerciseService';
+import { TourTarget } from '../features/tour/TourTarget';
 
 export type { ExerciseItem };
 
@@ -163,7 +164,7 @@ export const ExercisesScreen: React.FC<ExercisesScreenProps> = ({
             const duration = exercise.duration_mins || (index % 2 === 0 ? 32 : 25);
             const muscles = exercise.muscle_groups || (exercise.category === 'strength' ? 'Glutes / Squats / Core' : 'Cardio • Pace & Form');
 
-            return (
+            const card = (
               <TouchableOpacity
                 key={exercise.id}
                 style={[styles.workoutPlanCard, { backgroundColor: cardBg }]}
@@ -221,6 +222,13 @@ export const ExercisesScreen: React.FC<ExercisesScreenProps> = ({
                   </View>
                 </View>
               </TouchableOpacity>
+            );
+            return index === 0 ? (
+              <TourTarget key={exercise.id} id="train-first-exercise">
+                {card}
+              </TourTarget>
+            ) : (
+              card
             );
           })
         )}

@@ -73,19 +73,48 @@ export const Coal: React.FC<{ size: number }> = ({ size }) => {
   );
 };
 
+/** Two crossed logs with a bed of embers glowing under them; the fire sits on these. */
+export const CampfireLogs: React.FC<{ width: number; heat: number }> = ({ width, heat }) => (
+  <Svg width={width} height={width * 0.36} viewBox="0 0 120 43">
+    <Defs>
+      <LinearGradient id="bark" x1="0" y1="0" x2="0" y2="1">
+        <Stop offset="0" stopColor="#7A4A2A" />
+        <Stop offset="1" stopColor="#3B2214" />
+      </LinearGradient>
+      <RadialGradient id="bed" cx="50%" cy="50%" r="50%">
+        <Stop offset="0" stopColor="#FF7A1A" stopOpacity={0.85 * heat} />
+        <Stop offset="0.6" stopColor="#D7261B" stopOpacity={0.35 * heat} />
+        <Stop offset="1" stopColor="#D7261B" stopOpacity={0} />
+      </RadialGradient>
+    </Defs>
+    <Path d="M6 38 C30 30 90 30 114 38 C90 44 30 44 6 38 Z" fill="url(#bed)" />
+    <Path d="M14 34 L104 14" stroke="url(#bark)" strokeWidth={11} strokeLinecap="round" />
+    <Path d="M16 14 L106 34" stroke="url(#bark)" strokeWidth={11} strokeLinecap="round" />
+    {/* end grain */}
+    <Circle cx={104} cy={14} r={4.6} fill="#C08A5C" />
+    <Circle cx={104} cy={14} r={2} fill="#8A5A36" />
+    <Circle cx={16} cy={14} r={4.6} fill="#C08A5C" />
+    <Circle cx={16} cy={14} r={2} fill="#8A5A36" />
+    {/* glowing cracks where the logs cross */}
+    <Path d="M52 24 L60 22 L68 24" stroke="#FF9F1C" strokeWidth={1.6} strokeLinecap="round" opacity={heat} fill="none" />
+  </Svg>
+);
+
 const EMBER_COUNT = 12;
 
 interface StreakFireProps {
   size: number;
   /** Today's workout is done: full, bright fire. Otherwise a smaller, dimmer flame. */
   strong: boolean;
+  /** Width of the campfire logs under the flame; 0 hides them. */
+  logsWidth?: number;
 }
 
 export interface StreakFireHandle {
   ignite: () => void;
 }
 
-export const StreakFire = forwardRef<StreakFireHandle, StreakFireProps>(({ size, strong }, ref) => {
+export const StreakFire = forwardRef<StreakFireHandle, StreakFireProps>(({ size, strong, logsWidth = 0 }, ref) => {
   const palette: Palette = strong ? PALETTES.lit : PALETTES.dim;
   const height = size * 1.24;
 
@@ -204,7 +233,7 @@ export const StreakFire = forwardRef<StreakFireHandle, StreakFireProps>(({ size,
           {
             width: size * 1.8,
             height: size * 1.8,
-            bottom: -size * 0.35,
+            bottom: -size * 0.35 + (logsWidth ? logsWidth * 0.12 : 0),
             opacity: glow.interpolate({ inputRange: [0, 1], outputRange: [0, strong ? 0.95 : 0.6] }),
             transform: [{ scale: glow.interpolate({ inputRange: [0, 1], outputRange: [0.7, 1.05] }) }],
           },
@@ -230,7 +259,8 @@ export const StreakFire = forwardRef<StreakFireHandle, StreakFireProps>(({ size,
             key={i}
             style={{
               position: 'absolute',
-              bottom: height * 0.12,
+              bottom: height * 0.12 + (logsWidth ? logsWidth * 0.18 : 0),
+              zIndex: 2,
               width: s.dot,
               height: s.dot,
               borderRadius: s.dot / 2,
@@ -246,19 +276,22 @@ export const StreakFire = forwardRef<StreakFireHandle, StreakFireProps>(({ size,
         );
       })}
 
-      {/* flame */}
-      <View style={{ width: size, height }}>
+      {/* flame, sitting down into the logs */}
+      <View style={{ width: size, height, marginBottom: logsWidth ? -logsWidth * 0.17 : 0, zIndex: 1 }}>
         {layer(0, OUTER, palette.outer, 'fo', 3)}
         {layer(1, MIDDLE, palette.middle, 'fm', 4.5)}
         {layer(2, CORE, palette.core, 'fc', 6)}
       </View>
+
+      {logsWidth > 0 && <CampfireLogs width={logsWidth} heat={strong ? 1 : 0.6} />}
 
       {/* spark */}
       <Animated.View
         style={[
           styles.spark,
           {
-            bottom: height * 0.08,
+            bottom: height * 0.08 + (logsWidth ? logsWidth * 0.18 : 0),
+            zIndex: 2,
             opacity: spark.interpolate({ inputRange: [0, 0.3, 1, 2], outputRange: [0, 1, 1, 0] }),
             transform: [{ scale: spark.interpolate({ inputRange: [0, 1, 2], outputRange: [0.2, 1.4, 2.6] }) }],
           },

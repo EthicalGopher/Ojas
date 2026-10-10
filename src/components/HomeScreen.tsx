@@ -39,11 +39,11 @@ import { AIBotProfile } from '../utils/aiBotService';
 import { NewsScreen } from '../screens/NewsScreen';
 import { AvatarShopScreen } from '../features/avatar/components/AvatarShopScreen';
 import { LevelUpCelebration } from './LevelUpCelebration';
-import { StreakSplash } from './StreakSplash';
 import { selectUnreadCount, useNewsStore } from '../store/newsStore';
 import { makeStyles, radius, ThemeColors, useColors } from '../theme';
 
 import { ThemedStatusBar } from './ThemedStatusBar';
+import { TourTarget } from '../features/tour/TourTarget';
 export type MainTab = 'home' | 'explore' | 'workouts' | 'shop' | 'social' | 'profile';
 
 type DetailSubTab = 'workouts' | 'leaderboard' | 'how_to_play';
@@ -397,7 +397,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           {(['feed', 'news'] as const).map((tab) => {
             const active = activeSubTab === tab;
             const showBadge = tab === 'news' && !active && unreadNews > 0;
-            return (
+            const button = (
               <TouchableOpacity
                 key={tab}
                 style={[styles.subNavTab, active && styles.subNavTabActive]}
@@ -414,13 +414,19 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 )}
               </TouchableOpacity>
             );
+            return tab === 'news' ? (
+              <TourTarget key={tab} id="home-news" style={{ flex: 1 }}>
+                {button}
+              </TourTarget>
+            ) : (
+              button
+            );
           })}
         </View>
       )}
 
       <View style={styles.mainContent}>{mainContent}</View>
 
-      <StreakSplash />
       <LevelUpCelebration />
 
       <HumanVsAIModal

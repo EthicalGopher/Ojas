@@ -48,6 +48,8 @@ import {
   Coins,
   PersonStanding,
   ShoppingBag,
+  GraduationCap,
+  ChevronRight,
 } from 'lucide-react-native';
 import { ProgressRing } from '../components/ui/ProgressRing';
 import { useGameStats } from '../hooks/useGameStats';
@@ -148,6 +150,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const storeProfile = useUserStore((s) => s.profile);
   const [avatarCatalog, setAvatarCatalog] = useState<AvatarModel[]>(BUNDLED_AVATARS);
   const openShop = useUserStore((s) => s.openShop);
+  const openTutorial = useUserStore((s) => s.openTutorial);
   const equippedAvatar = findAvatar(avatarCatalog, getEquippedAvatarId(storeProfile));
   const equippedItems = loadoutItems(avatarCatalog, getLoadout(storeProfile, equippedAvatar.id), equippedAvatar.id);
   const ownedAvatarCount = avatarCatalog.filter((m) => isAvatarOwned(storeProfile, m)).length;
@@ -883,6 +886,15 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                     thumbColor="#FFFFFF"
                   />
                 </View>
+
+                <TouchableOpacity style={styles.reminderRow} activeOpacity={0.8} onPress={openTutorial}>
+                  <GraduationCap size={20} color={colors.accent} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.reminderTitle}>Replay tutorial</Text>
+                    <Text style={styles.reminderSub}>A quick tour of everything in Ojas.</Text>
+                  </View>
+                  <ChevronRight size={18} color={colors.textMuted} />
+                </TouchableOpacity>
               </View>
             )}
 

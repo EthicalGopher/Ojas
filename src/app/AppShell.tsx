@@ -11,6 +11,11 @@ import { AuthModal } from '../features/auth/components/AuthModal';
 import { CameraScreen } from '../features/camera/components/CameraScreen';
 import { MatchCameraScreen, MatchMode } from '../features/match/components/MatchCameraScreen';
 import { TabBar } from '../components/TabBar';
+import { StreakSplash } from '../components/StreakSplash';
+import { AppSplash } from '../components/AppSplash';
+import { AppTutorial } from '../components/AppTutorial';
+import { CoachMarks } from '../features/tour/CoachMarks';
+import { useTourStore } from '../features/tour/tourStore';
 
 import { Swords, Video, Zap, Check, X, Flame } from 'lucide-react-native';
 import { Avatar } from '../components/Avatar';
@@ -57,12 +62,19 @@ export default function AppShell() {
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [isAuthLoading, setIsAuthLoading] = useState<boolean>(true);
+  const [splashDone, setSplashDone] = useState<boolean>(false);
   const [incomingInvite, setIncomingInvite] = useState<BattleInvite | null>(null);
 
   const [soloExerciseId, setSoloExerciseId] = useState<string>('1');
   const [soloExerciseName, setSoloExerciseName] = useState<string>('Squats');
   const [isAiTutorMode, setIsAiTutorMode] = useState<boolean>(false);
   const { activeTab, setActiveTab, setUser } = useUserStore();
+  const profile = useUserStore((s) => s.profile);
+  const isGuest = useUserStore((s) => s.isGuest);
+  const guestTutorialDone = useUserStore((s) => s.guestTutorialDone);
+  const tutorialReplay = useUserStore((s) => s.tutorialReplay);
+  const completeTutorial = useUserStore((s) => s.completeTutorial);
+  const tourRunning = useTourStore((s) => s.running);
   const { level: playerLevelInfo, streak } = useGameStats();
   const playerLevel = playerLevelInfo.level;
 
@@ -187,10 +199,16 @@ export default function AppShell() {
     setIncomingInvite(null);
   };
 
+  // New users see the tutorial once: profiles.is_tutorial is false until they finish or skip it.
+  // Only an explicit false counts, so a missing column or an unloaded profile never shows it.
+  const needsTutorial = isGuest ? guestTutorialDone === false : profile?.is_tutorial === false;
+  const showTutorial =
+    splashDone && !!currentUser && !isFullscreen && !isMatchCamera && (needsTutorial || tutorialReplay);
+
   if (isAuthLoading) {
     return (
       <SafeAreaProvider>
-        <LoadingScreen message="Initializing Ojas..." />
+        <AppSplash />
       </SafeAreaProvider>
     );
   }
@@ -517,6 +535,34 @@ export default function AppShell() {
             </View>
           </View>
         )}
+
+        {/* Daily streak moment, over everything including the tab bar */}
+        {splashDone && currentUser && !isFullscreen && !isMatchCamera && !showTutorial && !tourRunning && <StreakSplash />}
+
+        {/* First-run tutorial (while profiles.is_tutorial is false): a welcome screen, then an
+            interactive tour that spotlights each real button. Finishing or skipping either one
+            sets is_tutorial = true. */}
+        <AppTutorial
+          visible={showTutorial && !tourRunning}
+          onStart={() => {
+            const u = useUserStore.getState();
+            u.setActiveTab('home');
+            u.setHomeSubTab('feed');
+            useTourStore.getState().start();
+          }}
+          onSkip={() => completeTutorial()}
+        />
+        {tourRunning && !isFullscreen && !isMatchCamera && (
+          <CoachMarks
+            onFinish={() => {
+              useTourStore.getState().stop();
+              completeTutorial();
+            }}
+          />
+        )}
+
+        {/* Brand splash: stays over the app until auth is done, then fades out */}
+        {!splashDone && <AppSplash ready onDone={() => setSplashDone(true)} />}
       </View>
     </SafeAreaProvider>
   );

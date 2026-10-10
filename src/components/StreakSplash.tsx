@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Easing, Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Animated, BackHandler, Easing, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 import { useGameStats } from '../hooks/useGameStats';
 import { useUserStore } from '../store/userStore';
 import { isActiveDay, toDateKey } from '../utils/gamification';
 import { askForRemindersOnce, scheduleStreakReminders } from '../utils/streakReminders';
-import { GradientFill } from '../features/squad/components/SquadUI';
-import { Coal, MiniFlame, StreakFire, StreakFireHandle } from './streak/StreakFire';
+import { GlowSpot, GradientFill } from '../features/squad/components/SquadUI';
+import { MiniFlame, StreakFire, StreakFireHandle } from './streak/StreakFire';
 
 const AUTO_HIDE_MS = 6500;
 const DAY_LETTERS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
@@ -26,7 +27,10 @@ const C = {
   line: 'rgba(255,255,255,0.08)',
 };
 
-/** Full-screen daily streak moment, played when the home screen first opens each launch. */
+/**
+ * Full-screen daily streak moment, played once per launch. Rendered as an overlay at the app root
+ * (not a Modal) so it reaches under the status and navigation bars of the edge-to-edge activity.
+ */
 export const StreakSplash: React.FC = () => {
   const profile = useUserStore((s) => s.profile);
   const setActiveTab = useUserStore((s) => s.setActiveTab);
@@ -79,7 +83,8 @@ export const StreakSplash: React.FC = () => {
     Animated.timing(backdrop, { toValue: 1, duration: 260, useNativeDriver: true }).start();
 
     // Fire catches first; the number and the week follow once it is burning.
-    const igniteAt = setTimeout(() => lit && fireRef.current?.ignite(), 220);
+    // With no streak a small pilot flame still lights, so the screen shows what you are building.
+    const igniteAt = setTimeout(() => fireRef.current?.ignite(), 220);
     Animated.sequence([
       Animated.delay(lit ? 650 : 250),
       Animated.parallel([
@@ -123,6 +128,17 @@ export const StreakSplash: React.FC = () => {
     });
   };
 
+  // Back closes the overlay (a Modal would have handled this itself).
+  useEffect(() => {
+    if (!visible) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      dismiss();
+      return true;
+    });
+    return () => sub.remove();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible]);
+
   if (!visible) return null;
 
   const headline = strong ? 'Streak secured' : lit ? 'Keep it burning' : 'Light your first flame';
@@ -133,27 +149,38 @@ export const StreakSplash: React.FC = () => {
     : 'Finish any workout today to start a streak.';
 
   return (
-    <Modal visible transparent statusBarTranslucent animationType="none" onRequestClose={() => dismiss()}>
       <Animated.View style={[styles.backdrop, { opacity: backdrop }]}>
-        <GradientFill colors={['#0B0705', '#1A0A05', '#2B0F06']} vertical />
+        <StatusBar style="light" hidden />
+        {/* full-bleed background, kept outside the padded content */}
+        <View style={StyleSheet.absoluteFill}>
+          {/* Flat base (a long dark gradient bands into visible steps), plus a soft light behind the fire */}
+          <GlowSpot color="#FF6A1F" size={640} strength={0.2} style={{ alignSelf: 'center', top: '6%' }} />
+        </View>
 
+        <View style={styles.content}>
         <View style={styles.center}>
           <Text style={styles.eyebrow}>DAILY STREAK</Text>
 
           <View style={styles.fireSlot}>
-            {lit ? <StreakFire ref={fireRef} size={132} strong={strong} /> : <Coal size={160} />}
+            {lit ? (
+              <StreakFire ref={fireRef} size={124} strong={strong} logsWidth={190} />
+            ) : (
+              <StreakFire ref={fireRef} size={54} strong={false} logsWidth={150} />
+            )}
           </View>
 
-          <Animated.View
-            style={{
-              alignItems: 'center',
-              opacity: countIn,
-              transform: [{ scale: countIn.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1] }) }],
-            }}
-          >
-            <Text style={[styles.count, !lit && { color: C.faint }]}>{displayCount}</Text>
-            <Text style={styles.countLabel}>{streak.current === 1 ? 'DAY' : 'DAYS'}</Text>
-          </Animated.View>
+          {lit ? (
+            <Animated.View
+              style={{
+                alignItems: 'center',
+                opacity: countIn,
+                transform: [{ scale: countIn.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1] }) }],
+              }}
+            >
+              <Text style={styles.count}>{displayCount}</Text>
+              <Text style={styles.countLabel}>DAY STREAK</Text>
+            </Animated.View>
+          ) : null}
 
           <Animated.View
             style={{
@@ -162,8 +189,15 @@ export const StreakSplash: React.FC = () => {
               transform: [{ translateY: contentIn.interpolate({ inputRange: [0, 1], outputRange: [18, 0] }) }],
             }}
           >
-            <Text style={styles.headline}>{headline}</Text>
+            <Text style={[styles.headline, !lit && styles.headlineHero]}>{headline}</Text>
             <Text style={styles.sub}>{sub}</Text>
+            {!lit && streak.best > 0 && (
+              <View style={styles.bestChip}>
+                <Text style={styles.bestChipText}>
+                  Best streak {streak.best} {streak.best === 1 ? 'day' : 'days'}
+                </Text>
+              </View>
+            )}
           </Animated.View>
 
           {/* WEEK: consecutive active days are joined into one burning chain */}
@@ -194,8 +228,8 @@ export const StreakSplash: React.FC = () => {
             })}
           </View>
 
-          {/* MILESTONE */}
-          {nextMilestone && (
+          {/* MILESTONE (only once there is a streak to grow) */}
+          {lit && nextMilestone && (
             <Animated.View style={[styles.milestone, { opacity: contentIn }]}>
               <View style={styles.milestoneTop}>
                 <Text style={styles.milestoneText}>
@@ -233,28 +267,32 @@ export const StreakSplash: React.FC = () => {
             </>
           )}
         </Animated.View>
+        </View>
       </Animated.View>
-    </Modal>
   );
 };
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, alignItems: 'center', backgroundColor: '#0B0705', paddingTop: 40, paddingBottom: 36 },
+  backdrop: { ...StyleSheet.absoluteFill, backgroundColor: '#1F0B05', zIndex: 100, elevation: 100 },
+  content: { flex: 1, alignItems: 'center', paddingTop: 56, paddingBottom: 44 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24, width: '100%' },
   eyebrow: { color: C.faint, fontSize: 11, fontWeight: '900', letterSpacing: 3 },
-  fireSlot: { height: 250, justifyContent: 'flex-end', alignItems: 'center', marginTop: 4 },
+  fireSlot: { height: 270, justifyContent: 'flex-end', alignItems: 'center', marginTop: 4 },
   count: {
     color: C.text,
     fontSize: 88,
     lineHeight: 92,
     fontWeight: '900',
     fontVariant: ['tabular-nums'],
-    textShadowColor: 'rgba(255,122,26,0.55)',
-    textShadowRadius: 22,
-    marginTop: 2,
+    textShadowColor: 'rgba(255,122,26,0.45)',
+    textShadowRadius: 18,
+    marginTop: 6,
   },
   countLabel: { color: C.ember, fontSize: 13, fontWeight: '900', letterSpacing: 6, marginTop: -2 },
   headline: { color: C.text, fontSize: 22, fontWeight: '900', marginTop: 18 },
+  headlineHero: { fontSize: 30, marginTop: 22, textAlign: 'center' },
+  bestChip: { marginTop: 14, paddingHorizontal: 12, height: 28, borderRadius: 14, justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.06)' },
+  bestChipText: { color: C.soft, fontSize: 12, fontWeight: '800' },
   sub: { color: C.soft, fontSize: 13.5, textAlign: 'center', lineHeight: 19, marginTop: 6, maxWidth: 300 },
 
   weekCard: {

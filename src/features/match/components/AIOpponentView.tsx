@@ -9,12 +9,15 @@ import {
 import { Svg, Line, Circle, Rect } from 'react-native-svg';
 import { Bot, Cpu, Sparkles, Zap, Flame, Shield, Target } from 'lucide-react-native';
 import { AIBotProfile, AIBotState } from '../../../utils/aiBotService';
+import { AIInstructor3D } from './AIInstructor3D';
 
 interface AIOpponentViewProps {
   bot: AIBotProfile;
   botState?: AIBotState | null;
   exerciseId?: string;
   isMatchActive: boolean;
+  /** The match is over: the 3D AI cheers if it won. */
+  isMatchEnded?: boolean;
 }
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -35,6 +38,7 @@ export const AIOpponentView: React.FC<AIOpponentViewProps> = ({
   botState: rawBotState,
   exerciseId = '1',
   isMatchActive,
+  isMatchEnded = false,
 }) => {
   const botState = rawBotState || DEFAULT_BOT_STATE;
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -52,6 +56,16 @@ export const AIOpponentView: React.FC<AIOpponentViewProps> = ({
       Animated.timing(scanLineAnim, { toValue: 1, duration: 2500, useNativeDriver: true })
     ).start();
   }, [pulseAnim, scanLineAnim]);
+
+  // Squats: the screen shows only the 3D instructor, squatting in step with the bot's reps.
+  if (exerciseId === '1') {
+    const mode = isMatchEnded
+      ? botState.isLeading ? 'cheer' : 'idle'
+      : !isMatchActive ? 'idle'
+      : botState.currentPhase === 'pause' ? 'rest'
+      : 'squat';
+    return <AIInstructor3D mode={mode} phaseProgress={botState.phaseProgress} />;
+  }
 
   // Compute kinematic joint coordinates for the cyber wireframe avatar based on exercise & phase
   const renderCyberSkeleton = () => {

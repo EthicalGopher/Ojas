@@ -1,0 +1,9 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+  <!-- Android 12+ draws its own launch splash (the app icon on this colour) instead of windowBackground. -->
+  <style name="Theme.App.SplashScreen" parent="AppTheme">
+    <item name="android:windowBackground">@drawable/ic_launcher_background</item>
+    <item name="android:windowSplashScreenBackground">@color/splashscreen_background</item>
+    <item name="android:statusBarColor">@color/splashscreen_background</item>
+    <item name="android:navigationBarColor">@color/splashscreen_background</item>
+  </style>
+</resources>

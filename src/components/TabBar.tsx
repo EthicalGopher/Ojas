@@ -3,6 +3,7 @@ import { Alert, Animated, StyleSheet, TouchableOpacity, View } from 'react-nativ
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Dumbbell, Home, Lock, ShoppingBag, User, Users } from 'lucide-react-native';
 import { makeStyles, radius, shadow, ThemeColors, useColors } from '../theme';
+import { TourTarget } from '../features/tour/TourTarget';
 
 export type TabBarItem = 'home' | 'explore' | 'workouts' | 'shop' | 'social' | 'profile';
 
@@ -106,14 +107,15 @@ export const TabBar: React.FC<TabBarProps> = ({
     <View style={[styles.wrapper, { bottom: Math.max(insets.bottom, 12) + 10 }]} pointerEvents="box-none">
       <View style={styles.dock}>
         {TAB_ITEMS.map((item) => (
-          <TabButton
-            key={item.key}
-            label={item.label}
-            isActive={activeTab === item.key || (item.key === 'profile' && activeTab === 'social')}
-            isLocked={isGuest && item.requiresAuth}
-            Icon={item.icon}
-            onPress={() => handlePress(item)}
-          />
+          <TourTarget key={item.key} id={`tab-${item.key}`}>
+            <TabButton
+              label={item.label}
+              isActive={activeTab === item.key || (item.key === 'profile' && activeTab === 'social')}
+              isLocked={isGuest && item.requiresAuth}
+              Icon={item.icon}
+              onPress={() => handlePress(item)}
+            />
+          </TourTarget>
         ))}
       </View>
     </View>

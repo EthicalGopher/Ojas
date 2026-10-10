@@ -1,6 +1,10 @@
 import { create } from 'zustand';
 import { supabase } from '../utils/supabase';
-import { UserProfile, getOrCreateUserProfile } from '../utils/profileService';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { UserProfile, getOrCreateUserProfile, markTutorialDone } from '../utils/profileService';
+
+/** Guests have no profile row, so their tutorial flag lives on the device. */
+const GUEST_TUTORIAL_KEY = 'ojas_guest_tutorial_done';
 import { useDailyChallengeStore } from './dailyChallengeStore';
 
 export type MainTab = 'home' | 'explore' | 'workouts' | 'shop' | 'social' | 'profile';
@@ -43,6 +47,13 @@ interface UserState {
   /** Jump to the Shop tab, optionally showing only the avatars the user owns. */
   openShop: (filter?: ShopFilter) => void;
   refreshProfile: () => Promise<UserProfile | null>;
+  /** Guest only: whether the tutorial was finished on this device (null = not read yet). */
+  guestTutorialDone: boolean | null;
+  /** Shows the tutorial again from Profile > Settings, without changing the saved flag. */
+  tutorialReplay: boolean;
+  openTutorial: () => void;
+  /** The tutorial was completed or skipped: profiles.is_tutorial = true (or the guest flag). */
+  completeTutorial: () => void;
 }
 
 export const useUserStore = create<UserState>((set, get) => ({
@@ -54,11 +65,29 @@ export const useUserStore = create<UserState>((set, get) => ({
   isGuest: false,
   lastMatchSummary: null,
   shopFilter: 'all',
+  guestTutorialDone: null,
+  tutorialReplay: false,
+  openTutorial: () => set({ tutorialReplay: true }),
+  completeTutorial: () => {
+    const { isGuest, profile } = get();
+    set({ tutorialReplay: false });
+    if (isGuest) {
+      set({ guestTutorialDone: true });
+      AsyncStorage.setItem(GUEST_TUTORIAL_KEY, '1').catch(() => {});
+      return;
+    }
+    if (!profile || profile.is_tutorial === true) return;
+    set({ profile: { ...profile, is_tutorial: true } });
+    markTutorialDone(profile.id);
+  },
   setUser: (user) => {
     set({ user, isGuest: user?.isGuest || false });
     if (user && !user?.isGuest) {
       get().refreshProfile();
     } else if (user?.isGuest) {
+      AsyncStorage.getItem(GUEST_TUTORIAL_KEY)
+        .then((v) => set({ guestTutorialDone: v === '1' }))
+        .catch(() => set({ guestTutorialDone: false }));
       set({
         profile: {
           id: 'guest',

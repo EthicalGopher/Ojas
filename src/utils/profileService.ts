@@ -36,6 +36,8 @@ export interface UserProfile {
   /** Per-character loadout: { [characterId]: { outfit?, hair?, accessory? } } */
   equipped_items?: Record<string, Record<string, string>>;
   coins_spent?: number;
+  /** true once the first-run tutorial was completed or skipped */
+  is_tutorial?: boolean;
   created_at?: string;
   updated_at?: string;
 }
@@ -316,6 +318,13 @@ async function writeProfileRow(
 /**
  * Update an existing profile row in public.profiles.
  */
+/** Marks the first-run tutorial as done (finished or skipped) so it isn't shown again. */
+export async function markTutorialDone(userId: string): Promise<boolean> {
+  const { error } = await supabase.from('profiles').update({ is_tutorial: true }).eq('id', userId);
+  if (error) console.warn('[profileService] markTutorialDone:', error.message);
+  return !error;
+}
+
 export async function updateUserProfile(
   userId: string,
   updates: Partial<UserProfile>

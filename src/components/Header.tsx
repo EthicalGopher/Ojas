@@ -9,6 +9,7 @@ import { useGameStats } from '../hooks/useGameStats';
 import { makeStyles, radius, ThemeColors, useColors } from '../theme';
 import { selectUnreadCount, useNewsStore } from '../store/newsStore';
 import { RankEmblem, rankTierFromTitle, tierNameFromTitle } from './RankEmblem';
+import { TourTarget } from '../features/tour/TourTarget';
 
 export interface HeaderProps {
   title?: string;
@@ -97,6 +98,7 @@ export const Header: React.FC<HeaderProps> = ({
         <Text style={styles.nameText} numberOfLines={1}>
           {activeUsername}
         </Text>
+        <TourTarget id="home-level">
         <View style={styles.xpRow}>
           <RankEmblem tier={rankTierFromTitle(level.title)} size={18} />
           <Text style={styles.titleText}>{tierNameFromTitle(level.title)}</Text>
@@ -107,6 +109,7 @@ export const Header: React.FC<HeaderProps> = ({
             {level.xpIntoLevel}/{level.xpForNextLevel}
           </Text>
         </View>
+        </TourTarget>
       </View>
     </TouchableOpacity>
   );
