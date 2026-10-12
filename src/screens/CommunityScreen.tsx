@@ -466,7 +466,7 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
               ? (match.community2_athlete_name || match.community2_name || 'Rival Community')
               : (match.community1_athlete_name || match.community1_name || 'Rival Community');
             if (onOpenMatchCamera) {
-              onOpenMatchCamera(oppName, 'faceoff', match.exercise_id);
+              onOpenMatchCamera(oppName, 'quickjoin', match.exercise_id);
             } else {
               Alert.alert('Battle Ready', 'Match camera ready for live rep counting!');
             }

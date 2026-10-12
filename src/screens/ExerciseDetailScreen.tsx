@@ -37,9 +37,7 @@ import {
   TrendingUp,
   Trophy,
   Users,
-  Video,
   X,
-  Zap,
 } from 'lucide-react-native';
 import { Avatar } from '../components/Avatar';
 import { ExerciseIcon } from '../components/ExerciseIcon';
@@ -96,7 +94,7 @@ interface ExerciseDetailScreenProps {
   exercise: ExerciseItem;
   detailTab: 'workouts' | 'leaderboard' | 'how_to_play';
   onBack: () => void;
-  onJoinQueue: (exercise: ExerciseItem, queue: 'faceoff' | 'quick_start' | 'ffa') => void;
+  onJoinQueue: (exercise: ExerciseItem, queue: 'quick_start' | 'ffa') => void;
   onDetailTabChange: (tab: 'workouts' | 'leaderboard' | 'how_to_play') => void;
   onStartCustomMatch?: (
     opponent: string,
@@ -132,7 +130,6 @@ export const ExerciseDetailScreen: React.FC<ExerciseDetailScreenProps> = ({
   const [showFriendChallengeModal, setShowFriendChallengeModal] = useState<boolean>(false);
   const [friends, setFriends] = useState<FriendshipItem[]>([]);
   const [loadingFriends, setLoadingFriends] = useState(false);
-  const [selectedBattleMode, setSelectedBattleMode] = useState<BattleMode>('faceoff');
   const [customUsername, setCustomUsername] = useState<string>('');
   const [challengingFriendId, setChallengingFriendId] = useState<string | null>(null);
   const [activeSentInvite, setActiveSentInvite] = useState<BattleInvite | null>(null);
@@ -219,10 +216,7 @@ export const ExerciseDetailScreen: React.FC<ExerciseDetailScreenProps> = ({
                 response.matchRoomId || activeSentInvite.matchRoomId
               );
             } else {
-              onJoinQueue(
-                exercise,
-                activeSentInvite.mode === 'faceoff' ? 'faceoff' : 'quick_start'
-              );
+              onJoinQueue(exercise, 'quick_start');
             }
           } else {
             setActiveSentInvite(null);
@@ -271,7 +265,7 @@ export const ExerciseDetailScreen: React.FC<ExerciseDetailScreenProps> = ({
         },
         exercise.id,
         exercise.name,
-        selectedBattleMode
+        'quickjoin'
       );
 
       setActiveSentInvite(invite);
@@ -348,8 +342,7 @@ export const ExerciseDetailScreen: React.FC<ExerciseDetailScreenProps> = ({
   const COMPETE_MODES: QueueMode[] = [
     { id: 'ai_duel', title: 'AI Duel', description: '1v1 match against an AI pacer', Icon: Cpu, tint: colors.accent, badge: 'VS AI', kind: 'ai_duel' },
     { id: 'ffa', title: 'Battle Ground', description: '10-player live leaderboard match', Icon: Trophy, tint: colors.gold, badge: '10 PLAYERS', kind: 'queue' },
-    { id: 'faceoff', title: 'Faceoff', description: '1v1 split-screen video duel', Icon: Video, tint: colors.pink, badge: '1V1 VIDEO', kind: 'queue' },
-    { id: 'quick_start', title: 'Quick Duel', description: '1v1 fast score battle', Icon: Zap, tint: colors.success, badge: '1V1 SCORE', kind: 'queue' },
+    { id: 'quick_start', title: '1v1 Duel', description: 'Live rival, shown as their 3D character', Icon: Swords, tint: colors.pink, badge: '1V1', kind: 'queue' },
     { id: 'custom_friend', title: 'Friend Battle', description: 'Challenge a friend directly', Icon: Users, tint: colors.lavender, badge: 'INVITE', kind: 'friend' },
   ];
 
@@ -377,7 +370,7 @@ export const ExerciseDetailScreen: React.FC<ExerciseDetailScreenProps> = ({
         loadFriendsList();
         break;
       default:
-        onJoinQueue(exercise, mode.id as 'faceoff' | 'quick_start' | 'ffa');
+        onJoinQueue(exercise, mode.id as 'quick_start' | 'ffa');
     }
   };
 
@@ -827,7 +820,7 @@ export const ExerciseDetailScreen: React.FC<ExerciseDetailScreenProps> = ({
                 <Text style={styles.waitingTitle}>Challenge sent!</Text>
                 <Text style={styles.waitingDesc}>
                   Invited <Text style={{ color: colors.accent, fontWeight: '900' }}>@{activeSentInvite.receiverUsername}</Text> to a 1v1{' '}
-                  {exercise.name} {activeSentInvite.mode === 'faceoff' ? 'Faceoff' : 'Score Duel'}.
+                  {exercise.name} duel.
                 </Text>
                 <View style={styles.waitingTimer}>
                   <ActivityIndicator size="small" color={colors.accent} />
@@ -839,26 +832,6 @@ export const ExerciseDetailScreen: React.FC<ExerciseDetailScreenProps> = ({
               </View>
             ) : (
               <>
-                <View style={styles.modeToggleRow}>
-                  {([
-                    { key: 'faceoff' as const, label: 'Faceoff (Camera)', Icon: Video },
-                    { key: 'quickjoin' as const, label: 'Score Duel', Icon: Zap },
-                  ]).map(({ key, label, Icon }) => {
-                    const active = selectedBattleMode === key;
-                    return (
-                      <TouchableOpacity
-                        key={key}
-                        style={[styles.modeToggleBtn, active && styles.modeToggleBtnActive]}
-                        activeOpacity={0.8}
-                        onPress={() => setSelectedBattleMode(key)}
-                      >
-                        <Icon size={14} color={active ? colors.onAccent : colors.textMuted} />
-                        <Text style={[styles.modeToggleText, active && { color: colors.onAccent }]}>{label}</Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-
                 <View style={styles.directChallengeRow}>
                   <View style={styles.directInputWrap}>
                     <Search size={14} color={colors.textDim} />
@@ -1171,21 +1144,6 @@ const useStyles = makeStyles((colors: ThemeColors) =>
     backgroundColor: colors.surfaceSunken,
   },
   waitingTimerText: { color: colors.text, fontSize: 12.5, fontWeight: '700' },
-  modeToggleRow: { flexDirection: 'row', gap: 8, marginTop: 14 },
-  modeToggleBtn: {
-    flex: 1,
-    height: 42,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    borderRadius: radius.pill,
-    backgroundColor: colors.surfaceSunken,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  modeToggleBtnActive: { backgroundColor: colors.accent, borderColor: colors.accent },
-  modeToggleText: { color: colors.textMuted, fontSize: 12.5, fontWeight: '800' },
   directChallengeRow: { flexDirection: 'row', gap: 8, marginTop: 12 },
   directInputWrap: {
     flex: 1,

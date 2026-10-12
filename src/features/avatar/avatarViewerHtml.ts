@@ -8,8 +8,9 @@
 // page -> RN: { type: 'PROGRESS', progress } | { type: 'LOADED' } | { type: 'ERROR', message }
 //
 // Loadout items are { category, config } from the shop catalog:
-//   recolor  { recolor: { "<material name part>": "#hex" } }   outfits and hair on the character's own materials
-//   skinned  { model_url, hide: ["<material name part>"] }      clothing GLB rigged to the same skeleton
+//   recolor  { recolor: { "<material name part>": "#hex" } }   tops, pants, shoes and hair on the character's own materials
+//   tint     { tint: { "<material name part>": [r, g, b] } }   linear multipliers (faces match the body's skin tone)
+//   skinned  { model_url, hide: ["<material name part>"] }      clothing or a face (head) GLB rigged to the same skeleton
 //   builtin  { builtin: "headband" | "cap" | "halo", color }     accessories drawn here, on the head bone
 //   attached { model_url, bone, position, rotation, scale }      accessory GLB on a humanoid bone
 
@@ -18,6 +19,8 @@ export function getAvatarViewerHtml(opts: {
   format: 'vrm' | 'glb';
   autoRotate: boolean;
   interactive: boolean;
+  /** Starting turn in radians (+ turns the model to its left). */
+  initialYaw?: number;
 }): string {
   const config = JSON.stringify(opts);
   return `<!DOCTYPE html>
@@ -90,7 +93,7 @@ export function getAvatarViewerHtml(opts: {
   var TARGET_HEIGHT = 1.6;
   var current = null; // { root, vrm, mixer, bones }
   var loadToken = 0;
-  var yaw = 0;
+  var yaw = CONFIG.initialYaw || 0;
   var autoRotate = !!CONFIG.autoRotate;
   var lastInteraction = 0;
   var clock = new THREE.Clock();
@@ -102,16 +105,34 @@ export function getAvatarViewerHtml(opts: {
     camera.lookAt(0, height * 0.5, 0);
   }
 
+  // three r137 boxes a SkinnedMesh by its raw geometry, which is off by the rig's scale when the
+  // mesh sits under a scaled bone (Rocketbox: Bip01 at 0.01). Measure skinned vertices as posed.
+  function modelBox(root) {
+    var box = new THREE.Box3(), v = new THREE.Vector3(), skinned = false;
+    root.traverse(function (o) {
+      if (!o.isSkinnedMesh || !o.geometry.attributes.position) return;
+      skinned = true;
+      o.skeleton.update();
+      var pos = o.geometry.attributes.position;
+      for (var i = 0; i < pos.count; i += 5) {
+        v.fromBufferAttribute(pos, i);
+        o.boneTransform(i, v);
+        box.expandByPoint(v.applyMatrix4(o.matrixWorld));
+      }
+    });
+    return skinned ? box : box.setFromObject(root);
+  }
+
   // Scale to a common height, stand on y = 0, centred. Daz exports are in cm, VRM in m.
   function normalize(root) {
     root.updateMatrixWorld(true);
-    var box = new THREE.Box3().setFromObject(root);
+    var box = modelBox(root);
     var size = box.getSize(new THREE.Vector3());
     if (!isFinite(size.y) || size.y <= 0) return;
     var s = TARGET_HEIGHT / size.y;
     root.scale.multiplyScalar(s);
     root.updateMatrixWorld(true);
-    box.setFromObject(root);
+    box = modelBox(root);
     var center = box.getCenter(new THREE.Vector3());
     root.position.x -= center.x;
     root.position.z -= center.z;
@@ -156,8 +177,9 @@ export function getAvatarViewerHtml(opts: {
     post({ type: 'LOADED' });
   }
 
-  // ---------- Loadout (outfits, hair, accessories) ----------
+  // ---------- Loadout (tops, pants, shoes, hair, accessories) ----------
 
+  var CLOTHING = { kit: true, top: true, pants: true, shoes: true, face: true }; // skinned GLBs on the character's rig
   var pendingLoadout = [];
   var loadoutToken = 0;
   var loadoutObjects = []; // things we added, removed on the next applyLoadout
@@ -209,6 +231,16 @@ export function getAvatarViewerHtml(opts: {
   function applyRecolor(map) {
     eachMaterial(current.root, function (m) {
       Object.keys(map).forEach(function (part) { if (matches(m.name, part)) tint(m, map[part]); });
+    });
+  }
+
+  // Linear RGB factors, may exceed 1: a face item brings the body's skin to its own tone.
+  function applyTint(map, root) {
+    eachMaterial(root || current.root, function (m) {
+      Object.keys(map).forEach(function (part) {
+        var f = map[part];
+        if (matches(m.name, part) && m.color && m.color.isColor) m.color.multiply(new THREE.Color(f[0], f[1], f[2]));
+      });
     });
   }
 
@@ -332,6 +364,8 @@ export function getAvatarViewerHtml(opts: {
         mesh.bind(new THREE.Skeleton(bones, mesh.skeleton.boneInverses), mesh.bindMatrix);
         current.root.add(mesh);
         loadoutObjects.push(mesh);
+        // loaded after the loadout's tints ran: give an outfit's skin the face's tone too
+        pendingLoadout.forEach(function (it) { if (it.config && it.config.tint) applyTint(it.config.tint, mesh); });
       });
       (cfg.hide || []).forEach(function (part) {
         current.root.traverse(function (o) {
@@ -351,8 +385,9 @@ export function getAvatarViewerHtml(opts: {
     pendingLoadout.forEach(function (item) {
       var cfg = item.config || {};
       if (cfg.recolor) applyRecolor(cfg.recolor);
+      if (cfg.tint) applyTint(cfg.tint);
       if (cfg.builtin) addBuiltinAccessory(cfg);
-      else if (cfg.model_url && item.category === 'outfit') addSkinnedOutfit(cfg, token);
+      else if (cfg.model_url && CLOTHING[item.category]) addSkinnedOutfit(cfg, token);
       else if (cfg.model_url) addAttachedAccessory(cfg, token);
     });
   }
@@ -380,7 +415,9 @@ export function getAvatarViewerHtml(opts: {
 
   function playIdleClip(root, animations) {
     if (!animations || animations.length === 0) return null;
-    var clip = animations.find(function (a) { return /idle|breath|stand/i.test(a.name); }) || animations[0];
+    // a calm standing loop first: the starters' "idle" is a busy warm-up for the duel screen
+    var clip = animations.find(function (a) { return /stand|breath/i.test(a.name); })
+      || animations.find(function (a) { return /idle/i.test(a.name); }) || animations[0];
     var mixer = new THREE.AnimationMixer(root);
     mixer.clipAction(clip).play();
     return mixer;

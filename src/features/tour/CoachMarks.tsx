@@ -70,7 +70,7 @@ export const TOUR_STEPS: TourStep[] = [
   {
     target: 'tab-shop',
     title: 'Shop',
-    body: 'Spend your coins on 3D avatars, outfits and accessories. Tap to open it.',
+    body: 'Spend your coins on 3D avatars, clothes and accessories. Tap to open it.',
     goTo: 'shop',
     round: true,
   },

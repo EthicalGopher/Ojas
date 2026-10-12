@@ -43,6 +43,7 @@ import {
   Sun,
   Video,
   VideoOff,
+  PersonStanding,
 } from 'lucide-react-native';
 import { ProgressRing } from '../../../components/ui/ProgressRing';
 import {
@@ -71,6 +72,8 @@ import {
 } from '../../../utils/aiBotService';
 import { AIOpponentView } from './AIOpponentView';
 import { VersusIntro } from './VersusIntro';
+import { DuelOpponentView } from './DuelOpponentView';
+import type { AIInstructor3DHandle } from './AIInstructor3D';
 import { SimulatedOpponent } from '../../../utils/simulatedOpponent';
 import { getAvatarUri } from '../../../components/Avatar';
 
@@ -93,58 +96,18 @@ interface MatchCameraScreenProps {
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
-const OPPONENT_STREAM_HTML = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { width: 100%; height: 100%; overflow: hidden; background-color: #0C0F14; }
-    #container { position: relative; width: 100vw; height: 100vh; display: flex; justify-content: center; align-items: center; background-color: #0C0F14; }
-    #stream-canvas { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
-  </style>
-</head>
-<body>
-  <div id="container">
-    <canvas id="stream-canvas"></canvas>
-  </div>
-  <script>
-    const canvas = document.getElementById('stream-canvas');
-    const ctx = canvas.getContext('2d', { alpha: false });
-    const img = new Image();
-    let isReady = true;
-
-    img.onload = function() {
-      if (canvas.width !== img.naturalWidth && img.naturalWidth > 0) {
-        canvas.width = img.naturalWidth;
-        canvas.height = img.naturalHeight;
-      }
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      isReady = true;
-    };
-
-    window.updateFrame = function(dataUrl) {
-      if (isReady && dataUrl) {
-        isReady = false;
-        img.src = dataUrl;
-      }
-    };
-  </script>
-</body>
-</html>
-`;
-
 export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
   onClose,
   onRequeue,
   selectedModel = 'medium',
-  mode = 'faceoff',
+  mode: requestedMode = 'quickjoin',
   opponentUsername = 'opponent',
   selfUsername = 'user',
   exerciseId = '1',
   simulatedOpponent = null,
 }) => {
+  // Faceoff and Quick Duel are one 1v1 duel now; old faceoff invites open it too.
+  const mode: MatchMode = requestedMode === 'faceoff' ? 'quickjoin' : requestedMode;
   // Simulated opponents play through the normal PvP screen, driven by the AI rep simulation.
   const isSimulated = !!simulatedOpponent && mode !== 'ai_battle';
   const usesAiSimulation = mode === 'ai_battle' || isSimulated;
@@ -152,7 +115,6 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
   // Versus card replaces the old "syncing players" loading screen and fades out once synced.
   const [showVersus, setShowVersus] = useState(true);
   const [hasPermission, setHasPermission] = useState<boolean>(false);
-  const [hasOpponentStream, setHasOpponentStream] = useState(false);
   const [selfScore, setSelfScore] = useState(0);
   const [opponentScore, setOpponentScore] = useState(0);
   const [ffaLeaderboard, setFfaLeaderboard] = useState<FFALeaderboardPlayer[]>([]);
@@ -170,8 +132,15 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
   const [isSkeletonVisible, setIsSkeletonVisible] = useState(true);
   // AI squat duel: the 3D AI fills the screen. The player's camera keeps running (it counts the
   // reps) behind it, or in a small corner window when switched on from the floating widget.
-  const aiFullscreen = mode === 'ai_battle' && exerciseId === '1';
+  // 1v1 duels work the same way: the opponent's 3D character fills the screen.
+  const aiFullscreen = (mode === 'ai_battle' && exerciseId === '1') || mode === 'quickjoin';
+  // Live moves (floating widget, off by default): the opponent's character mirrors their real pose.
+  const [liveMoves, setLiveMoves] = useState(false);
+  const liveMovesRef = useRef(false);
+  const opponentWantsPoseRef = useRef(false);
+  const duelRef = useRef<AIInstructor3DHandle>(null);
   const [showSelfCam, setShowSelfCam] = useState(false);
+  const positioning = matchPhase === 'loading_resources' || matchPhase === 'setup_countdown';
 
   // Animated values for setup phase choreography
   const setupPositionAnim = useRef(new Animated.Value(0)).current; // 0 = center (large), 1 = top (small)
@@ -180,8 +149,6 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
   const matchEndedRef = useRef(false);
   const recordedResultRef = useRef(false);
   const webViewRef = useRef<WebView>(null);
-  const opponentWebViewRef = useRef<WebView>(null);
-  const hasReceivedFirstOpponentFrame = useRef(false);
   const matchPhaseRef = useRef<MatchPhase>('loading_resources');
   const [dimensions, setDimensions] = useState(() => Dimensions.get('window'));
   const [autoCountdown, setAutoCountdown] = useState<number>(5);
@@ -445,6 +412,7 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
     const removeMatchListener = addMatchMessageListener(async (msg: any) => {
       if (msg.type === 'peer_ready') {
         setOpponentReady(true);
+        if (liveMovesRef.current) sendMatchMessage({ type: 'frame', data: 'pose_sub:1' });
       }
       if (msg.type === 'ffa_ready_update') {
         if (typeof msg.ready_count === 'number') setFfaReadyCount(msg.ready_count);
@@ -468,12 +436,17 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
           setTimeLeft(0);
         }
       }
-      if (!matchEndedRef.current && mode === 'faceoff' && msg.type === 'frame' && msg.data) {
-        if (!hasReceivedFirstOpponentFrame.current) {
-          hasReceivedFirstOpponentFrame.current = true;
-          setHasOpponentStream(true);
+      // The 'frame' channel (it carried faceoff video) now carries live moves:
+      //   'pose_sub:1' / 'pose_sub:0'  the opponent wants our pose (their toggle)
+      //   'pose:<76 ints>'             one pose of theirs, see LIVE_JOINTS
+      if (!matchEndedRef.current && msg.type === 'frame' && typeof msg.data === 'string') {
+        if (msg.data.startsWith('pose:')) {
+          const p = msg.data.slice(5).split(',').map(Number);
+          if (p.length === 76 && p.every((v: number) => Number.isFinite(v))) duelRef.current?.pushPose(p);
+        } else if (msg.data.startsWith('pose_sub:')) {
+          opponentWantsPoseRef.current = msg.data === 'pose_sub:1';
+          webViewRef.current?.injectJavaScript(`window.__poseStream = ${opponentWantsPoseRef.current}; true;`);
         }
-        opponentWebViewRef.current?.injectJavaScript(`window.updateFrame && window.updateFrame('${msg.data}'); true;`);
       }
 
       if (msg.type === 'game_end') {
@@ -701,13 +674,14 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
           setVisibility(data.visibility);
         }
 
+        // Our pose, for an opponent who switched live moves on
         if (
           !matchEndedRef.current &&
-          mode === 'faceoff' &&
-          data.type === 'camera_frame' &&
-          data.frame
+          opponentWantsPoseRef.current &&
+          data.type === 'POSE_WORLD' &&
+          Array.isArray(data.p)
         ) {
-          sendMatchMessage({ type: 'frame', data: data.frame });
+          sendMatchMessage({ type: 'frame', data: 'pose:' + data.p.join(',') });
         }
 
         if (data.type === 'POSE_HOLD_TIME' && typeof data.holdSeconds === 'number') {
@@ -911,7 +885,7 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
         },
         exerciseId,
         'Squats',
-        mode === 'faceoff' ? 'faceoff' : 'quickjoin'
+        'quickjoin'
       );
       Alert.alert('Challenge Sent', `Direct 1v1 battle invite sent to @${opponentUsername}!`);
     } catch (e: any) {
@@ -936,6 +910,13 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
     }
   };
 
+  const handleToggleLiveMoves = () => {
+    const on = !liveMovesRef.current;
+    liveMovesRef.current = on;
+    setLiveMoves(on);
+    sendMatchMessage({ type: 'frame', data: on ? 'pose_sub:1' : 'pose_sub:0' });
+  };
+
   const htmlBundle = getPoseHtmlBundle(exerciseId || 'squats', true);
 
   return (
@@ -943,7 +924,7 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
       <StatusBar hidden />
 
       {/* Main Split / Full Camera Feeds */}
-      {mode === 'quickjoin' || mode === 'ffa' ? (
+      {mode === 'ffa' ? (
         <View style={styles.yourContainerFull}>
           <WebView
             ref={webViewRef}
@@ -1002,27 +983,18 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
                 isMatchEnded={matchPhase === 'match_ended'}
               />
             ) : (
-              <>
-                <WebView
-                  ref={opponentWebViewRef}
-                  source={{
-                    html: OPPONENT_STREAM_HTML,
-                  }}
-                  style={StyleSheet.absoluteFill}
-                  javaScriptEnabled
-                  domStorageEnabled
-                  scrollEnabled={false}
-                  bounces={false}
-                  overScrollMode="never"
-                  originWhitelist={['*']}
-                />
-                {!hasOpponentStream && (
-                  <View style={[StyleSheet.absoluteFill, styles.waitingOpponentBox]}>
-                    <ActivityIndicator size="small" color="#C8B6FF" />
-                    <Text style={styles.waitingOpponentText}>@{opponentUsername}</Text>
-                  </View>
-                )}
-              </>
+              <DuelOpponentView
+                ref={duelRef}
+                opponentUsername={opponentUsername}
+                isSimulated={isSimulated}
+                botState={aiBotState}
+                opponentScore={opponentScore}
+                exerciseId={exerciseId}
+                isMatchActive={matchPhase === 'active_match'}
+                isMatchEnded={matchPhase === 'match_ended'}
+                opponentWon={opponentScore > selfScore}
+                live={liveMoves}
+              />
             )}
           </View>
 
@@ -1032,10 +1004,16 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
               styles.yourContainer,
               aiFullscreen
                 ? [
-                    styles.selfCamWidget,
-                    isLandscape ? styles.selfCamWidgetLandscape : null,
-                    // Hidden = kept running underneath the opaque AI view, so pose tracking never stops.
-                    { zIndex: showSelfCam ? 2 : 0, elevation: showSelfCam ? 6 : 0 },
+                    // Getting into position: your camera fills the screen so you can see whether you
+                    // are too close, too far or out of frame; the opponent loads behind it.
+                    positioning
+                      ? [StyleSheet.absoluteFill, { zIndex: 3, elevation: 8 }]
+                      : [
+                          styles.selfCamWidget,
+                          isLandscape ? styles.selfCamWidgetLandscape : null,
+                          // Hidden = kept running underneath the opaque 3D view, so pose tracking never stops.
+                          { zIndex: showSelfCam ? 2 : 0, elevation: showSelfCam ? 6 : 0 },
+                        ],
                   ]
                 : {
                     width: isLandscape ? '50%' : '100%',
@@ -1392,6 +1370,8 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
         isSkeletonVisible={isSkeletonVisible}
         onToggleSelfCam={aiFullscreen ? () => setShowSelfCam((v) => !v) : undefined}
         isSelfCamVisible={showSelfCam}
+        onToggleLiveMoves={mode === 'quickjoin' ? handleToggleLiveMoves : undefined}
+        isLiveMoves={liveMoves}
         onTryAgain={handleRestartMatch}
         onToggleAutoRematch={toggleAutoRematch}
         autoRematch={autoRematch}
@@ -1419,9 +1399,12 @@ interface DraggableWidgetProps {
   onToggleOrientation: () => void;
   onToggleSkeleton?: () => void;
   isSkeletonVisible?: boolean;
-  /** Shows / hides the player's camera window (AI squat duel only). */
+  /** Shows / hides the player's camera window (AI squat duel and 1v1 duel). */
   onToggleSelfCam?: () => void;
   isSelfCamVisible?: boolean;
+  /** 1v1 duel: the opponent's character mirrors their real moves (off by default). */
+  onToggleLiveMoves?: () => void;
+  isLiveMoves?: boolean;
   onTryAgain: () => void;
   onToggleAutoRematch: () => void;
   autoRematch: boolean;
@@ -1439,6 +1422,8 @@ const DraggableActionsWidget: React.FC<DraggableWidgetProps> = ({
   isSkeletonVisible = true,
   onToggleSelfCam,
   isSelfCamVisible = false,
+  onToggleLiveMoves,
+  isLiveMoves = false,
   onTryAgain,
   onToggleAutoRematch,
   autoRematch,
@@ -1548,6 +1533,17 @@ const DraggableActionsWidget: React.FC<DraggableWidgetProps> = ({
                 ) : (
                   <VideoOff size={16} color="#94A3B8" />
                 )}
+              </TouchableOpacity>
+            )}
+
+            {/* Live moves on / off (1v1 duel): the rival copies the opponent's real pose */}
+            {onToggleLiveMoves && (
+              <TouchableOpacity
+                style={[styles.widgetActionBtn, !isLiveMoves && styles.mutedActionBtn]}
+                activeOpacity={0.75}
+                onPress={onToggleLiveMoves}
+              >
+                <PersonStanding size={16} color={isLiveMoves ? '#EF4444' : '#94A3B8'} />
               </TouchableOpacity>
             )}
 
@@ -2078,17 +2074,6 @@ const styles = StyleSheet.create({
   opponentImage: {
     width: '100%',
     height: '100%',
-  },
-  waitingOpponentBox: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 8,
-  },
-  waitingOpponentText: {
-    color: '#8E95A0',
-    fontSize: 12,
-    fontWeight: '700',
   },
   yourContainer: {
     flex: 1,

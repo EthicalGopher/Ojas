@@ -14,7 +14,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import type { ModelComplexity } from '../utils/deviceSpecs';
 import { getDeviceInfo, getRecommendedModel } from '../utils/deviceSpecs';
 import {
-  addMatchMessageListener,
   connectMatchSocket,
   connectPresenceSocket,
   disconnectMatchSocket,
@@ -189,26 +188,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     }
   };
 
-  const handleJoinQueue = (exercise: ExerciseItem, queue: 'faceoff' | 'quick_start' | 'ffa') => {
+  const handleJoinQueue = (exercise: ExerciseItem, queue: 'quick_start' | 'ffa') => {
     const userId =
       currentUser?.user_metadata?.username ||
       currentUser?.email ||
       currentUser?.user?.id ||
       currentUser?.id ||
       `Player_${Math.floor(1000 + Math.random() * 9000)}`;
-
-    if (queue === 'faceoff') {
-      // Live video duel needs a real opponent, so it never falls back to a bot.
-      onEnterQueue('FINDING OPPONENT', 'Searching for a worthy rival in the queue...', undefined, undefined, false);
-      connectMatchSocket(userId, `${exercise.id}_faceoff`);
-      const cleanup = addMatchMessageListener((msg) => {
-        if (msg.type === 'matched') {
-          onOpenMatchCamera(msg.opponent, 'faceoff', exercise.id);
-          cleanup();
-        }
-      });
-      return;
-    }
 
     if (queue === 'ffa') {
       onEnterQueue(

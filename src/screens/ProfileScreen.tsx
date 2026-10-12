@@ -84,6 +84,7 @@ import { supabase } from '../utils/supabase';
 import { useUserStore } from '../store/userStore';
 import { AvatarViewer3D } from '../features/avatar/components/AvatarViewer3D';
 import { CoinDot, RARITY_COLORS } from '../features/avatar/components/AvatarShopScreen';
+import { GradientFill } from '../features/squad/components/SquadUI';
 import {
   AvatarModel,
   BUNDLED_AVATARS,
@@ -152,7 +153,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const openShop = useUserStore((s) => s.openShop);
   const openTutorial = useUserStore((s) => s.openTutorial);
   const equippedAvatar = findAvatar(avatarCatalog, getEquippedAvatarId(storeProfile));
-  const equippedItems = loadoutItems(avatarCatalog, getLoadout(storeProfile, equippedAvatar.id), equippedAvatar.id);
+  const equippedItems = loadoutItems(avatarCatalog, getLoadout(storeProfile, equippedAvatar.id), equippedAvatar);
   const ownedAvatarCount = avatarCatalog.filter((m) => isAvatarOwned(storeProfile, m)).length;
   const coinBalance = computeCoinBalance(storeProfile);
 
@@ -661,24 +662,26 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                     <Text style={styles.coinChipText}>{coinBalance.toLocaleString()}</Text>
                   </View>
                 </View>
+                {/* PoGo-style trainer stage: sky, ground, the avatar and a floating name plate */}
                 <View style={styles.avatarStage}>
-                  <AvatarViewer3D model={equippedAvatar} items={equippedItems} style={{ flex: 1 }} interactive={false} />
-                </View>
-                <View style={styles.avatarInfoRow}>
-                  <Text style={styles.avatarName} numberOfLines={1}>{equippedAvatar.name}</Text>
-                  <Text style={[styles.avatarRarity, { color: RARITY_COLORS[equippedAvatar.rarity] }]}>
-                    {equippedAvatar.rarity}
-                  </Text>
-                  <Text style={styles.sectionMeta}>{ownedAvatarCount} owned</Text>
+                  <GradientFill colors={['#46C9C0', '#D7F5EE']} vertical />
+                  <View style={styles.avatarGround} pointerEvents="none" />
+                  <AvatarViewer3D model={equippedAvatar} items={equippedItems} style={{ flex: 1, marginBottom: 40 }} interactive={false} />
+                  <View style={styles.avatarPlate}>
+                    <Text style={styles.avatarName} numberOfLines={1}>{equippedAvatar.name}</Text>
+                    <View style={[styles.avatarRarityDot, { backgroundColor: RARITY_COLORS[equippedAvatar.rarity] }]} />
+                    <Text style={styles.avatarRarity}>{equippedAvatar.rarity}</Text>
+                    <Text style={styles.avatarOwned}>{ownedAvatarCount} items</Text>
+                  </View>
                 </View>
                 <View style={styles.avatarActions}>
                   <TouchableOpacity style={styles.avatarSecondaryBtn} activeOpacity={0.85} onPress={() => openShop('owned')}>
-                    <PersonStanding size={14} color={colors.text} />
-                    <Text style={styles.avatarSecondaryText}>Change</Text>
+                    <PersonStanding size={16} color="#13877D" strokeWidth={2.5} />
+                    <Text style={styles.avatarSecondaryText}>Customize</Text>
                   </TouchableOpacity>
                   <TouchableOpacity style={styles.avatarPrimaryBtn} activeOpacity={0.85} onPress={() => openShop('all')}>
-                    <ShoppingBag size={14} color={colors.onAccent} />
-                    <Text style={styles.avatarPrimaryText}>Avatar Shop</Text>
+                    <ShoppingBag size={16} color="#FFFFFF" strokeWidth={2.5} />
+                    <Text style={styles.avatarPrimaryText}>Style Shop</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -1090,15 +1093,28 @@ const useStyles = makeStyles((colors: ThemeColors) =>
   StyleSheet.create({
   coinChip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 9, paddingVertical: 4, borderRadius: radius.pill, backgroundColor: colors.surfaceHi },
   coinChipText: { color: colors.text, fontSize: 11.5, fontWeight: '900' },
-  avatarStage: { height: 280, marginTop: 14, borderRadius: radius.lg, backgroundColor: colors.surfaceSunken, overflow: 'hidden' },
-  avatarInfoRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 14 },
-  avatarName: { flexShrink: 1, color: colors.text, fontSize: 16, fontWeight: '900' },
-  avatarRarity: { flex: 1, fontSize: 11, fontWeight: '800', textTransform: 'capitalize' },
+  avatarStage: { height: 320, marginTop: 14, borderRadius: 22, overflow: 'hidden' },
+  avatarGround: { position: 'absolute', left: '-25%', right: '-25%', bottom: -110, height: 200, borderRadius: 300, backgroundColor: '#9BE3C9' },
+  avatarPlate: {
+    position: 'absolute', left: 12, right: 12, bottom: 12, height: 46, paddingHorizontal: 14, borderRadius: 23,
+    backgroundColor: '#FFFFFF', flexDirection: 'row', alignItems: 'center', gap: 7,
+    elevation: 4, shadowColor: '#0B3B36', shadowOpacity: 0.2, shadowRadius: 6, shadowOffset: { width: 0, height: 2 },
+  },
+  avatarName: { flexShrink: 1, color: '#1C2B2A', fontSize: 16, fontWeight: '900' },
+  avatarRarityDot: { width: 8, height: 8, borderRadius: 4, marginLeft: 2 },
+  avatarRarity: { flex: 1, color: '#5E7270', fontSize: 12, fontWeight: '800', textTransform: 'capitalize' },
+  avatarOwned: { color: '#8AA09D', fontSize: 12, fontWeight: '700' },
   avatarActions: { flexDirection: 'row', gap: 10, marginTop: 14 },
-  avatarSecondaryBtn: { flex: 1, height: 42, borderRadius: radius.pill, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: colors.surfaceHi },
-  avatarSecondaryText: { color: colors.text, fontSize: 13, fontWeight: '800' },
-  avatarPrimaryBtn: { flex: 1.4, height: 42, borderRadius: radius.pill, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: colors.accent },
-  avatarPrimaryText: { color: colors.onAccent, fontSize: 13, fontWeight: '900' },
+  avatarSecondaryBtn: {
+    flex: 1, height: 48, borderRadius: 24, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7,
+    backgroundColor: '#E4F3F1', borderBottomWidth: 4, borderBottomColor: '#C6E2DE',
+  },
+  avatarSecondaryText: { color: '#13877D', fontSize: 14, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 0.3 },
+  avatarPrimaryBtn: {
+    flex: 1, height: 48, borderRadius: 24, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7,
+    backgroundColor: '#1FB5A8', borderBottomWidth: 4, borderBottomColor: '#13877D',
+  },
+  avatarPrimaryText: { color: '#FFFFFF', fontSize: 14, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 0.3 },
   themeOptionTextActive: { color: colors.onAccent },
   themeOptionText: { color: colors.textMuted, fontSize: 13, fontWeight: '800' },
   themeOptionActive: { backgroundColor: colors.accent },

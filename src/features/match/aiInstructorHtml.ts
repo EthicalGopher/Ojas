@@ -12,21 +12,44 @@
 // Behind the transparent canvas sits a gym photo (web/backdrops/, see CREDITS.md there), picked
 // at random per match, with a vignette so the scoreboard and widgets stay readable.
 //
+// The same page shows a 1v1 duel opponent: their shop character (modelUrl) wearing their face
+// and outfit (loadout: { category, config } items, as in avatarViewerHtml.ts: skinned GLBs rebound
+// by bone name, `hide` material parts, `tint` linear multipliers).
+//
 // RN -> page: window.setAnim(mode, progress)   mode: 'squat' | 'idle' | 'rest' | 'cheer'
+//             window.setLive(on)                live moves: follow the opponent's streamed pose
+//             window.setPose(p)                 19 joints x [x, y, z cm, visibility 0-9], MediaPipe
+//                                               world landmarks (see LIVE_JOINTS), about 12 per second
 // page -> RN: { type: 'PROGRESS', progress } | { type: 'LOADED' } | { type: 'ERROR', message }
 //             | { type: 'HEARTBEAT' } every 2 s while frames render (RN reloads the view if they stop)
 
-export type AiInstructorMode = 'squat' | 'idle' | 'rest' | 'cheer';
+/** stand: the duel starters' calm loop (the instructor has no such clip and keeps the last mode). */
+export type AiInstructorMode = 'squat' | 'idle' | 'rest' | 'cheer' | 'stand';
 
-// LocalAssetServer marks assets immutable for a year, so a WebView kept playing an old copy of
-// the model after an app update. A per-launch query makes it fetch the APK's current files.
-const BUST = `?v=${Date.now().toString(36)}`;
+import { ASSET_BUST } from '../../utils/avatarShopService';
+
+// Per-launch query, shared with the shop / VS viewers (see ASSET_BUST).
+export const BUST = ASSET_BUST;
 export const AI_INSTRUCTOR_MODEL_URL = `http://127.0.0.1:8888/avatars/instructor_ai.glb${BUST}`;
 export const AI_BACKDROPS = ['gym_turf', 'gym_rig', 'gym_hall'].map((n) => `/backdrops/${n}.jpg${BUST}`);
+
+/** MediaPipe pose indices streamed for live moves, in order (CameraScreen POSE_WORLD). */
+export const LIVE_JOINTS = [0, 7, 8, 11, 12, 13, 14, 15, 16, 19, 20, 23, 24, 25, 26, 27, 28, 31, 32];
+
+export interface AiLoadoutItem {
+  category: string;
+  config: {
+    model_url?: string;
+    hide?: string[];
+    tint?: Record<string, [number, number, number]>;
+    recolor?: Record<string, string>;
+  };
+}
 
 export function getAiInstructorHtml(
   modelUrl: string = AI_INSTRUCTOR_MODEL_URL,
   backdrop: string = AI_BACKDROPS[Math.floor(Math.random() * AI_BACKDROPS.length)],
+  loadout: AiLoadoutItem[] = [],
 ): string {
   return `<!DOCTYPE html>
 <html>
@@ -58,6 +81,7 @@ export function getAiInstructorHtml(
   function post(msg) {
     if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage(JSON.stringify(msg));
   }
+  window.onerror = function (m, src, line) { post({ type: 'ERROR', message: 'js: ' + m + ' @' + line }); };
   if (!window.THREE || !THREE.GLTFLoader) {
     post({ type: 'ERROR', message: '3D engine failed to load' });
     return;
@@ -141,6 +165,176 @@ export function getAiInstructorHtml(
     root.position.y -= box.min.y - 0.03; // toe bones sit a little above the soles
   }
 
+  // ---------- Loadout: face / outfit GLBs on the same Bip01 skeleton ----------
+  var LOADOUT = ${JSON.stringify(loadout)};
+  var model = null, floorY = 0;
+  function matches(name, part) { return (name || '').toLowerCase().indexOf(part.toLowerCase()) !== -1; }
+  var TINTS = LOADOUT.map(function (it) { return (it.config || {}).tint; }).filter(Boolean);
+  function tintMesh(o) {
+    (Array.isArray(o.material) ? o.material : [o.material]).forEach(function (m) {
+      if (!m || !m.color) return;
+      TINTS.forEach(function (t) {
+        Object.keys(t).forEach(function (part) {
+          if (matches(m.name, part)) m.color.multiply(new THREE.Color(t[part][0], t[part][1], t[part][2]));
+        });
+      });
+    });
+  }
+  function applyLoadout(root) {
+    // shop colour items: a top / pants / shoes colour on the character's own materials
+    LOADOUT.forEach(function (it) {
+      var rc = (it.config || {}).recolor;
+      if (!rc) return;
+      root.traverse(function (o) {
+        if (!o.isMesh) return;
+        (Array.isArray(o.material) ? o.material : [o.material]).forEach(function (m) {
+          Object.keys(rc).forEach(function (part) {
+            if (m && m.color && matches(m.name, part)) m.color.copy(new THREE.Color(rc[part]).convertSRGBToLinear());
+          });
+        });
+      });
+    });
+    root.traverse(function (o) { if (o.isMesh) tintMesh(o); });
+    LOADOUT.forEach(function (it) {
+      var c = it.config || {};
+      if (!c.model_url) return;
+      new THREE.GLTFLoader().load(c.model_url, function (g) {
+        var byName = {};
+        root.traverse(function (o) { if (o.isBone) byName[o.name] = o; });
+        var meshes = [];
+        g.scene.traverse(function (o) { if (o.isSkinnedMesh) meshes.push(o); });
+        meshes.forEach(function (mesh) {
+          var bones = mesh.skeleton.bones.map(function (b) { return byName[b.name] || b; });
+          mesh.frustumCulled = false;
+          mesh.userData.loadout = true;
+          mesh.bind(new THREE.Skeleton(bones, mesh.skeleton.boneInverses), mesh.bindMatrix);
+          root.add(mesh);
+          tintMesh(mesh);
+        });
+        (c.hide || []).forEach(function (part) {
+          root.traverse(function (o) {
+            if (o.isMesh && !o.userData.loadout && o.material && matches(o.material.name, part)) o.visible = false;
+          });
+        });
+      });
+    });
+  }
+
+  // ---------- Live moves: retarget streamed MediaPipe world landmarks onto the Bip01 rig ----------
+  var REST = [], B = {}, FRAMES = {};
+  var J = { nose: 0, lEar: 1, rEar: 2, lSh: 3, rSh: 4, lEl: 5, rEl: 6, lWr: 7, rWr: 8, lIdx: 9, rIdx: 10,
+            lHip: 11, rHip: 12, lKn: 13, rKn: 14, lAn: 15, rAn: 16, lFt: 17, rFt: 18 };
+  var NJ = 19;
+  var target = null, smooth = null, liveOn = false, liveUntil = 0;
+  var _v1 = new THREE.Vector3(), _v2 = new THREE.Vector3(), _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion();
+  function boneKey(n) { return n.replace(/[^a-z0-9]/gi, '').toLowerCase(); }
+  function captureRest(root) {
+    root.traverse(function (o) {
+      if (!o.isBone) return;
+      B[boneKey(o.name)] = o;
+      REST.push({ b: o, q: o.quaternion.clone(), p: o.position.clone() });
+    });
+    root.updateMatrixWorld(true);
+    // body frames, in each bone's own space: across = character's left, up = toward the head
+    function wp(n) { return B[n] ? B[n].getWorldPosition(new THREE.Vector3()) : null; }
+    function frame(bn, across, up) {
+      var b = B[bn];
+      if (!b || !across || !up) return;
+      var qi = b.getWorldQuaternion(new THREE.Quaternion()).invert();
+      FRAMES[bn] = { a: across.clone().normalize().applyQuaternion(qi), u: up.clone().normalize().applyQuaternion(qi) };
+    }
+    var up = wp('bip01neck') && wp('bip01pelvis') ? wp('bip01neck').sub(wp('bip01pelvis')) : null;
+    var hips = wp('bip01lthigh') && wp('bip01rthigh') ? wp('bip01lthigh').sub(wp('bip01rthigh')) : null;
+    var shoulders = wp('bip01lupperarm') && wp('bip01rupperarm') ? wp('bip01lupperarm').sub(wp('bip01rupperarm')) : null;
+    frame('bip01pelvis', hips, up && up.clone());
+    frame('bip01spine2', shoulders, up && up.clone());
+    frame('bip01head', shoulders && shoulders.clone(), new THREE.Vector3(0, 1, 0));
+  }
+  function lm(i, out) { return out.set(smooth[i * 4], smooth[i * 4 + 1], smooth[i * 4 + 2]); }
+  function vis(i) { return target[i * 4 + 3]; }
+  function mid(a, b, out) { lm(a, out); return out.add(lm(b, _v2)).multiplyScalar(0.5); }
+  function setWorldQ(b, q) {
+    b.parent.getWorldQuaternion(_q2).invert();
+    b.quaternion.copy(_q2.multiply(q));
+    b.updateMatrixWorld(true);
+  }
+  function basis(a, u) {
+    var x = a.clone().normalize();
+    var y = u.clone().sub(x.clone().multiplyScalar(u.dot(x))).normalize();
+    var z = new THREE.Vector3().crossVectors(x, y);
+    return new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(x, y, z));
+  }
+  function alignFrame(bn, across, up) {
+    var b = B[bn], f = FRAMES[bn];
+    if (!b || !f) return;
+    var q = basis(across, up).multiply(basis(f.a, f.u).invert());
+    setWorldQ(b, q);
+  }
+  function aim(bn, cn, dir) {
+    var b = B[bn], c = B[cn];
+    if (!b || !c || dir.lengthSq() < 1e-6) return;
+    var from = c.getWorldPosition(new THREE.Vector3()).sub(b.getWorldPosition(new THREE.Vector3())).normalize();
+    var q = new THREE.Quaternion().setFromUnitVectors(from, dir.clone().normalize());
+    setWorldQ(b, q.multiply(b.getWorldQuaternion(_q)));
+  }
+  function seg(a, b) { return lm(b, new THREE.Vector3()).sub(lm(a, new THREE.Vector3())); }
+  function applyLive() {
+    REST.forEach(function (r) { r.b.quaternion.copy(r.q); r.b.position.copy(r.p); });
+    model.position.y = floorY;
+    model.updateMatrixWorld(true);
+    if (restLow === null) restLow = lowestFoot();
+    var hipMid = mid(J.lHip, J.rHip, new THREE.Vector3());
+    var shMid = mid(J.lSh, J.rSh, new THREE.Vector3());
+    var up = shMid.clone().sub(hipMid);
+    alignFrame('bip01pelvis', seg(J.rHip, J.lHip), up);
+    alignFrame('bip01spine2', seg(J.rSh, J.lSh), up);
+    if (vis(J.lEar) > 3 && vis(J.rEar) > 3) {
+      var earMid = mid(J.lEar, J.rEar, new THREE.Vector3());
+      alignFrame('bip01head', seg(J.rEar, J.lEar), earMid.sub(shMid));
+    }
+    aim('bip01lupperarm', 'bip01lforearm', seg(J.lSh, J.lEl));
+    aim('bip01lforearm', 'bip01lhand', seg(J.lEl, J.lWr));
+    aim('bip01lhand', 'bip01lfinger2', seg(J.lWr, J.lIdx));
+    aim('bip01rupperarm', 'bip01rforearm', seg(J.rSh, J.rEl));
+    aim('bip01rforearm', 'bip01rhand', seg(J.rEl, J.rWr));
+    aim('bip01rhand', 'bip01rfinger2', seg(J.rWr, J.rIdx));
+    aim('bip01lthigh', 'bip01lcalf', seg(J.lHip, J.lKn));
+    aim('bip01lcalf', 'bip01lfoot', seg(J.lKn, J.lAn));
+    aim('bip01lfoot', 'bip01ltoe0', seg(J.lAn, J.lFt));
+    aim('bip01rthigh', 'bip01rcalf', seg(J.rHip, J.rKn));
+    aim('bip01rcalf', 'bip01rfoot', seg(J.rKn, J.rAn));
+    aim('bip01rfoot', 'bip01rtoe0', seg(J.rAn, J.rFt));
+    // feet back on the floor: the streamed pose is hip-centred, so a squat would float
+    var low = lowestFoot();
+    if (isFinite(low)) model.position.y += restLow - low;
+  }
+  function lowestFoot() {
+    var low = Infinity;
+    ['bip01lfoot', 'bip01rfoot', 'bip01ltoe0', 'bip01rtoe0'].forEach(function (n) {
+      if (B[n]) low = Math.min(low, B[n].getWorldPosition(_v1).y);
+    });
+    return low;
+  }
+  var wasLive = false;
+  var restLow = null; // feet height in the rest pose, measured on the first live frame
+  window.setLive = function (on) { liveOn = !!on; };
+  window.setPose = function (p) {
+    if (!p || p.length < NJ * 4) return;
+    // MediaPipe world: metres, y down, z toward the camera negative -> three: y up, facing +z
+    var t = new Array(NJ * 4);
+    for (var i = 0; i < NJ; i++) {
+      t[i * 4] = p[i * 4] / 100;
+      t[i * 4 + 1] = -p[i * 4 + 1] / 100;
+      t[i * 4 + 2] = -p[i * 4 + 2] / 100;
+      t[i * 4 + 3] = p[i * 4 + 3];
+    }
+    var torso = Math.min(t[J.lSh * 4 + 3], t[J.rSh * 4 + 3], t[J.lHip * 4 + 3], t[J.rHip * 4 + 3]);
+    if (torso < 3) return; // body not in view: keep the clips
+    if (!smooth) smooth = t.slice();
+    target = t;
+    liveUntil = performance.now() + 1500;
+  };
+
   new THREE.GLTFLoader().load(
     ${JSON.stringify(modelUrl)},
     function (gltf) {
@@ -148,6 +342,7 @@ export function getAiInstructorHtml(
       root.traverse(function (o) {
         if (o.isMesh) o.frustumCulled = false; // skinned bounds don't follow the squat
       });
+      captureRest(root);
       mixer = new THREE.AnimationMixer(root);
       gltf.animations.forEach(function (clip) {
         var a = mixer.clipAction(clip);
@@ -169,6 +364,9 @@ export function getAiInstructorHtml(
       pivot.rotation.y = YAW;
       pivot.add(root);
       scene.add(pivot);
+      model = root;
+      floorY = root.position.y;
+      applyLoadout(root);
       // for remote debugging (chrome://inspect): window.__ai.state()
       window.__ai = { actions: actions, weights: weights, state: function () {
         return { mode: mode, shown: shown, w: weights, t: Object.keys(actions).map(function (k) {
@@ -209,6 +407,20 @@ export function getAiInstructorHtml(
     var dt = Math.min(clock.getDelta(), 0.1);
     // Progress arrives every 100 ms; ease toward it so the motion stays smooth at 60 fps.
     shown += (target - shown) * (1 - Math.exp(-dt * 14));
+    var live = liveOn && model && target && now < liveUntil;
+    if (!live && wasLive) {
+      // hand back to the clips from the rest pose (the mixer only rewrites bones whose values change)
+      REST.forEach(function (r) { r.b.quaternion.copy(r.q); r.b.position.copy(r.p); });
+      model.position.y = floorY;
+    }
+    wasLive = live;
+    if (live) {
+      var k = 1 - Math.exp(-dt * 15);
+      for (var i = 0; i < smooth.length; i++) smooth[i] += (target[i] - smooth[i]) * k;
+      applyLive();
+      renderer.render(scene, camera);
+      return;
+    }
     if (mixer) {
       var sq = actions.squat;
       if (sq) sq.time = Math.max(0, Math.min(1, shown)) * sq.getClip().duration * 0.9999;

@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Easing, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import { Bot, Swords, Users, Zap } from 'lucide-react-native';
-import { Avatar, getAvatarUri } from '../../../components/Avatar';
+import { getAvatarUri } from '../../../components/Avatar';
 import { TierIcon } from '../../../components/TierIcon';
 import { RankEmblem, rankTierFromTitle, tierNameFromTitle } from '../../../components/RankEmblem';
 import { useGameStats } from '../../../hooks/useGameStats';
@@ -12,14 +12,22 @@ import { computeTotalXp, levelFromXp } from '../../../utils/gamification';
 import { getBotByName } from '../../../utils/aiBotService';
 import type { SimulatedOpponent } from '../../../utils/simulatedOpponent';
 import type { MatchMode } from './MatchCameraScreen';
+import { AvatarViewer3D } from '../../avatar/components/AvatarViewer3D';
+import {
+  AI_RIVAL_MODEL,
+  AvatarModel,
+  BUNDLED_AVATARS,
+  lookForName,
+  lookOf,
+} from '../../../utils/avatarShopService';
 
 // Keep the card up at least this long so the entrance animation always plays out.
 const MIN_SHOW_MS = 2400;
 const FIGHT_MS = 700;
 
 const MODE_LABELS: Record<MatchMode, string> = {
-  quickjoin: 'QUICK DUEL',
-  faceoff: 'FACEOFF',
+  quickjoin: '1V1 DUEL',
+  faceoff: '1V1 DUEL',
   ffa: 'BATTLE GROUND',
   ai_battle: 'AI DUEL',
 };
@@ -38,6 +46,8 @@ const EXERCISE_NAMES: Record<string, string> = {
 
 interface OpponentCard {
   name: string;
+  /** Their shop character and loadout (real players: from their profile). */
+  look?: { equipped_avatar_id?: string | null; equipped_items?: any } | null;
   avatarUrl?: string | null;
   avatarConfig?: any;
   level?: number;
@@ -112,6 +122,7 @@ export const VersusIntro: React.FC<VersusIntroProps> = ({
         const lv = levelFromXp(computeTotalXp(data as any));
         setOpponent((prev) => ({
           ...prev,
+          look: { equipped_avatar_id: data.equipped_avatar_id, equipped_items: data.equipped_items },
           avatarUrl: data.avatar_url,
           avatarConfig: data.avatar_config,
           level: lv.level,
@@ -122,6 +133,21 @@ export const VersusIntro: React.FC<VersusIntroProps> = ({
       active = false;
     };
   }, [mode, opponentUsername, simulatedOpponent]);
+
+  // 3D characters: yours, and the rival's (their own look, a stable random one for simulated
+  // rivals, the AI coach in AI duels).
+  // Same bundled catalog as the match's DuelOpponentView, so both pick the same look and the
+  // match finds this card's downloads in the WebView cache.
+  const catalog = BUNDLED_AVATARS;
+  const selfLook = lookOf(catalog, profile as any);
+  const oppLook =
+    opponent.kind === 'bot'
+      ? { model: AI_RIVAL_MODEL, items: [] as AvatarModel[] }
+      : opponent.look
+        ? lookOf(catalog, opponent.look as any)
+        : lookForName(catalog, opponent.name || 'rival');
+  const stageW = Math.min(width * 0.46, 220);
+  const stageH = Math.min(height * 0.33, 320);
 
   const selfSlide = useRef(new Animated.Value(-1)).current;
   const oppSlide = useRef(new Animated.Value(1)).current;
@@ -207,8 +233,9 @@ export const VersusIntro: React.FC<VersusIntroProps> = ({
             { transform: [{ translateX: selfSlide.interpolate({ inputRange: [-1, 0], outputRange: [-width, 0] }) }] },
           ]}
         >
-          <View style={[styles.avatarRing, { borderColor: colors.text }]}>
-            <Avatar username={selfName} size={104} config={profile?.avatar_config} avatarUrl={profile?.avatar_url} />
+          <View style={[styles.stage, { width: stageW, height: stageH }]}>
+            <View style={styles.stageGlow} />
+            <AvatarViewer3D model={selfLook.model} items={selfLook.items} style={styles.viewer} autoRotate={false} interactive={false} initialYaw={0.45} />
           </View>
           <View style={styles.fighterInfo}>
             <Text style={styles.youTag}>YOU</Text>
@@ -258,24 +285,24 @@ export const VersusIntro: React.FC<VersusIntroProps> = ({
               </View>
             ) : null}
           </View>
-          <View style={[styles.avatarRing, { borderColor: colors.lavender }]}>
-            {opponent.kind === 'crowd' ? (
+          {opponent.kind === 'crowd' ? (
+            <View style={[styles.avatarRing, { borderColor: colors.lavender }]}>
               <View style={styles.iconAvatar}>
                 <Users size={48} color={colors.text} />
               </View>
-            ) : opponent.kind === 'bot' ? (
-              <View style={styles.iconAvatar}>
-                <Bot size={48} color={colors.text} />
-              </View>
-            ) : (
-              <Avatar
-                username={opponent.name}
-                size={104}
-                config={opponent.avatarConfig}
-                avatarUrl={opponent.avatarUrl}
-              />
-            )}
-          </View>
+            </View>
+          ) : (
+            <View style={[styles.stage, { width: stageW, height: stageH }]}>
+              <View style={styles.stageGlow} />
+              <AvatarViewer3D model={oppLook.model} items={oppLook.items} style={styles.viewer} autoRotate={false} interactive={false} initialYaw={-0.45} />
+              {opponent.kind === 'bot' && (
+                <View style={styles.botTag}>
+                  <Bot size={12} color={colors.text} />
+                  <Text style={styles.botTagText}>AI</Text>
+                </View>
+              )}
+            </View>
+          )}
         </Animated.View>
 
         {/* Sync status -> FIGHT! */}
@@ -330,9 +357,32 @@ const styles = StyleSheet.create({
   },
   bannerText: { color: colors.text, fontSize: 12, fontWeight: '900', letterSpacing: 1.5 },
 
-  fighter: { position: 'absolute', left: 24, right: 24, flexDirection: 'row', alignItems: 'center', gap: 16 },
-  selfFighter: { top: '17%' },
-  oppFighter: { bottom: '19%', justifyContent: 'flex-end' },
+  fighter: { position: 'absolute', left: 16, right: 20, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  selfFighter: { top: '9%' },
+  oppFighter: { bottom: '15%', justifyContent: 'flex-end' },
+  stage: { alignItems: 'center', justifyContent: 'flex-end' },
+  stageGlow: {
+    position: 'absolute',
+    bottom: 4,
+    width: '78%',
+    height: 34,
+    borderRadius: 40,
+    backgroundColor: 'rgba(0,0,0,0.28)',
+  },
+  viewer: { width: '100%', height: '100%' },
+  botTag: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+  },
+  botTagText: { color: colors.text, fontSize: 10.5, fontWeight: '900', letterSpacing: 1 },
   avatarRing: {
     width: 122,
     height: 122,
@@ -366,7 +416,7 @@ const styles = StyleSheet.create({
   },
   levelChipText: { color: colors.text, fontSize: 11.5, fontWeight: '800' },
 
-  vsWrap: { position: 'absolute', top: '44%', left: 0, right: 0, alignItems: 'center' },
+  vsWrap: { position: 'absolute', top: '43%', left: 0, right: 0, alignItems: 'center' },
   vsBolt: { marginBottom: -10, zIndex: 2 },
   vsCircle: {
     width: 104,

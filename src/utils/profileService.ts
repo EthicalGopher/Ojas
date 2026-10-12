@@ -33,7 +33,7 @@ export interface UserProfile {
   daily_challenges?: Record<string, { completedIds: string[]; progress: Record<string, { reps: number; holdSeconds: number }> }>;
   owned_avatar_ids?: string[]; // 3D avatar shop: set server-side by purchase_avatar()
   equipped_avatar_id?: string;
-  /** Per-character loadout: { [characterId]: { outfit?, hair?, accessory? } } */
+  /** Per-character loadout: { [characterId]: { top?, pants?, shoes?, hair?, accessory? } } */
   equipped_items?: Record<string, Record<string, string>>;
   coins_spent?: number;
   /** true once the first-run tutorial was completed or skipped */

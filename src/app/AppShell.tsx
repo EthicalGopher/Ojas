@@ -178,7 +178,7 @@ export default function AppShell() {
 
     const matchRoomId = await acceptCustomBattleInvite(incomingInvite, currentUsername);
     const opponent = incomingInvite.senderUsername;
-    const mode = incomingInvite.mode;
+    const mode: MatchMode = 'quickjoin'; // faceoff invites from older versions open the same duel
     const exerciseId = incomingInvite.exerciseId;
 
     setIncomingInvite(null);
@@ -277,8 +277,8 @@ export default function AppShell() {
                   currentUser?.id ||
                   `Player_${Math.floor(1000 + Math.random() * 9000)}`;
 
-                // A finished bot match requeues as Quick Duel: real athletes first, bot as fallback.
-                if (nextMode === 'ffa' || nextMode === 'quickjoin' || nextMode === 'ai_battle') {
+                // Requeue as a 1v1 duel (old faceoff too): real athletes first, bot as fallback.
+                if (nextMode === 'ffa' || nextMode === 'quickjoin' || nextMode === 'ai_battle' || nextMode === 'faceoff') {
                   const queue = nextMode === 'ffa' ? 'ffa' : 'quick_start';
                   const isFFA = queue === 'ffa';
                   setWaitingTitle(isFFA ? 'BATTLE GROUND LOBBY' : 'FINDING OPPONENT');
@@ -510,7 +510,7 @@ export default function AppShell() {
                 <Text style={{ color: '#E8D5C4', fontWeight: '900' }}>
                   {incomingInvite.exerciseName}
                 </Text>{' '}
-                {incomingInvite.mode === 'faceoff' ? 'Live Camera Faceoff' : 'Score Duel'}!
+                duel!
               </Text>
 
               <View style={styles.incomingActionRow}>

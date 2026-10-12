@@ -3,17 +3,19 @@ import { ActivityIndicator, StyleProp, StyleSheet, Text, View, ViewStyle } from 
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import { AlertTriangle } from 'lucide-react-native';
 import { getAvatarViewerHtml } from '../avatarViewerHtml';
-import { AvatarModel, LOCAL_ASSET_ORIGIN, resolveModelUrl } from '../../../utils/avatarShopService';
+import { AvatarModel, LOCAL_ASSET_ORIGIN, resolveModelUrl, viewerConfig } from '../../../utils/avatarShopService';
 import { useColors } from '../../../theme';
 
 interface AvatarViewer3DProps {
   model: AvatarModel;
-  /** Outfit / hair / accessory items worn on the model. */
+  /** Top / pants / shoes / hair / accessory items worn on the model. */
   items?: AvatarModel[];
   style?: StyleProp<ViewStyle>;
   autoRotate?: boolean;
   /** Drag to spin the model. */
   interactive?: boolean;
+  /** Starting turn in radians, e.g. to face a rival on the VS screen. */
+  initialYaw?: number;
 }
 
 /** Renders a VRM/GLB body model in a transparent WebView. Swapping `model` reuses the same WebView. */
@@ -23,6 +25,7 @@ export const AvatarViewer3D: React.FC<AvatarViewer3DProps> = ({
   style,
   autoRotate = true,
   interactive = true,
+  initialYaw = 0,
 }) => {
   const colors = useColors();
   const webViewRef = useRef<WebView>(null);
@@ -39,6 +42,7 @@ export const AvatarViewer3D: React.FC<AvatarViewer3DProps> = ({
         format: initialModel.current.model_format,
         autoRotate,
         interactive,
+        initialYaw,
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
@@ -64,12 +68,15 @@ export const AvatarViewer3D: React.FC<AvatarViewer3DProps> = ({
   const loadoutJson = useMemo(
     () =>
       JSON.stringify(
-        items.map((it) => ({
-          category: it.category,
-          config: it.config.model_url ? { ...it.config, model_url: resolveModelUrl(it.config.model_url) } : it.config,
-        })),
+        items.map((it) => {
+          const config = viewerConfig(it, model);
+          return {
+            category: it.category,
+            config: config.model_url ? { ...config, model_url: resolveModelUrl(config.model_url) } : config,
+          };
+        }),
       ),
-    [items],
+    [items, model],
   );
   const sendLoadout = () =>
     webViewRef.current?.injectJavaScript(`window.applyLoadout && window.applyLoadout(${loadoutJson}); true;`);

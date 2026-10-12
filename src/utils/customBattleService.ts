@@ -115,7 +115,7 @@ export async function sendCustomBattleInvite(
   receiver: { id: string; username: string },
   exerciseId: string,
   exerciseName: string,
-  mode: BattleMode = 'faceoff'
+  mode: BattleMode = 'quickjoin'
 ): Promise<BattleInvite> {
   const randomHex = Math.random().toString(36).substring(2, 10) + Math.random().toString(36).substring(2, 10);
   const invite: BattleInvite = {

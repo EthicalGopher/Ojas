@@ -9,8 +9,9 @@ import {
   Text,
   TouchableOpacity,
   View,
+  useWindowDimensions,
 } from 'react-native';
-import { ArrowLeft } from 'lucide-react-native';
+import { ArrowLeft, Check, Crown, Palette, Shirt, Smile, Users } from 'lucide-react-native';
 import { AvatarViewer3D } from './AvatarViewer3D';
 import {
   AvatarModel,
@@ -27,11 +28,12 @@ import {
   isAvatarOwned,
   loadoutItems,
   purchaseAvatar,
+  resolveModelUrl,
   unequipSlot,
 } from '../../../utils/avatarShopService';
 import { computeCoinBalance, XP_PER_COIN } from '../../../utils/gamification';
 import { useUserStore } from '../../../store/userStore';
-import { makeStyles, radius, ThemeColors, useColors } from '../../../theme';
+import { makeStyles, palettes, ThemeColors, useColors } from '../../../theme';
 import { GradientFill } from '../../squad/components/SquadUI';
 
 export const RARITY_COLORS: Record<AvatarRarity, string> = {
@@ -41,14 +43,42 @@ export const RARITY_COLORS: Record<AvatarRarity, string> = {
   legendary: '#F59E0B',
 };
 
-const CATEGORIES: { key: ShopCategory; label: string }[] = [
-  { key: 'character', label: 'Characters' },
-  { key: 'outfit', label: 'Outfits' },
+/** Pokemon GO style shop palette: sky teal stage, white sheet, teal actions. */
+const SHOP = {
+  skyTop: '#46C9C0',
+  skyBottom: '#D7F5EE',
+  ground: '#9BE3C9',
+  teal: '#1FB5A8',
+  tealDark: '#13877D',
+  tile: '#EEF6F5',
+  tileDark: '#1E2A2E',
+};
+
+/** Shop tabs. Colours groups the plain colour items (top / pants / shoes / hair) under one tab. */
+type ShopTab = 'character' | 'face' | 'kit' | 'colours' | 'accessory';
+const TABS: { key: ShopTab; label: string; Icon: typeof Users }[] = [
+  { key: 'character', label: 'Avatar', Icon: Users },
+  { key: 'face', label: 'Face', Icon: Smile },
+  { key: 'kit', label: 'Outfits', Icon: Shirt },
+  { key: 'colours', label: 'Colours', Icon: Palette },
+  { key: 'accessory', label: 'Extras', Icon: Crown },
+];
+const COLOUR_SLOTS: { key: LoadoutSlot; label: string }[] = [
+  { key: 'top', label: 'Top' },
+  { key: 'pants', label: 'Pants' },
+  { key: 'shoes', label: 'Shoes' },
   { key: 'hair', label: 'Hair' },
-  { key: 'accessory', label: 'Accessories' },
 ];
 
-const SLOT_NAMES: Record<LoadoutSlot, string> = { outfit: 'outfit', hair: 'hair colour', accessory: 'accessory' };
+const SLOT_NAMES: Record<LoadoutSlot, string> = {
+  face: 'face',
+  kit: 'outfit',
+  top: 'top colour',
+  pants: 'pants colour',
+  shoes: 'shoes colour',
+  hair: 'hair colour',
+  accessory: 'extra',
+};
 
 /** Small gold coin drawn with views, used next to prices. */
 export const CoinDot: React.FC<{ size?: number }> = ({ size = 12 }) => (
@@ -95,7 +125,7 @@ const SwatchArt: React.FC<{ item: AvatarModel }> = ({ item }) => {
 const swatchStyles = StyleSheet.create({
   wrap: { flex: 1, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   row: { flexDirection: 'row', alignItems: 'center' },
-  dot: { width: 46, height: 46, borderRadius: 23, borderWidth: 3, borderColor: 'rgba(255,255,255,0.85)' },
+  dot: { width: 40, height: 40, borderRadius: 20, borderWidth: 3, borderColor: 'rgba(255,255,255,0.85)' },
   ring: { borderWidth: 9 },
   initial: { fontSize: 46, fontWeight: '900' },
 });
@@ -104,10 +134,12 @@ interface AvatarShopScreenProps {
   onBack: () => void;
 }
 
-/** The Shop tab: characters plus outfits, hair and accessories for them, with live try-on. */
+/** The Shop tab, Pokemon GO style: the character on a sky stage, a white sheet of round category
+ * buttons and item tiles below; tapping a tile tries it on, the floating button buys or wears it. */
 export const AvatarShopScreen: React.FC<AvatarShopScreenProps> = ({ onBack }) => {
   const colors = useColors();
   const styles = useStyles();
+  const { height: screenH } = useWindowDimensions();
   const profile = useUserStore((s) => s.profile);
   const isGuest = useUserStore((s) => s.isGuest);
   const refreshProfile = useUserStore((s) => s.refreshProfile);
@@ -115,7 +147,8 @@ export const AvatarShopScreen: React.FC<AvatarShopScreenProps> = ({ onBack }) =>
   const setFilter = useUserStore((s) => s.setShopFilter);
 
   const [catalog, setCatalog] = useState<AvatarModel[]>(BUNDLED_AVATARS);
-  const [category, setCategory] = useState<ShopCategory>('character');
+  const [tab, setTab] = useState<ShopTab>('character');
+  const [colourSlot, setColourSlot] = useState<LoadoutSlot>('top');
   const [selectedId, setSelectedId] = useState<string>(getEquippedAvatarId(profile));
   const [isBusy, setIsBusy] = useState<boolean>(false);
   const [refreshing, setRefreshing] = useState<boolean>(false);
@@ -124,6 +157,8 @@ export const AvatarShopScreen: React.FC<AvatarShopScreenProps> = ({ onBack }) =>
   const equippedId = getEquippedAvatarId(profile);
   const equippedCharacter = findAvatar(catalog, equippedId);
   const loadout = getLoadout(profile, equippedCharacter.id);
+  /** The category the grid shows. */
+  const category: ShopCategory = tab === 'colours' ? colourSlot : tab;
 
   const loadCatalog = useCallback(async () => {
     setCatalog(await fetchAvatarCatalog());
@@ -149,18 +184,18 @@ export const AvatarShopScreen: React.FC<AvatarShopScreenProps> = ({ onBack }) =>
   const stageItems = useMemo(() => {
     const base = { ...getLoadout(profile, stageCharacter.id) };
     if (selected.category !== 'character') base[selected.category as LoadoutSlot] = selected.id;
-    return loadoutItems(catalog, base, stageCharacter.id);
-  }, [catalog, profile, selected, stageCharacter.id]);
+    return loadoutItems(catalog, base, stageCharacter);
+  }, [catalog, profile, selected, stageCharacter]);
 
   const visibleItems = useMemo(
     () =>
       catalog.filter(
         (m) =>
           m.category === category &&
-          (category === 'character' || fitsCharacter(m, equippedCharacter.id)) &&
+          (category === 'character' || fitsCharacter(m, equippedCharacter)) &&
           (filter === 'all' || isAvatarOwned(profile, m)),
       ),
-    [catalog, category, equippedCharacter.id, filter, profile],
+    [catalog, category, equippedCharacter, filter, profile],
   );
 
   const run = async (action: () => Promise<{ ok: boolean; error?: string }>, failTitle: string) => {
@@ -196,27 +231,36 @@ export const AvatarShopScreen: React.FC<AvatarShopScreenProps> = ({ onBack }) =>
     ]);
   };
 
-  const switchCategory = (key: ShopCategory) => {
-    setCategory(key);
-    // Keep the stage on what you are wearing in that slot, so switching tabs does not try things on
+  // Keep the stage on what you are wearing in that slot, so switching tabs does not try things on
+  const showSlot = (key: ShopCategory) => {
     if (key === 'character') setSelectedId(equippedId);
-    else setSelectedId(loadout[key] ?? '');
+    else setSelectedId(loadout[key as LoadoutSlot] ?? '');
   };
+  const switchTab = (key: ShopTab) => {
+    setTab(key);
+    showSlot(key === 'colours' ? colourSlot : key);
+  };
+  const switchColourSlot = (key: LoadoutSlot) => {
+    setColourSlot(key);
+    showSlot(key);
+  };
+
+  const hasSelection = category === 'character' || !!catalog.find((m) => m.id === selectedId && m.category === category);
 
   const renderAction = () => {
     if (isBusy) {
       return (
         <View style={[styles.actionBtn, styles.actionBtnMuted]}>
-          <ActivityIndicator color={colors.text} />
+          <ActivityIndicator color={SHOP.tealDark} />
         </View>
       );
     }
-    if (selected.category === 'character' && selectedId === '') return null;
     if (isWorn) {
       if (selected.category === 'character') {
         return (
           <View style={[styles.actionBtn, styles.actionBtnMuted]}>
-            <Text style={[styles.actionText, { color: colors.text }]}>Your character</Text>
+            <Check size={16} color={SHOP.tealDark} strokeWidth={3} />
+            <Text style={[styles.actionText, styles.actionTextMuted]}>Playing</Text>
           </View>
         );
       }
@@ -226,176 +270,188 @@ export const AvatarShopScreen: React.FC<AvatarShopScreenProps> = ({ onBack }) =>
           activeOpacity={0.85}
           onPress={() => run(() => unequipSlot(selected.category as LoadoutSlot), 'Could not remove')}
         >
-          <Text style={[styles.actionText, { color: colors.text }]}>Take off</Text>
+          <Text style={[styles.actionText, styles.actionTextMuted]}>Take off</Text>
         </TouchableOpacity>
       );
     }
     if (isGuest) {
       return (
         <View style={[styles.actionBtn, styles.actionBtnMuted]}>
-          <Text style={[styles.actionText, { color: colors.textMuted }]}>Sign in to collect items</Text>
+          <Text style={[styles.actionText, styles.actionTextMuted]}>Sign in</Text>
         </View>
       );
     }
     if (selectedOwned) {
       return (
         <TouchableOpacity style={styles.actionBtn} activeOpacity={0.85} onPress={() => run(() => equipAvatar(selected.id), 'Could not equip')}>
-          <Text style={styles.actionText}>{selected.category === 'character' ? 'Play as ' + selected.name : 'Wear'}</Text>
+          <Text style={styles.actionText}>{selected.category === 'character' ? 'Play' : 'Wear'}</Text>
         </TouchableOpacity>
       );
     }
     const affordable = coins >= selected.price_coins;
     return (
-      <TouchableOpacity
-        style={[styles.actionBtn, !affordable && styles.actionBtnLocked]}
-        activeOpacity={0.85}
-        onPress={() => handleBuy(selected)}
-      >
-        <Text style={[styles.actionText, !affordable && { color: colors.textMuted }]}>Buy</Text>
-        <CoinDot size={14} />
-        <Text style={[styles.actionText, !affordable && { color: colors.textMuted }]}>{selected.price_coins.toLocaleString()}</Text>
+      <TouchableOpacity style={[styles.actionBtn, !affordable && styles.actionBtnLocked]} activeOpacity={0.85} onPress={() => handleBuy(selected)}>
+        <CoinDot size={15} />
+        <Text style={styles.actionText}>{selected.price_coins.toLocaleString()}</Text>
       </TouchableOpacity>
     );
   };
 
-  const hasSelection = category === 'character' || !!catalog.find((m) => m.id === selectedId && m.category === category);
+  const stageH = Math.max(340, Math.min(470, screenH * 0.5));
 
   return (
     <View style={styles.container}>
-      {/* HEADER */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.iconButton} activeOpacity={0.8} onPress={onBack}>
-          <ArrowLeft size={18} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Shop</Text>
-        <View style={styles.coinPill}>
-          <CoinDot />
-          <Text style={styles.coinText}>{coins.toLocaleString()}</Text>
-        </View>
-      </View>
-
       <ScrollView
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
+        stickyHeaderIndices={[1]}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.accent} colors={[colors.accent]} />
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={SHOP.teal} colors={[SHOP.teal]} />
         }
       >
         {/* STAGE */}
-        <View style={styles.stage}>
-          <GradientFill colors={['#2A2470', '#14112B']} vertical />
+        <View style={[styles.stage, { height: stageH }]}>
+          <GradientFill colors={[SHOP.skyTop, SHOP.skyBottom]} vertical />
+          <View style={styles.ground} pointerEvents="none" />
           <AvatarViewer3D model={stageCharacter} items={stageItems} style={styles.viewer} />
+
+          <View style={styles.stageTop} pointerEvents="box-none">
+            <TouchableOpacity style={styles.roundBtn} activeOpacity={0.8} onPress={onBack}>
+              <ArrowLeft size={20} color={SHOP.tealDark} strokeWidth={2.6} />
+            </TouchableOpacity>
+            <View style={styles.coinPill}>
+              <CoinDot size={16} />
+              <Text style={styles.coinText}>{coins.toLocaleString()}</Text>
+            </View>
+          </View>
+
           {hasSelection && selected.category !== 'character' && !isWorn && (
             <View style={styles.tryOnChip} pointerEvents="none">
               <Text style={styles.tryOnText}>TRYING ON</Text>
             </View>
           )}
-          <Text style={styles.stageHint} pointerEvents="none">Drag to spin</Text>
-        </View>
 
-        {/* CATEGORY TABS */}
-        <View style={styles.categoryBar}>
-          {CATEGORIES.map(({ key, label }) => {
-            const active = category === key;
-            return (
-              <TouchableOpacity
-                key={key}
-                style={[styles.categoryTab, active && styles.categoryTabActive]}
-                activeOpacity={0.85}
-                onPress={() => switchCategory(key)}
-              >
-                <Text style={[styles.categoryText, active && styles.categoryTextActive]} numberOfLines={1}>
-                  {label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-
-        {/* SELECTED ITEM */}
-        {hasSelection ? (
-          <View style={styles.detailCard}>
-            <View style={styles.detailTop}>
-              <Text style={styles.modelName} numberOfLines={1}>{selected.name}</Text>
-              <Text style={[styles.rarityText, { color: RARITY_COLORS[selected.rarity] }]}>{selected.rarity.toUpperCase()}</Text>
-            </View>
-            {!!selected.description && <Text style={styles.modelDesc}>{selected.description}</Text>}
-            {renderAction()}
+          {/* selected item plate + action, floating over the stage like PoGo's purchase bar */}
+          <View style={styles.plate}>
+            {hasSelection ? (
+              <>
+                <View style={styles.plateInfo}>
+                  <Text style={styles.plateName} numberOfLines={1}>{selected.name}</Text>
+                  <View style={styles.plateMeta}>
+                    <View style={[styles.rarityDot, { backgroundColor: RARITY_COLORS[selected.rarity] }]} />
+                    <Text style={styles.plateRarity}>{selected.rarity}</Text>
+                    {selected.category !== 'character' && (
+                      <Text style={styles.plateFor} numberOfLines={1}>· for {equippedCharacter.name}</Text>
+                    )}
+                  </View>
+                </View>
+                {renderAction()}
+              </>
+            ) : (
+              <Text style={styles.plateHint}>
+                No {SLOT_NAMES[category as LoadoutSlot]} on {equippedCharacter.name}. Tap one below to try it on.
+              </Text>
+            )}
           </View>
-        ) : (
-          <View style={styles.detailCard}>
-            <Text style={styles.modelDesc}>
-              No {SLOT_NAMES[category as LoadoutSlot]} on {equippedCharacter.name}. Pick one below to try it on.
+        </View>
+
+        {/* CATEGORY BUTTONS (sticky) */}
+        <View style={styles.sheetTop}>
+          <View style={styles.tabRow}>
+            {TABS.map(({ key, label, Icon }) => {
+              const active = tab === key;
+              return (
+                <TouchableOpacity key={key} style={styles.tabItem} activeOpacity={0.85} onPress={() => switchTab(key)}>
+                  <View style={[styles.tabCircle, active && styles.tabCircleActive]}>
+                    <Icon size={22} color={active ? '#FFFFFF' : SHOP.tealDark} strokeWidth={2.4} />
+                  </View>
+                  <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>{label}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+          {tab === 'colours' && (
+            <View style={styles.subRow}>
+              {COLOUR_SLOTS.map(({ key, label }) => (
+                <TouchableOpacity
+                  key={key}
+                  style={[styles.subChip, colourSlot === key && styles.subChipActive]}
+                  activeOpacity={0.85}
+                  onPress={() => switchColourSlot(key)}
+                >
+                  <Text style={[styles.subChipText, colourSlot === key && styles.subChipTextActive]}>{label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+        </View>
+
+        {/* ITEMS */}
+        <View style={styles.sheet}>
+          <View style={styles.listHeader}>
+            <Text style={styles.listTitle}>
+              {category === 'character' ? 'Avatars' : `${TABS.find((t) => t.key === tab)?.label} for ${equippedCharacter.name}`}
+            </Text>
+            <TouchableOpacity
+              style={[styles.ownedToggle, filter === 'owned' && styles.ownedToggleOn]}
+              activeOpacity={0.85}
+              onPress={() => setFilter(filter === 'owned' ? 'all' : 'owned')}
+            >
+              <Text style={[styles.ownedToggleText, filter === 'owned' && styles.ownedToggleTextOn]}>Owned</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.grid}>
+            {visibleItems.map((item) => {
+              const owned = isAvatarOwned(profile, item);
+              const isSelected = item.id === selectedId;
+              const worn = item.category === 'character' ? item.id === equippedId : loadout[item.category as LoadoutSlot] === item.id;
+              return (
+                <TouchableOpacity
+                  key={item.id}
+                  style={[styles.tile, isSelected && styles.tileSelected]}
+                  activeOpacity={0.85}
+                  onPress={() => setSelectedId(item.id)}
+                >
+                  <View style={styles.tileArt}>
+                    {item.thumbnail_url ? (
+                      <Image source={{ uri: resolveModelUrl(item.thumbnail_url) }} style={styles.thumbImage} resizeMode="contain" />
+                    ) : (
+                      <SwatchArt item={item} />
+                    )}
+                  </View>
+                  {worn ? (
+                    <View style={styles.wornBadge}>
+                      <Check size={12} color="#FFFFFF" strokeWidth={3.5} />
+                    </View>
+                  ) : null}
+                  {!owned && (
+                    <View style={styles.tilePrice}>
+                      <CoinDot size={11} />
+                      <Text style={styles.tilePriceText}>{item.price_coins.toLocaleString()}</Text>
+                    </View>
+                  )}
+                  <View style={styles.tileFooter}>
+                    <Text style={styles.tileName} numberOfLines={1}>{item.name}</Text>
+                  </View>
+                  <View style={[styles.rarityBar, { backgroundColor: RARITY_COLORS[item.rarity] }]} />
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          {visibleItems.length === 0 && (
+            <Text style={styles.emptyText}>
+              {filter === 'owned' ? 'Nothing owned here yet.' : 'New drops are on the way. Pull down to check.'}
+            </Text>
+          )}
+
+          <View style={styles.earnCard}>
+            <CoinDot size={14} />
+            <Text style={styles.earnText}>
+              1 coin for every {XP_PER_COIN} XP. Reps, matches, calories and daily challenges all count.
             </Text>
           </View>
-        )}
-
-        {/* LIST HEADER */}
-        <View style={styles.listHeader}>
-          <Text style={styles.listTitle}>
-            {category === 'character' ? 'CHARACTERS' : `FOR ${equippedCharacter.name.toUpperCase()}`}
-          </Text>
-          <TouchableOpacity
-            style={[styles.ownedToggle, filter === 'owned' && styles.ownedToggleOn]}
-            activeOpacity={0.85}
-            onPress={() => setFilter(filter === 'owned' ? 'all' : 'owned')}
-          >
-            <Text style={[styles.ownedToggleText, filter === 'owned' && styles.ownedToggleTextOn]}>Owned only</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* GRID */}
-        <View style={styles.grid}>
-          {visibleItems.map((item) => {
-            const owned = isAvatarOwned(profile, item);
-            const isSelected = item.id === selectedId;
-            const worn = item.category === 'character' ? item.id === equippedId : loadout[item.category as LoadoutSlot] === item.id;
-            return (
-              <TouchableOpacity
-                key={item.id}
-                style={[styles.card, isSelected && { borderColor: colors.accent }]}
-                activeOpacity={0.85}
-                onPress={() => setSelectedId(item.id)}
-              >
-                <View style={styles.thumb}>
-                  {item.thumbnail_url ? (
-                    <Image source={{ uri: item.thumbnail_url }} style={styles.thumbImage} resizeMode="cover" />
-                  ) : (
-                    <SwatchArt item={item} />
-                  )}
-                  {worn && (
-                    <View style={styles.wornBadge}>
-                      <Text style={styles.wornText}>WEARING</Text>
-                    </View>
-                  )}
-                </View>
-                <Text style={styles.cardName} numberOfLines={1}>{item.name}</Text>
-                <View style={styles.cardFooter}>
-                  <Text style={[styles.cardRarity, { color: RARITY_COLORS[item.rarity] }]}>{item.rarity}</Text>
-                  {owned ? (
-                    <Text style={styles.cardOwned}>Owned</Text>
-                  ) : (
-                    <View style={styles.cardPrice}>
-                      <CoinDot size={11} />
-                      <Text style={styles.cardPriceText}>{item.price_coins.toLocaleString()}</Text>
-                    </View>
-                  )}
-                </View>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-
-        {visibleItems.length === 0 && (
-          <Text style={styles.emptyText}>
-            {filter === 'owned' ? 'Nothing owned here yet.' : 'New drops are on the way. Pull down to check.'}
-          </Text>
-        )}
-
-        <View style={styles.earnCard}>
-          <Text style={styles.earnText}>
-            Earn 1 coin for every {XP_PER_COIN} XP. Reps, matches, calories and daily challenges all count.
-          </Text>
         </View>
       </ScrollView>
     </View>
@@ -404,146 +460,218 @@ export const AvatarShopScreen: React.FC<AvatarShopScreenProps> = ({ onBack }) =>
 
 const useStyles = makeStyles((colors: ThemeColors) =>
   StyleSheet.create({
-    container: { flex: 1, backgroundColor: colors.bg },
-    header: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingHorizontal: 16,
-      paddingTop: 8,
-      paddingBottom: 10,
+    container: { flex: 1, backgroundColor: colors.surface },
+    scroll: { paddingBottom: 150 },
+
+    stage: { overflow: 'hidden' },
+    ground: {
+      position: 'absolute',
+      left: '-20%',
+      right: '-20%',
+      bottom: -140,
+      height: 260,
+      borderRadius: 400,
+      backgroundColor: SHOP.ground,
     },
-    iconButton: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
-      backgroundColor: colors.surface,
-      borderWidth: 1,
-      borderColor: colors.border,
+    viewer: { flex: 1, marginBottom: 64 },
+    stageTop: {
+      position: 'absolute',
+      top: 12,
+      left: 16,
+      right: 16,
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+    },
+    roundBtn: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: '#FFFFFF',
       alignItems: 'center',
       justifyContent: 'center',
+      elevation: 4,
+      shadowColor: '#0B3B36',
+      shadowOpacity: 0.2,
+      shadowRadius: 6,
+      shadowOffset: { width: 0, height: 2 },
     },
-    headerTitle: { color: colors.text, fontSize: 18, fontWeight: '900', letterSpacing: 0.5 },
     coinPill: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 6,
-      height: 36,
-      paddingHorizontal: 12,
-      borderRadius: radius.pill,
-      backgroundColor: colors.surface,
-      borderWidth: 1,
-      borderColor: colors.border,
+      gap: 7,
+      height: 40,
+      paddingHorizontal: 14,
+      borderRadius: 20,
+      backgroundColor: '#FFFFFF',
+      elevation: 4,
+      shadowColor: '#0B3B36',
+      shadowOpacity: 0.2,
+      shadowRadius: 6,
+      shadowOffset: { width: 0, height: 2 },
     },
-    coinText: { color: colors.text, fontSize: 13, fontWeight: '900' },
-    scroll: { paddingHorizontal: 18, paddingBottom: 150 },
-
-    stage: { height: 360, borderRadius: radius.xl, overflow: 'hidden' },
-    viewer: { flex: 1 },
-    stageHint: { position: 'absolute', bottom: 12, alignSelf: 'center', color: 'rgba(255,255,255,0.45)', fontSize: 11, fontWeight: '700' },
+    coinText: { color: '#1C2B2A', fontSize: 15, fontWeight: '900' },
     tryOnChip: {
       position: 'absolute',
-      top: 12,
-      left: 12,
-      paddingHorizontal: 10,
-      height: 24,
-      borderRadius: 12,
+      top: 68,
+      left: 16,
+      paddingHorizontal: 12,
+      height: 26,
+      borderRadius: 13,
       justifyContent: 'center',
-      backgroundColor: 'rgba(251,191,36,0.18)',
-      borderWidth: 1,
-      borderColor: 'rgba(251,191,36,0.5)',
+      backgroundColor: 'rgba(255,255,255,0.85)',
     },
-    tryOnText: { color: '#FBBF24', fontSize: 10, fontWeight: '900', letterSpacing: 1 },
+    tryOnText: { color: SHOP.tealDark, fontSize: 10.5, fontWeight: '900', letterSpacing: 1.2 },
 
-    categoryBar: {
+    plate: {
+      position: 'absolute',
+      left: 14,
+      right: 14,
+      bottom: 14,
+      minHeight: 64,
+      paddingLeft: 16,
+      paddingRight: 8,
+      paddingVertical: 8,
+      borderRadius: 22,
+      backgroundColor: '#FFFFFF',
       flexDirection: 'row',
-      marginTop: 14,
-      padding: 4,
-      borderRadius: radius.pill,
-      backgroundColor: colors.surface,
-      borderWidth: 1,
-      borderColor: colors.border,
+      alignItems: 'center',
+      gap: 10,
+      elevation: 6,
+      shadowColor: '#0B3B36',
+      shadowOpacity: 0.25,
+      shadowRadius: 10,
+      shadowOffset: { width: 0, height: 3 },
     },
-    categoryTab: { flex: 1, height: 36, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center' },
-    categoryTabActive: { backgroundColor: colors.accent },
-    categoryText: { color: colors.textMuted, fontSize: 11.5, fontWeight: '900' },
-    categoryTextActive: { color: colors.onAccent },
-
-    detailCard: {
-      marginTop: 14,
-      padding: 18,
-      borderRadius: radius.xl,
-      backgroundColor: colors.surface,
-      borderWidth: 1,
-      borderColor: colors.border,
-    },
-    detailTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
-    modelName: { flex: 1, color: colors.text, fontSize: 20, fontWeight: '900' },
-    rarityText: { fontSize: 10.5, fontWeight: '900', letterSpacing: 1.2 },
-    modelDesc: { color: colors.textMuted, fontSize: 13, lineHeight: 19, marginTop: 6 },
+    plateInfo: { flex: 1 },
+    plateName: { color: '#1C2B2A', fontSize: 17, fontWeight: '900' },
+    plateMeta: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2 },
+    rarityDot: { width: 8, height: 8, borderRadius: 4 },
+    plateRarity: { color: '#5E7270', fontSize: 12, fontWeight: '800', textTransform: 'capitalize' },
+    plateFor: { flexShrink: 1, color: '#8AA09D', fontSize: 12, fontWeight: '700' },
+    plateHint: { flex: 1, color: '#5E7270', fontSize: 13, fontWeight: '700', paddingVertical: 10, paddingRight: 8 },
     actionBtn: {
-      marginTop: 16,
+      minWidth: 108,
       height: 48,
-      borderRadius: 14,
-      backgroundColor: colors.accent,
-      borderBottomWidth: 3,
-      borderBottomColor: '#9A3412',
+      paddingHorizontal: 18,
+      borderRadius: 24,
+      backgroundColor: SHOP.teal,
+      borderBottomWidth: 4,
+      borderBottomColor: SHOP.tealDark,
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
-      gap: 8,
+      gap: 7,
     },
-    actionBtnMuted: { backgroundColor: colors.surfaceHi, borderBottomColor: colors.border },
-    actionBtnLocked: { backgroundColor: colors.surfaceHi, borderBottomColor: colors.border },
-    actionText: { color: colors.onAccent, fontSize: 14, fontWeight: '900', letterSpacing: 0.4 },
+    actionBtnMuted: { backgroundColor: '#E4F3F1', borderBottomColor: '#C6E2DE' },
+    actionBtnLocked: { backgroundColor: '#9FB8B5', borderBottomColor: '#7F9996' },
+    actionText: { color: '#FFFFFF', fontSize: 16, fontWeight: '900', letterSpacing: 0.4, textTransform: 'uppercase' },
+    actionTextMuted: { color: SHOP.tealDark },
 
-    listHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 22, marginBottom: 12 },
-    listTitle: { color: colors.text, fontSize: 13, fontWeight: '900', letterSpacing: 1.2 },
-    ownedToggle: {
+    sheetTop: {
+      marginTop: -18,
+      paddingTop: 16,
+      paddingBottom: 10,
       paddingHorizontal: 12,
-      height: 30,
-      borderRadius: radius.pill,
+      borderTopLeftRadius: 26,
+      borderTopRightRadius: 26,
+      backgroundColor: colors.surface,
+    },
+    tabRow: { flexDirection: 'row', justifyContent: 'space-between' },
+    tabItem: { flex: 1, alignItems: 'center', gap: 5 },
+    tabCircle: {
+      width: 54,
+      height: 54,
+      borderRadius: 27,
+      alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: colors.surface,
-      borderWidth: 1,
-      borderColor: colors.border,
+      borderWidth: 2.5,
+      borderColor: '#BFE6E1',
     },
-    ownedToggleOn: { backgroundColor: colors.accent, borderColor: colors.accent },
-    ownedToggleText: { color: colors.textMuted, fontSize: 11.5, fontWeight: '800' },
-    ownedToggleTextOn: { color: colors.onAccent },
+    tabCircleActive: { backgroundColor: SHOP.teal, borderColor: SHOP.tealDark },
+    tabLabel: { color: colors.textMuted, fontSize: 11.5, fontWeight: '800' },
+    tabLabelActive: { color: SHOP.tealDark },
+    subRow: { flexDirection: 'row', gap: 8, marginTop: 12, paddingHorizontal: 4 },
+    subChip: {
+      flex: 1,
+      height: 34,
+      borderRadius: 17,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.surfaceHi,
+    },
+    subChipActive: { backgroundColor: SHOP.teal },
+    subChipText: { color: colors.textMuted, fontSize: 12.5, fontWeight: '800' },
+    subChipTextActive: { color: '#FFFFFF' },
 
-    grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-    card: {
-      width: '47%',
-      flexGrow: 1,
-      padding: 10,
-      borderRadius: radius.lg,
-      backgroundColor: colors.surface,
-      borderWidth: 2,
-      borderColor: colors.border,
+    sheet: { paddingHorizontal: 14, backgroundColor: colors.surface },
+    listHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6, marginBottom: 12 },
+    listTitle: { color: colors.text, fontSize: 15, fontWeight: '900' },
+    ownedToggle: {
+      paddingHorizontal: 14,
+      height: 30,
+      borderRadius: 15,
+      justifyContent: 'center',
+      backgroundColor: colors.surfaceHi,
     },
-    thumb: { height: 110, borderRadius: radius.md, overflow: 'hidden', backgroundColor: colors.surfaceSunken },
+    ownedToggleOn: { backgroundColor: SHOP.teal },
+    ownedToggleText: { color: colors.textMuted, fontSize: 12, fontWeight: '800' },
+    ownedToggleTextOn: { color: '#FFFFFF' },
+
+    grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+    tile: {
+      width: '31.3%',
+      aspectRatio: 0.82,
+      borderRadius: 18,
+      overflow: 'hidden',
+      backgroundColor: colors === palettes.light ? SHOP.tile : SHOP.tileDark,
+      borderWidth: 2.5,
+      borderColor: 'transparent',
+    },
+    tileSelected: { borderColor: SHOP.teal },
+    tileArt: { flex: 1, padding: 6 },
     thumbImage: { width: '100%', height: '100%' },
     wornBadge: {
       position: 'absolute',
-      top: 8,
-      left: 8,
-      paddingHorizontal: 7,
-      height: 20,
-      borderRadius: 10,
+      top: 6,
+      right: 6,
+      width: 22,
+      height: 22,
+      borderRadius: 11,
+      alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: colors.success,
+      backgroundColor: '#22C55E',
+      borderWidth: 2,
+      borderColor: '#FFFFFF',
     },
-    wornText: { color: '#FFFFFF', fontSize: 9, fontWeight: '900', letterSpacing: 0.8 },
-    cardName: { color: colors.text, fontSize: 14, fontWeight: '900', marginTop: 10 },
-    cardFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 },
-    cardRarity: { fontSize: 11, fontWeight: '800', textTransform: 'capitalize' },
-    cardOwned: { color: colors.success, fontSize: 11, fontWeight: '900' },
-    cardPrice: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-    cardPriceText: { color: colors.text, fontSize: 12.5, fontWeight: '900' },
+    tileFooter: { height: 26, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 },
+    tileName: { color: colors.text, fontSize: 11, fontWeight: '800' },
+    tilePrice: {
+      position: 'absolute',
+      top: 6,
+      left: 6,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      paddingHorizontal: 7,
+      height: 22,
+      borderRadius: 11,
+      backgroundColor: '#FFFFFF',
+    },
+    tilePriceText: { color: '#1C2B2A', fontSize: 11.5, fontWeight: '900' },
+    rarityBar: { height: 4 },
     emptyText: { color: colors.textMuted, fontSize: 12.5, textAlign: 'center', marginTop: 16 },
 
-    earnCard: { marginTop: 22, padding: 14, borderRadius: radius.lg, backgroundColor: colors.surfaceSunken },
-    earnText: { color: colors.textMuted, fontSize: 12, lineHeight: 17, fontWeight: '600', textAlign: 'center' },
+    earnCard: {
+      marginTop: 22,
+      padding: 14,
+      borderRadius: 18,
+      backgroundColor: colors.surfaceHi,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+    },
+    earnText: { flex: 1, color: colors.textMuted, fontSize: 12, lineHeight: 17, fontWeight: '600' },
   }),
 );

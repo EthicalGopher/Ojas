@@ -208,9 +208,7 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
     let currentProgress = 20;
     let poseInstance = null;
     let selectedComplexity = 1;
-    let thumbCanvas = null;
-    let thumbCtx = null;
-    let lastThumbTime = 0;
+    let lastThumbTime = 0; // last live-moves pose sent (1v1 duel)
 
     function setProgress(pct, statusMsg, isError) {
       currentProgress = Math.max(currentProgress, Math.min(100, pct));
@@ -1273,23 +1271,21 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
 
           ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-          // High-Speed Smooth HD Camera Stream for 1v1 Faceoff (25 FPS, 480x360)
+          // 1v1 duel live moves: 3D joints (MediaPipe world landmarks, metres -> cm ints) about 12 times a
+          // second, only while the opponent has asked for them (RN sets window.__poseStream).
           const nowTime = Date.now();
-          if (nowTime - lastThumbTime >= 40 && video && video.videoWidth > 0) {
+          if (window.__poseStream && results.poseWorldLandmarks && nowTime - lastThumbTime >= 80) {
             lastThumbTime = nowTime;
-            try {
-              if (!thumbCanvas) {
-                thumbCanvas = document.createElement('canvas');
-                thumbCanvas.width = 480;
-                thumbCanvas.height = 360;
-                thumbCtx = thumbCanvas.getContext('2d', { alpha: false });
-              }
-              thumbCtx.drawImage(video, 0, 0, 480, 360);
-              const frameJpeg = thumbCanvas.toDataURL('image/jpeg', 0.65);
-              if (window.ReactNativeWebView) {
-                window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'camera_frame', frame: frameJpeg }));
-              }
-            } catch (e) {}
+            const W = results.poseWorldLandmarks;
+            const J = [0, 7, 8, 11, 12, 13, 14, 15, 16, 19, 20, 23, 24, 25, 26, 27, 28, 31, 32];
+            const p = [];
+            for (let i = 0; i < J.length; i++) {
+              const w = W[J[i]];
+              p.push(Math.round(w.x * 100), Math.round(w.y * 100), Math.round(w.z * 100), Math.round((w.visibility || 0) * 9));
+            }
+            if (window.ReactNativeWebView) {
+              window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'POSE_WORLD', p: p }));
+            }
           }
 
           const landmarks = results.poseLandmarks;
