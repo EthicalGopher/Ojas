@@ -6,8 +6,11 @@ import { AiInstructorMode, AiLoadoutItem, getAiInstructorHtml } from '../aiInstr
 import { LOCAL_ASSET_ORIGIN } from '../../../utils/avatarShopService';
 
 interface AIInstructor3DProps {
-  /** squat: follows phaseProgress; idle / rest / cheer / stand: loops. */
+  /** squat: follows phaseProgress; idle / rest / cheer / stand: loops; move: the exercise's own
+   * moves (exerciseId), following phaseProgress for reps (rest = between reps / lost the hold). */
   mode: AiInstructorMode;
+  /** Exercise id '2'..'9' for mode 'move' / 'rest' (squats, '1', use the squat clip). */
+  exerciseId?: string;
   /** Rep progress, 0 (standing) -> 0.5 (bottom) -> 1 (standing again). */
   phaseProgress: number;
   /** A 1v1 opponent's shop character instead of the AI instructor (full URL). */
@@ -18,6 +21,8 @@ interface AIInstructor3DProps {
   live?: boolean;
   /** Loading label, e.g. "Loading rival". */
   label?: string;
+  /** The model is loaded and drawing (called again after a reload). */
+  onReady?: () => void;
 }
 
 export interface AIInstructor3DHandle {
@@ -28,7 +33,7 @@ export interface AIInstructor3DHandle {
 /** A 3D fighter: the AI instructor, or a duel opponent in their own look. Squats in step with the
  * reps, idles, rests, cheers, or mirrors the opponent's live pose. */
 export const AIInstructor3D = forwardRef<AIInstructor3DHandle, AIInstructor3DProps>(
-  ({ mode, phaseProgress, modelUrl, loadout, live = false, label = 'Loading AI' }, ref) => {
+  ({ mode, exerciseId, phaseProgress, modelUrl, loadout, live = false, label = 'Loading AI', onReady }, ref) => {
     const webViewRef = useRef<WebView>(null);
     const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
     const [progress, setProgress] = useState<number>(0);
@@ -72,9 +77,9 @@ export const AIInstructor3D = forwardRef<AIInstructor3DHandle, AIInstructor3DPro
     useEffect(() => {
       if (status !== 'ready') return;
       webViewRef.current?.injectJavaScript(
-        `window.setAnim && window.setAnim(${JSON.stringify(mode)}, ${phaseProgress}); true;`,
+        `window.setAnim && window.setAnim(${JSON.stringify(mode)}, ${phaseProgress}, ${JSON.stringify(exerciseId || '')}); true;`,
       );
-    }, [mode, phaseProgress, status]);
+    }, [mode, exerciseId, phaseProgress, status]);
 
     useEffect(() => {
       if (status !== 'ready') return;
@@ -89,6 +94,7 @@ export const AIInstructor3D = forwardRef<AIInstructor3DHandle, AIInstructor3DPro
         else if (msg.type === 'LOADED') {
           lastBeat.current = Date.now();
           setStatus('ready');
+          onReady?.();
         } else if (msg.type === 'ERROR') {
           if (msg.message === 'webgl context lost') reload();
           else setStatus('error');

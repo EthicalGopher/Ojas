@@ -16,7 +16,12 @@
 // and outfit (loadout: { category, config } items, as in avatarViewerHtml.ts: skinned GLBs rebound
 // by bone name, `hide` material parts, `tint` linear multipliers).
 //
-// RN -> page: window.setAnim(mode, progress)   mode: 'squat' | 'idle' | 'rest' | 'cheer'
+// Every other exercise (exerciseMovesSource.ts) is built in the page: its poses go through the same
+// retarget as live moves, so the opponent does sit-ups, push-ups, lunges, crunches and the yoga poses.
+//
+// RN -> page: window.setAnim(mode, progress, exerciseId)
+//                                               mode: 'squat' | 'idle' | 'rest' | 'cheer' | 'move';
+//                                               'move' / 'rest' + exerciseId '2'..'9' = that exercise
 //             window.setLive(on)                live moves: follow the opponent's streamed pose
 //             window.setPose(p)                 19 joints x [x, y, z cm, visibility 0-9], MediaPipe
 //                                               world landmarks (see LIVE_JOINTS), about 12 per second
@@ -24,9 +29,10 @@
 //             | { type: 'HEARTBEAT' } every 2 s while frames render (RN reloads the view if they stop)
 
 /** stand: the duel starters' calm loop (the instructor has no such clip and keeps the last mode). */
-export type AiInstructorMode = 'squat' | 'idle' | 'rest' | 'cheer' | 'stand';
+export type AiInstructorMode = 'squat' | 'idle' | 'rest' | 'cheer' | 'stand' | 'move';
 
 import { ASSET_BUST } from '../../utils/avatarShopService';
+import { EXERCISE_MOVES_SOURCE } from './exerciseMovesSource';
 
 // Per-launch query, shared with the shop / VS viewers (see ASSET_BUST).
 export const BUST = ASSET_BUST;
@@ -76,6 +82,7 @@ export function getAiInstructorHtml(
 </head>
 <body>
 <div id="backdrop"></div>
+<script>${EXERCISE_MOVES_SOURCE}</script>
 <script>
 (function () {
   function post(msg) {
@@ -132,16 +139,18 @@ export function getAiInstructorHtml(
   var CROSSFADE = 0.35;
   var mixer = null, actions = {}, weights = {};
   var mode = 'idle', target = 0, shown = 0;
+  // framing: half the width to fit (m), camera height and look-at height (fractions of standing height)
+  var viewHalfW = 0.75, viewCam = 0.55, viewLook = 0.47;
 
   function frameCamera() {
     var fov = camera.fov * Math.PI / 180;
     var aspect = camera.aspect;
     // Fit the standing height, and the width of the crouch on narrow (landscape split) views.
     var fitH = (TARGET_HEIGHT * 0.6) / Math.tan(fov / 2);
-    var fitW = (0.75 / aspect) / Math.tan(fov / 2);
+    var fitW = (viewHalfW / aspect) / Math.tan(fov / 2);
     var dist = Math.max(fitH, fitW);
-    camera.position.set(0, TARGET_HEIGHT * 0.55, dist);
-    camera.lookAt(0, TARGET_HEIGHT * 0.47, 0);
+    camera.position.set(0, TARGET_HEIGHT * viewCam, dist);
+    camera.lookAt(0, TARGET_HEIGHT * viewLook, 0);
   }
 
   // Scale to a common height, stand on y = 0, centred. Measured on the posed bones: the skinned
@@ -225,7 +234,7 @@ export function getAiInstructorHtml(
   var J = { nose: 0, lEar: 1, rEar: 2, lSh: 3, rSh: 4, lEl: 5, rEl: 6, lWr: 7, rWr: 8, lIdx: 9, rIdx: 10,
             lHip: 11, rHip: 12, lKn: 13, rKn: 14, lAn: 15, rAn: 16, lFt: 17, rFt: 18 };
   var NJ = 19;
-  var target = null, smooth = null, liveOn = false, liveUntil = 0;
+  var poseTarget = null, smooth = null, liveOn = false, liveUntil = 0, realUntil = 0;
   var _v1 = new THREE.Vector3(), _v2 = new THREE.Vector3(), _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion();
   function boneKey(n) { return n.replace(/[^a-z0-9]/gi, '').toLowerCase(); }
   function captureRest(root) {
@@ -247,11 +256,13 @@ export function getAiInstructorHtml(
     var hips = wp('bip01lthigh') && wp('bip01rthigh') ? wp('bip01lthigh').sub(wp('bip01rthigh')) : null;
     var shoulders = wp('bip01lupperarm') && wp('bip01rupperarm') ? wp('bip01lupperarm').sub(wp('bip01rupperarm')) : null;
     frame('bip01pelvis', hips, up && up.clone());
+    frame('bip01spine', hips, up && up.clone());
+    frame('bip01spine1', shoulders, up && up.clone());
     frame('bip01spine2', shoulders, up && up.clone());
     frame('bip01head', shoulders && shoulders.clone(), new THREE.Vector3(0, 1, 0));
   }
   function lm(i, out) { return out.set(smooth[i * 4], smooth[i * 4 + 1], smooth[i * 4 + 2]); }
-  function vis(i) { return target[i * 4 + 3]; }
+  function vis(i) { return poseTarget[i * 4 + 3]; }
   function mid(a, b, out) { lm(a, out); return out.add(lm(b, _v2)).multiplyScalar(0.5); }
   function setWorldQ(b, q) {
     b.parent.getWorldQuaternion(_q2).invert();
@@ -287,6 +298,9 @@ export function getAiInstructorHtml(
     var shMid = mid(J.lSh, J.rSh, new THREE.Vector3());
     var up = shMid.clone().sub(hipMid);
     alignFrame('bip01pelvis', seg(J.rHip, J.lHip), up);
+    // the whole spine follows the torso, so a sideways or forward bend starts low, not at the chest
+    alignFrame('bip01spine', seg(J.rHip, J.lHip), up);
+    alignFrame('bip01spine1', seg(J.rSh, J.lSh), up);
     alignFrame('bip01spine2', seg(J.rSh, J.lSh), up);
     if (vis(J.lEar) > 3 && vis(J.rEar) > 3) {
       var earMid = mid(J.lEar, J.rEar, new THREE.Vector3());
@@ -331,9 +345,35 @@ export function getAiInstructorHtml(
     var torso = Math.min(t[J.lSh * 4 + 3], t[J.rSh * 4 + 3], t[J.lHip * 4 + 3], t[J.rHip * 4 + 3]);
     if (torso < 3) return; // body not in view: keep the clips
     if (!smooth) smooth = t.slice();
-    target = t;
-    liveUntil = performance.now() + 1500;
+    poseTarget = t;
+    liveUntil = realUntil = performance.now() + 1500;
   };
+
+  // ---------- Built-in moves for the other exercises (OjasMoves) ----------
+  var moveId = null, moveRest = false, moveBlend = 0, moveInfo = null;
+  function setMove(id, rest) {
+    var info = id && window.OjasMoves ? OjasMoves.info(id) : null;
+    if (!info) { moveId = null; return; }
+    if (id !== moveId) {
+      moveId = id;
+      moveInfo = info;
+      moveBlend = 0;
+      smooth = null;
+      viewHalfW = info.wide;
+      viewCam = info.lying ? 0.42 : 0.55;
+      viewLook = info.lying ? 0.24 : 0.47;
+      frameCamera();
+    }
+    moveRest = !!rest;
+  }
+  function stepMove(now, dt) {
+    var want = moveRest && !moveInfo.stay ? 0 : 1;
+    moveBlend += (want - moveBlend) * (1 - Math.exp(-dt * 3));
+    if (liveOn && now < realUntil) return; // a real opponent's pose wins
+    poseTarget = OjasMoves.pose(moveId, shown, now / 1000, moveBlend);
+    if (!smooth) smooth = poseTarget.slice();
+    liveUntil = now + 1500;
+  }
 
   new THREE.GLTFLoader().load(
     ${JSON.stringify(modelUrl)},
@@ -383,7 +423,9 @@ export function getAiInstructorHtml(
     }
   );
 
-  window.setAnim = function (m, p) {
+  window.setAnim = function (m, p, ex) {
+    if ((m === 'move' || m === 'rest') && ex && ex !== '1') setMove(String(ex), m === 'rest');
+    else if (moveId) { moveId = null; viewHalfW = 0.75; viewCam = 0.55; viewLook = 0.47; frameCamera(); }
     if (m !== mode && actions[m] && m !== 'squat') actions[m].time = 0; // loops start from their top
     if (actions[m] || !mixer) mode = m;
     p = Math.max(0, Math.min(1, +p || 0));
@@ -400,14 +442,16 @@ export function getAiInstructorHtml(
   });
 
   var clock = new THREE.Clock();
-  var lastBeat = 0;
+  // From a timer, not requestAnimationFrame: while the player's camera covers this view during
+  // setup the frames may pause, and a missing beat would make RN reload the page ("Loading rival").
+  setInterval(function () { post({ type: 'HEARTBEAT' }); }, 2000);
   function tick(now) {
     requestAnimationFrame(tick);
-    if (now - lastBeat > 2000) { lastBeat = now; post({ type: 'HEARTBEAT' }); }
     var dt = Math.min(clock.getDelta(), 0.1);
     // Progress arrives every 100 ms; ease toward it so the motion stays smooth at 60 fps.
     shown += (target - shown) * (1 - Math.exp(-dt * 14));
-    var live = liveOn && model && target && now < liveUntil;
+    if (moveId && model) stepMove(now, dt);
+    var live = (liveOn || moveId) && model && poseTarget && now < liveUntil;
     if (!live && wasLive) {
       // hand back to the clips from the rest pose (the mixer only rewrites bones whose values change)
       REST.forEach(function (r) { r.b.quaternion.copy(r.q); r.b.position.copy(r.p); });
@@ -416,7 +460,7 @@ export function getAiInstructorHtml(
     wasLive = live;
     if (live) {
       var k = 1 - Math.exp(-dt * 15);
-      for (var i = 0; i < smooth.length; i++) smooth[i] += (target[i] - smooth[i]) * k;
+      for (var i = 0; i < smooth.length; i++) smooth[i] += (poseTarget[i] - smooth[i]) * k;
       applyLive();
       renderer.render(scene, camera);
       return;

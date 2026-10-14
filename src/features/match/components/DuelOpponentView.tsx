@@ -25,13 +25,18 @@ interface DuelOpponentViewProps {
   opponentWon: boolean;
   /** Live moves (floating widget toggle): mirror the opponent's streamed pose. */
   live: boolean;
+  /** The 3D opponent has loaded. */
+  onReady?: () => void;
 }
 
 const REP_MS = 1300;
+// Holds (triangle, cobra, child's, tree) score once a second: the rival keeps the pose while points arrive.
+const HOLD_IDS = ['3', '6', '8', '9'];
+const HOLD_MS = 2500;
 
 /** The 1v1 duel opponent in 3D, in their own shop look, like the AI in Human vs AI. */
 export const DuelOpponentView = forwardRef<AIInstructor3DHandle, DuelOpponentViewProps>(
-  ({ opponentUsername, isSimulated, botState, opponentScore, exerciseId, isMatchActive, isMatchEnded, opponentWon, live }, ref) => {
+  ({ opponentUsername, isSimulated, botState, opponentScore, exerciseId, isMatchActive, isMatchEnded, opponentWon, live, onReady }, ref) => {
     // The bundled catalog has every character, face and outfit, so the look is known at once and
     // the 3D page is built once (a server catalog arriving later used to rebuild and reload it).
     const catalog = BUNDLED_AVATARS;
@@ -79,7 +84,7 @@ export const DuelOpponentView = forwardRef<AIInstructor3DHandle, DuelOpponentVie
       [look],
     );
 
-    // Real opponents: one squat per point they score.
+    // Real opponents: one rep per point they score (holds: in the pose while points keep coming).
     const [repProgress, setRepProgress] = useState<number>(0);
     const [repping, setRepping] = useState<boolean>(false);
     const lastScore = useRef<number>(opponentScore);
@@ -91,8 +96,9 @@ export const DuelOpponentView = forwardRef<AIInstructor3DHandle, DuelOpponentVie
       lastScore.current = opponentScore;
       const start = Date.now();
       setRepping(true);
+      const dur = HOLD_IDS.includes(exerciseId) ? HOLD_MS : REP_MS;
       const t = setInterval(() => {
-        const p = Math.min(1, (Date.now() - start) / REP_MS);
+        const p = Math.min(1, (Date.now() - start) / dur);
         setRepProgress(p);
         if (p >= 1) {
           clearInterval(t);
@@ -100,19 +106,22 @@ export const DuelOpponentView = forwardRef<AIInstructor3DHandle, DuelOpponentVie
         }
       }, 50);
       return () => clearInterval(t);
-    }, [opponentScore, isSimulated]);
+    }, [opponentScore, isSimulated, exerciseId]);
 
     const isSquat = exerciseId === '1';
     let mode: AiInstructorMode = 'stand';
     let progress = 0;
     if (isMatchEnded) mode = opponentWon ? 'cheer' : 'stand';
-    else if (isMatchActive && isSquat) {
+    else if (isMatchActive) {
+      const doing: AiInstructorMode = isSquat ? 'squat' : 'move';
       if (isSimulated && botState) {
-        mode = botState.currentPhase === 'pause' ? 'rest' : 'squat';
+        mode = botState.currentPhase === 'pause' ? 'rest' : doing;
         progress = botState.phaseProgress;
       } else if (repping) {
-        mode = 'squat';
+        mode = doing;
         progress = repProgress;
+      } else if (!isSquat) {
+        mode = 'rest';
       }
     }
 
@@ -122,11 +131,13 @@ export const DuelOpponentView = forwardRef<AIInstructor3DHandle, DuelOpponentVie
         <AIInstructor3D
           ref={ref}
           mode={mode}
+          exerciseId={exerciseId}
           phaseProgress={progress}
           modelUrl={modelUrl}
           loadout={loadout}
           live={live}
           label="Loading rival"
+          onReady={onReady}
         />
         {live && (
           <View style={styles.liveChip} pointerEvents="none">

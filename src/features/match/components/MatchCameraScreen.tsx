@@ -130,10 +130,10 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
   const [timeLeft, setTimeLeft] = useState(120); // 2 mins duel match timer
   const [matchEnded, setMatchEnded] = useState(false);
   const [isSkeletonVisible, setIsSkeletonVisible] = useState(true);
-  // AI squat duel: the 3D AI fills the screen. The player's camera keeps running (it counts the
+  // AI duel: the 3D AI fills the screen. The player's camera keeps running (it counts the
   // reps) behind it, or in a small corner window when switched on from the floating widget.
   // 1v1 duels work the same way: the opponent's 3D character fills the screen.
-  const aiFullscreen = (mode === 'ai_battle' && exerciseId === '1') || mode === 'quickjoin';
+  const aiFullscreen = mode === 'ai_battle' || mode === 'quickjoin';
   // Live moves (floating widget, off by default): the opponent's character mirrors their real pose.
   const [liveMoves, setLiveMoves] = useState(false);
   const liveMovesRef = useRef(false);
@@ -150,6 +150,11 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
   const recordedResultRef = useRef(false);
   const webViewRef = useRef<WebView>(null);
   const matchPhaseRef = useRef<MatchPhase>('loading_resources');
+  // The 3D opponent loads while players sync and the camera is set up; the match waits for it.
+  const opponentModelReadyRef = useRef(false);
+  const markOpponentModelReady = useCallback(() => {
+    opponentModelReadyRef.current = true;
+  }, []);
   const [dimensions, setDimensions] = useState(() => Dimensions.get('window'));
   const [autoCountdown, setAutoCountdown] = useState<number>(5);
   const [opponentAvatarUrl, setOpponentAvatarUrl] = useState<string | null>(null);
@@ -583,9 +588,12 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
   useEffect(() => {
     if (matchPhase !== 'setup_countdown') return;
 
+    let waited = 0;
     const setupTimer = setInterval(() => {
       setSetupCount((prev) => {
         if (prev <= 1) {
+          // hold the last second (up to 20 s) until the opponent model is on screen
+          if (!opponentModelReadyRef.current && (waited += 1) <= 20) return 1;
           clearInterval(setupTimer);
           setMatchPhase('active_match');
           setTimeLeft(120);
@@ -981,6 +989,7 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
                 exerciseId={exerciseId}
                 isMatchActive={matchPhase === 'active_match'}
                 isMatchEnded={matchPhase === 'match_ended'}
+                onReady={markOpponentModelReady}
               />
             ) : (
               <DuelOpponentView
@@ -994,6 +1003,7 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
                 isMatchEnded={matchPhase === 'match_ended'}
                 opponentWon={opponentScore > selfScore}
                 live={liveMoves}
+                onReady={markOpponentModelReady}
               />
             )}
           </View>
