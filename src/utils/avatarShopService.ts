@@ -138,9 +138,20 @@ export const LOCAL_ASSET_ORIGIN = 'http://127.0.0.1:8888';
  * the shop already downloaded comes from the WebView cache when the match loads it. */
 export const ASSET_BUST = `?v=${Date.now().toString(36)}`;
 
+/** Face and outfit GLBs live in the Supabase `avatar-models` bucket, not the APK (scripts/upload-avatar-models.mjs).
+ * Catalog rows keep their `local://avatars/faces|outfits/x.glb` urls; they resolve here. */
+const REMOTE_MODEL_BASE = `${process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://locsjrjekkyjbeapgreu.supabase.co'}/storage/v1/object/public/avatar-models`;
+const REMOTE_MODEL_PATH = /^avatars\/(faces|outfits)\/[^/]+\.glb$/;
+/** Bump when the bucket files change. Stable across launches so the WebView cache keeps the download. */
+const REMOTE_MODEL_VERSION = '1';
+
 /** Turns a catalog `model_url` (or thumbnail) into something the WebView can fetch. */
 export function resolveModelUrl(modelUrl: string): string {
-  if (modelUrl.startsWith('local://')) return `${LOCAL_ASSET_ORIGIN}/${modelUrl.slice('local://'.length)}${ASSET_BUST}`;
+  if (modelUrl.startsWith('local://')) {
+    const path = modelUrl.slice('local://'.length);
+    if (REMOTE_MODEL_PATH.test(path)) return `${REMOTE_MODEL_BASE}/${path}?v=${REMOTE_MODEL_VERSION}`;
+    return `${LOCAL_ASSET_ORIGIN}/${path}${ASSET_BUST}`;
+  }
   return modelUrl;
 }
 
