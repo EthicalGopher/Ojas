@@ -1,0 +1,13 @@
+{
+  "name": "ai-warrior2-pose-tracker-js",
+  "version": "1.0.0",
+  "description": "AI Warrior II (Virabhadrasana II) Tracker & Form Validator in pure JavaScript with MediaPipe Pose",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node test/warrior2_engine.test.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}

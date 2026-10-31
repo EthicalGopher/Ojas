@@ -18,7 +18,8 @@ ARCH_FLAG := -PreactNativeArchitectures=armeabi-v7a,arm64-v8a,x86,x86_64
 
 .PHONY: db-check uninstall help install start android web typecheck doctor check \
         keystore apk apk-debug install-apk run-apk logs clean clean-android \
-        backend backend-install migrate tree-pose-engine tree-pose-test tree-pose-onnx
+        backend backend-install migrate tree-pose-engine tree-pose-test tree-pose-onnx \
+        warrior2-engine warrior2-test warrior2-python-test warrior2-onnx
 
 help: ## Show this help
 	@echo "Ojas v$(VERSION) - available commands:"
@@ -57,6 +58,18 @@ tree-pose-onnx: ## Re-export the Tree Pose classifier (.pth -> int8 ONNX for off
 
 tree-pose-test: ## Run the Tree Pose geometry engine tests
 	node backend/Pose/tree_pose/web/test/tree_pose_engine.test.js
+
+warrior2-engine: ## Re-embed the Warrior II JS engine into the app after editing it
+	node scripts/gen-warrior2-engine.js
+
+warrior2-onnx: ## Re-export the Warrior II classifier (.pth -> int8 ONNX for offline on-device use)
+	python3 backend/Pose/warrior_pose/export_onnx.py
+
+warrior2-test: ## Run the Warrior II geometry engine tests
+	node backend/Pose/warrior_pose/web/test/warrior2_engine.test.js
+
+warrior2-python-test: ## Run the Warrior II Python biomechanical test suite
+	/home/sankhyahrick/Python/bin/python3 backend/Pose/warrior_pose/test/test_warrior2_python.py
 
 check: typecheck ## Run all checks (typecheck + expo-doctor)
 	-npx expo-doctor

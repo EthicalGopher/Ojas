@@ -1,0 +1,41 @@
+{
+  "_description": "Tree Pose (Vrikshasana) shared configuration. Single source of truth for ALL biomechanical thresholds, loaded by BOTH the Python implementation (tree_pose_tracker.py, tree_pose_image.py) and the JavaScript implementation (tree_pose_engine.js via app.js). Changing a value here changes both engines identically.",
+  "aspect_default": 1.7778,
+  "quality": {
+    "vis_min": 0.60,
+    "vis_min_single": 0.40
+  },
+  "standing_leg": {
+    "knee_min": 160.0
+  },
+  "lifted_leg": {
+    "knee_min": 25.0,
+    "knee_max": 135.0
+  },
+  "foot_placement": {
+    "on_thigh_min": 0.45,
+    "knee_zone_hi": 0.40,
+    "knee_zone_lo": -0.10,
+    "calf_max": -0.25,
+    "calf_low": -0.80,
+    "horiz_max": 0.75
+  },
+  "knee_opening": {
+    "open_min": 0.15
+  },
+  "torso_max_lean": 18.0,
+  "head": {
+    "_description": "Head/nose alignment relative to shoulder midpoint. max_offset is aspect-corrected lateral offset normalized by torso scale. min_visibility is the minimum nose landmark visibility.",
+    "max_offset": 0.28,
+    "min_visibility": 0.40
+  },
+  "hands": {
+    "together_max": 0.45,
+    "prayer_y_min": 0.10,
+    "prayer_y_max": 1.05
+  },
+  "ankle_diff_min": 0.08,
+  "ema_alpha": 0.35,
+  "confirm_frames": 5,
+  "break_frames": 3
+}

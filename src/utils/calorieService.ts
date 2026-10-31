@@ -28,6 +28,7 @@ export function calculateExerciseCalories(
     identifier === '6' ||
     identifier === '8' ||
     identifier === '9' ||
+    identifier === '10' ||
     identifier.includes('triangle') ||
     identifier.includes('trikon') ||
     identifier.includes('cobra') ||
@@ -35,7 +36,9 @@ export function calculateExerciseCalories(
     identifier.includes('child') ||
     identifier.includes('balasana') ||
     identifier.includes('tree') ||
-    identifier.includes('vriksh')
+    identifier.includes('vriksh') ||
+    identifier.includes('warrior') ||
+    identifier.includes('virabhadra')
   ) {
     repRate = 0.40;
     holdRate = 0.12;

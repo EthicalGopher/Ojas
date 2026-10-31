@@ -158,8 +158,8 @@ export class AIBattleSimulation {
 
   constructor(bot: AIBotProfile, exerciseId?: string) {
     this.bot = bot;
-    this.isHoldExercise = ['3', '6', '8', '9'].includes(exerciseId || '1');
-    this.isLongestHold = exerciseId === '9';
+    this.isHoldExercise = ['3', '6', '8', '9', '10'].includes(exerciseId || '1');
+    this.isLongestHold = exerciseId === '9' || exerciseId === '10';
     this.balanceLimitSeconds = this.rollBalanceLimit();
     this.currentRepDuration = this.bot.baseRepSeconds;
     this.currentQuote = this.bot.quotes.greeting[Math.floor(Math.random() * this.bot.quotes.greeting.length)];

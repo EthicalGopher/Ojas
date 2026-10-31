@@ -167,6 +167,23 @@ export const DEFAULT_EXERCISES: ExerciseItem[] = [
     type: 'Yoga',
     cure_to: ['flat_feet', 'knock_knees', 'bow_legs', 'rounded_shoulders'],
   },
+  {
+    id: '10',
+    name: 'Warrior II',
+    category: 'flexibility',
+    icon: '',
+    description: 'AI Real-time Virabhadrasana II Tracker: Deep lunge, level T-arms, and vertical spine biomechanics',
+    bgGradient: '#BAE6FD',
+    isFavorite: true,
+    duration_mins: 15,
+    muscle_groups: 'Quadriceps / Glutes / Hip Flexors / Deltoids / Core',
+    reps_target: 10,
+    difficulty: 'Intermediate',
+    bg_theme: '#BAE6FD',
+    image_url: 'https://locsjrjekkyjbeapgreu.supabase.co/storage/v1/object/public/Images/Excercise/a-female-doing-yoga.svg',
+    type: 'Yoga',
+    cure_to: ['flat_feet', 'knock_knees', 'lower_back_pain'],
+  },
 ];
 
 export async function fetchExercisesFromSupabase(): Promise<ExerciseItem[]> {

@@ -1,0 +1,68 @@
+{
+  "pose": "Warrior II (Virabhadrasana II)",
+  "dataset": {
+    "correct_pose": [
+      {
+        "file": "warrior2_pose_1.png",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/0/06/Warrior_II.jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:Warrior_II.jpg",
+        "author": "Kennguru",
+        "license": "CC BY 2.0"
+      },
+      {
+        "file": "warrior2_pose_2.png",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/1/1d/Virabhadrasana_II_-_Warrior_II_Pose.jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:Virabhadrasana_II_-_Warrior_II_Pose.jpg",
+        "author": "Scott & Emily",
+        "license": "CC BY 2.0"
+      },
+      {
+        "file": "warrior2_pose_3.png",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/c/c7/Rocket-yoga-06-1200px.jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:Rocket-yoga-06-1200px.jpg",
+        "author": "Nicholas Laughlin",
+        "license": "CC BY 4.0"
+      },
+      {
+        "file": "warrior2_pose_4.png",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/3/31/Ashish_veerbhadrasana.jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:Ashish_veerbhadrasana.jpg",
+        "author": "Ashish Sharma",
+        "license": "CC BY-SA 4.0"
+      },
+      {
+        "file": "warrior2_pose_5.png",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/0/0f/Photography_by_Mina_Alizadeh.png",
+        "page": "https://commons.wikimedia.org/wiki/File:Photography_by_Mina_Alizadeh.png",
+        "author": "Mina Alizadeh",
+        "license": "CC BY-SA 4.0"
+      }
+    ],
+    "wrong_pose": [
+      {
+        "file": "wrong_pose_1.png",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/8/88/Yoga_Warrior_I.jpg",
+        "defect": "Warrior I arm posture (overhead arms)",
+        "license": "CC BY 2.0"
+      },
+      {
+        "file": "wrong_pose_2.png",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/e/ef/Yoga_(9707554768).jpg",
+        "defect": "Bent rear leg (sagging knee)",
+        "license": "CC BY 2.0"
+      },
+      {
+        "file": "wrong_pose_3.png",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/e/e3/14er_Yoga_Gurus_(8544069414).jpg",
+        "defect": "High upright stance with uneven arms",
+        "license": "CC BY 2.0"
+      },
+      {
+        "file": "wrong_pose_4.png",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/3/37/Yoga_(9704316523).jpg",
+        "defect": "Narrow stance without horizontal T-arms",
+        "license": "CC BY 2.0"
+      }
+    ]
+  }
+}

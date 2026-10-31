@@ -260,6 +260,41 @@ export function getAiInstructorHtml(
     frame('bip01spine1', shoulders, up && up.clone());
     frame('bip01spine2', shoulders, up && up.clone());
     frame('bip01head', shoulders && shoulders.clone(), new THREE.Vector3(0, 1, 0));
+    function footFrame(fbn, tbn) {
+      var fb = B[fbn], tb = B[tbn];
+      if (!fb || !tb) return;
+      var fwd = tb.getWorldPosition(new THREE.Vector3()).sub(fb.getWorldPosition(new THREE.Vector3())).normalize();
+      var lat = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), fwd).normalize();
+      var fup = new THREE.Vector3().crossVectors(fwd, lat).normalize();
+      var qi = fb.getWorldQuaternion(new THREE.Quaternion()).invert();
+      FRAMES[fbn] = { a: lat.applyQuaternion(qi), u: fup.applyQuaternion(qi) };
+    }
+    footFrame('bip01lfoot', 'bip01ltoe0');
+    footFrame('bip01rfoot', 'bip01rtoe0');
+    function handFrame(hbn, fbn, f1bn, f2bn) {
+      var hb = B[hbn], fb = B[fbn];
+      if (!hb || !fb) return;
+      var fwd = fb.getWorldPosition(new THREE.Vector3()).sub(hb.getWorldPosition(new THREE.Vector3())).normalize();
+      var palm;
+      var f1b = B[f1bn], f2b = B[f2bn];
+      if (f1b && f2b) {
+        var d1 = f1b.getWorldPosition(new THREE.Vector3()).sub(fb.getWorldPosition(new THREE.Vector3())).normalize();
+        var d2 = f2b.getWorldPosition(new THREE.Vector3()).sub(f1b.getWorldPosition(new THREE.Vector3())).normalize();
+        var curl = d2.sub(d1);
+        if (curl.lengthSq() > 1e-4) {
+          palm = curl.sub(fwd.clone().multiplyScalar(curl.dot(fwd))).normalize();
+        }
+      }
+      if (!palm) {
+        var isLeft = hbn.indexOf('lhand') !== -1;
+        var pVec = new THREE.Vector3(isLeft ? -1 : 1, 0, 0);
+        palm = pVec.sub(fwd.clone().multiplyScalar(pVec.dot(fwd))).normalize();
+      }
+      var qi = hb.getWorldQuaternion(new THREE.Quaternion()).invert();
+      FRAMES[hbn] = { a: palm.applyQuaternion(qi), u: fwd.applyQuaternion(qi) };
+    }
+    handFrame('bip01lhand', 'bip01lfinger2', 'bip01lfinger21', 'bip01lfinger22');
+    handFrame('bip01rhand', 'bip01rfinger2', 'bip01rfinger21', 'bip01rfinger22');
   }
   function lm(i, out) { return out.set(smooth[i * 4], smooth[i * 4 + 1], smooth[i * 4 + 2]); }
   function vis(i) { return poseTarget[i * 4 + 3]; }
@@ -288,6 +323,43 @@ export function getAiInstructorHtml(
     var q = new THREE.Quaternion().setFromUnitVectors(from, dir.clone().normalize());
     setWorldQ(b, q.multiply(b.getWorldQuaternion(_q)));
   }
+  function alignFoot(fbn, tbn, dir, anPos) {
+    if (!B[fbn] || !FRAMES[fbn] || dir.lengthSq() < 1e-6) {
+      aim(fbn, tbn, dir);
+      return;
+    }
+    var fwd = dir.clone().normalize();
+    // Lifted feet (e.g. Tree Pose where the ankle is at y > 0.25):
+    // When toes point downward (fwd.y < -0.4), press the sole flush against the standing inner thigh:
+    // - Left foot (standing leg at -x): sole faces -x, laces/top of foot (fup) faces +x (and slightly +z)
+    // - Right foot (standing leg at +x): sole faces +x, laces/top of foot (fup) faces -x (and slightly +z)
+    if (anPos && anPos.y > 0.25 && fwd.y < -0.4) {
+      var isLeft = fbn.indexOf('lfoot') !== -1;
+      var fup = new THREE.Vector3(isLeft ? 0.95 : -0.95, 0, 0.3).normalize();
+      var lat = new THREE.Vector3().crossVectors(fup, fwd).normalize();
+      alignFrame(fbn, lat, fup);
+      return;
+    }
+    var lat = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), fwd);
+    if (lat.lengthSq() < 1e-4) lat = new THREE.Vector3(1, 0, 0);
+    else lat.normalize();
+    var fup = new THREE.Vector3().crossVectors(fwd, lat).normalize();
+    alignFrame(fbn, lat, fup);
+  }
+  function alignHand(hbn, fbn, dir) {
+    if (!B[hbn] || !FRAMES[hbn] || dir.lengthSq() < 1e-6) {
+      aim(hbn, fbn, dir);
+      return;
+    }
+    var fwd = dir.clone().normalize();
+    if (fwd.y > 0.6) {
+      var isLeft = hbn.indexOf('lhand') !== -1;
+      var palm = new THREE.Vector3(isLeft ? -1 : 1, 0, 0);
+      alignFrame(hbn, palm, fwd);
+      return;
+    }
+    aim(hbn, fbn, dir);
+  }
   function seg(a, b) { return lm(b, new THREE.Vector3()).sub(lm(a, new THREE.Vector3())); }
   function applyLive() {
     REST.forEach(function (r) { r.b.quaternion.copy(r.q); r.b.position.copy(r.p); });
@@ -308,19 +380,27 @@ export function getAiInstructorHtml(
     }
     aim('bip01lupperarm', 'bip01lforearm', seg(J.lSh, J.lEl));
     aim('bip01lforearm', 'bip01lhand', seg(J.lEl, J.lWr));
-    aim('bip01lhand', 'bip01lfinger2', seg(J.lWr, J.lIdx));
+    alignHand('bip01lhand', 'bip01lfinger2', seg(J.lWr, J.lIdx));
     aim('bip01rupperarm', 'bip01rforearm', seg(J.rSh, J.rEl));
     aim('bip01rforearm', 'bip01rhand', seg(J.rEl, J.rWr));
-    aim('bip01rhand', 'bip01rfinger2', seg(J.rWr, J.rIdx));
+    alignHand('bip01rhand', 'bip01rfinger2', seg(J.rWr, J.rIdx));
     aim('bip01lthigh', 'bip01lcalf', seg(J.lHip, J.lKn));
     aim('bip01lcalf', 'bip01lfoot', seg(J.lKn, J.lAn));
-    aim('bip01lfoot', 'bip01ltoe0', seg(J.lAn, J.lFt));
+    alignFoot('bip01lfoot', 'bip01ltoe0', seg(J.lAn, J.lFt), lm(J.lAn, _v1));
     aim('bip01rthigh', 'bip01rcalf', seg(J.rHip, J.rKn));
     aim('bip01rcalf', 'bip01rfoot', seg(J.rKn, J.rAn));
-    aim('bip01rfoot', 'bip01rtoe0', seg(J.rAn, J.rFt));
+    alignFoot('bip01rfoot', 'bip01rtoe0', seg(J.rAn, J.rFt), lm(J.rAn, _v2));
     // feet back on the floor: the streamed pose is hip-centred, so a squat would float
     var low = lowestFoot();
     if (isFinite(low)) model.position.y += restLow - low;
+    if (shadow && B['bip01lfoot'] && B['bip01rfoot']) {
+      var lf = B['bip01lfoot'].getWorldPosition(_v1);
+      var rf = B['bip01rfoot'].getWorldPosition(_v2);
+      shadow.position.x = (lf.x + rf.x) * 0.5;
+      shadow.position.z = (lf.z + rf.z) * 0.5;
+      var span = Math.max(1.1, Math.abs(lf.x - rf.x) + 0.6);
+      shadow.scale.x = span / 1.1;
+    }
   }
   function lowestFoot() {
     var low = Infinity;
@@ -406,6 +486,7 @@ export function getAiInstructorHtml(
       scene.add(pivot);
       model = root;
       floorY = root.position.y;
+      if (shadow) shadow.position.z = root.position.z;
       applyLoadout(root);
       // for remote debugging (chrome://inspect): window.__ai.state()
       window.__ai = { actions: actions, weights: weights, state: function () {

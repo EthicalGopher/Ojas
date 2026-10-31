@@ -39,6 +39,41 @@ import torch.nn as nn
 DEVICE = "cpu"
 POSE_MODEL_URL = "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/latest/pose_landmarker_full.task"
 POSE_MODEL_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pose_landmarker_full.task")
+CONFIG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tree_pose_config.json")
+
+
+def load_config():
+    """Loads shared configuration from tree_pose_config.json."""
+    defaults = {
+        "aspect_default": 1.7778,
+        "quality": {"vis_min": 0.60, "vis_min_single": 0.40},
+        "standing_leg": {"knee_min": 160.0},
+        "lifted_leg": {"knee_min": 25.0, "knee_max": 135.0},
+        "foot_placement": {
+            "on_thigh_min": 0.45, "knee_zone_hi": 0.40, "knee_zone_lo": -0.10,
+            "calf_max": -0.25, "calf_low": -0.80, "horiz_max": 0.75
+        },
+        "knee_opening": {"open_min": 0.15},
+        "torso_max_lean": 18.0,
+        "head": {"max_offset": 0.28, "min_visibility": 0.40},
+        "hands": {"together_max": 0.45, "prayer_y_min": 0.10, "prayer_y_max": 1.05},
+        "ankle_diff_min": 0.08,
+        "ema_alpha": 0.35,
+        "confirm_frames": 5,
+        "break_frames": 3
+    }
+    if os.path.exists(CONFIG_PATH):
+        try:
+            import json
+            with open(CONFIG_PATH, "r") as f:
+                cfg = json.load(f)
+                return cfg
+        except Exception as e:
+            print(f"[WARNING] Could not load {CONFIG_PATH}: {e}")
+    return defaults
+
+
+CONFIG = load_config()
 
 
 

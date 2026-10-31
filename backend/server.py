@@ -698,6 +698,38 @@ async def tree_pose_classify(request: Request):
     result = await asyncio.to_thread(tree_pose_classifier.classify_jpeg, jpeg)
     return JSONResponse(result)
 
+# ---------- Warrior II image classifier (cross-checks the MediaPipe geometry) ----------
+import importlib.util
+warrior2_classifier_path = os.path.join(BASE_DIR, "Pose", "warrior_pose", "classifier.py")
+if os.path.exists(warrior2_classifier_path):
+    _w2_spec = importlib.util.spec_from_file_location("warrior2_classifier", warrior2_classifier_path)
+    warrior2_classifier = importlib.util.module_from_spec(_w2_spec)
+    _w2_spec.loader.exec_module(warrior2_classifier)
+else:
+    warrior2_classifier = None
+
+@app.get("/api/warrior2/status")
+async def warrior2_status():
+    if not warrior2_classifier:
+        return JSONResponse({"available": False})
+    available = await asyncio.to_thread(warrior2_classifier.is_available)
+    return JSONResponse({"available": available})
+
+@app.post("/api/warrior2/classify")
+async def warrior2_classify(request: Request):
+    if not warrior2_classifier:
+        return JSONResponse({"available": False, "reason": "classifier not loaded"})
+    try:
+        payload = json.loads(await request.body())
+        image = payload.get("image", "")
+        if "," in image:
+            image = image.split(",", 1)[1]
+        jpeg = base64.b64decode(image)
+    except Exception:
+        return JSONResponse({"error": "invalid payload"}, status_code=400)
+    result = await asyncio.to_thread(warrior2_classifier.classify_jpeg, jpeg)
+    return JSONResponse(result)
+
 @app.websocket("/ws/presence")
 async def presence_websocket(ws: WebSocket):
     await ws.accept()

@@ -55,8 +55,8 @@ export const EXERCISE_MOVES_SOURCE = `
     var rEar = add(add(sm, sc(hd, 0.22)), sc(hac, -0.075));
     var lA = ik(lS, s.lw, L.ua, L.fa, s.lwh), rA = ik(rS, s.rw, L.ua, L.fa, s.rwh);
     var lL = ik(lH, s.la, L.th, L.sn, s.lah), rL = ik(rH, s.ra, L.th, L.sn, s.rah);
-    var lIdx = add(lA.end, sc(n(sub(lA.end, lA.mid)), L.hand));
-    var rIdx = add(rA.end, sc(n(sub(rA.end, rA.mid)), L.hand));
+    var lIdx = add(lA.end, sc(n(s.lh || sub(lA.end, lA.mid)), L.hand));
+    var rIdx = add(rA.end, sc(n(s.rh || sub(rA.end, rA.mid)), L.hand));
     var lFt = add(lL.end, sc(n(s.lft), L.ft)), rFt = add(rL.end, sc(n(s.rft), L.ft));
     var pts = [nose, lEar, rEar, lS, rS, lA.mid, rA.mid, lA.end, rA.end, lIdx, rIdx,
                lH, rH, lL.mid, rL.mid, lL.end, rL.end, lFt, rFt];
@@ -69,8 +69,15 @@ export const EXERCISE_MOVES_SOURCE = `
 
   function mix(a, b, t) {
     var o = {};
-    Object.keys(a).forEach(function (k) {
-      o[k] = [a[k][0] + (b[k][0] - a[k][0]) * t, a[k][1] + (b[k][1] - a[k][1]) * t, a[k][2] + (b[k][2] - a[k][2]) * t];
+    var keys = {};
+    Object.keys(a).forEach(function (k) { keys[k] = true; });
+    Object.keys(b).forEach(function (k) { keys[k] = true; });
+    Object.keys(keys).forEach(function (k) {
+      if (a[k] && b[k]) {
+        o[k] = [a[k][0] + (b[k][0] - a[k][0]) * t, a[k][1] + (b[k][1] - a[k][1]) * t, a[k][2] + (b[k][2] - a[k][2]) * t];
+      } else {
+        o[k] = (b[k] || a[k]).slice();
+      }
     });
     return o;
   }
@@ -85,6 +92,7 @@ export const EXERCISE_MOVES_SOURCE = `
   var FRONT = {
     hip: [0, 0.93, 0], up: [0, 1, 0], across: [1, 0, 0], pAcross: [1, 0, 0], head: [0, 1, 0], hAcross: [1, 0, 0],
     lw: [0.31, 0.86, 0.03], lwh: [0.5, 0, -1], rw: [-0.31, 0.86, 0.03], rwh: [-0.5, 0, -1],
+    lh: [0, -1, 0], rh: [0, -1, 0],
     la: [0.10, 0.08, 0], lah: [0, 0, 1], ra: [-0.10, 0.08, 0], rah: [0, 0, 1],
     lft: [0, -0.1, 1], rft: [0, -0.1, 1]
   };
@@ -147,10 +155,14 @@ export const EXERCISE_MOVES_SOURCE = `
   function tree(p, t) {
     var sw = 0.02 * Math.sin(t * 1.2);
     return spec(FRONT, {
+      hip: [-0.02, 0.93, 0],
       up: [sw, 1, 0],
-      lw: [0.03, 1.27, 0.25], lwh: [1, -0.5, 0], rw: [-0.03, 1.27, 0.25], rwh: [-1, -0.5, 0],
-      la: [0.06, 0.64, 0.11], lah: [1, 0, 0.3], ra: [-0.10, 0.08, 0], rah: [0, 0, 1],
-      lft: [-0.2, -0.6, 0.8]
+      lw: [0.015, 1.20, 0.22], lwh: [1, -0.6, 0], rw: [-0.055, 1.20, 0.22], rwh: [-1, -0.6, 0],
+      lh: [0, 0.95, 0.3], rh: [0, 0.95, 0.3],
+      la: [-0.02, 0.80, 0.01], lah: [1, -0.05, 0],
+      ra: [-0.06, 0.08, 0], rah: [0, 0, 1],
+      lft: [-0.05, -0.98, 0.05],
+      rft: [0, -0.1, 1]
     });
   }
   function triangle(p, t) {
@@ -184,6 +196,15 @@ export const EXERCISE_MOVES_SOURCE = `
       lft: [-1, -0.1, 0], rft: [-1, -0.1, 0]
     });
   }
+  function warrior(p, t) {
+    var sw = 0.012 * Math.sin(t * 1.2);
+    return spec(FRONT, {
+      hip: [0.02, 0.65, 0], up: [sw, 1, 0], head: [0, 1, 0], hAcross: [0.15, 0, -0.99],
+      lw: [0.78, 1.15, 0], lwh: [0, -1, 0], rw: [-0.74, 1.15, 0], rwh: [0, -1, 0],
+      la: [0.50, 0.08, 0], lah: [0.92, 0, 0.08], ra: [-0.70, 0.08, 0], rah: [-0.1, 0, 0.2],
+      lft: [1, -0.1, 0], rft: [0.38, -0.1, 0.92]
+    });
+  }
 
   // stay: keeps the start pose between reps; wide: needs a wider camera frame (metres, half width)
   var MOVES = {
@@ -194,7 +215,8 @@ export const EXERCISE_MOVES_SOURCE = `
     '6': { f: cobra, base: SIDE, stay: false, hold: true, wide: 1.0, lying: true },
     '7': { f: pushup, base: SIDE, stay: true, hold: false, wide: 1.1, lying: true },
     '8': { f: child, base: SIDE, stay: false, hold: true, wide: 1.0, lying: true },
-    '9': { f: tree, base: FRONT, stay: false, hold: true, wide: 0.75, lying: false }
+    '9': { f: tree, base: FRONT, stay: false, hold: true, wide: 0.75, lying: false },
+    '10': { f: warrior, base: FRONT, stay: false, hold: true, wide: 1.15, lying: false }
   };
 
   g.OjasMoves = {

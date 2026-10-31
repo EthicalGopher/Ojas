@@ -36,9 +36,10 @@ const LM = {
 };
 
 // ---------------------------------------------------------------------------
-// Biomechanical thresholds (tuned; see README)
+// Biomechanical thresholds (synced with tree_pose_config.json)
 // ---------------------------------------------------------------------------
-const THRESHOLDS = {
+const DEFAULT_THRESHOLDS = {
+    ASPECT_DEFAULT: 1.7778,
     // Standing leg
     STANDING_KNEE_MIN: 160.0,      // deg — below this the standing knee is bent
     // Lifted leg
@@ -57,10 +58,9 @@ const THRESHOLDS = {
     // Torso
     TORSO_MAX_LEAN: 18.0,          // deg from vertical
     // Head/neck alignment: lateral nose offset from the shoulder-line midpoint,
-    // aspect-corrected and normalized by body scale (torso length). Rejects a
-    // clearly excessive lateral head tilt/displacement while tolerating small
-    // natural head movements and minor camera-perspective differences.
+    // aspect-corrected and normalized by body scale (torso length).
     HEAD_ALIGNMENT_MAX_OFFSET: 0.28,
+    HEAD_MIN_VISIBILITY: 0.40,
     // Hands (normalized by torso length; heights by shoulder-hip span)
     HANDS_TOGETHER_MAX: 0.45,      // wrist gap / torso length
     PRAYER_Y_MIN: 0.10,            // chest band: 0 = shoulder line, 1 = hip line
@@ -68,10 +68,44 @@ const THRESHOLDS = {
     // Landmark quality
     VIS_MIN: 0.60,                 // required mean visibility of critical landmarks
     VIS_MIN_SINGLE: 0.40,          // no critical landmark may fall below this
-    // Temporal confirmation
+    // Temporal confirmation & smoothing
+    EMA_ALPHA: 0.35,
     CONFIRM_FRAMES: 5,             // consecutive validated frames to confirm a hold
     BREAK_FRAMES: 3                // consecutive failed frames to break a hold (jitter tolerance)
 };
+
+// Allow loading config dynamically if running in Node or browser
+let THRESHOLDS = Object.assign({}, DEFAULT_THRESHOLDS);
+try {
+    if (typeof require !== "undefined") {
+        const cfg = require('./tree_pose_config.json');
+        if (cfg) {
+            THRESHOLDS.VIS_MIN = cfg.quality?.vis_min ?? THRESHOLDS.VIS_MIN;
+            THRESHOLDS.VIS_MIN_SINGLE = cfg.quality?.vis_min_single ?? THRESHOLDS.VIS_MIN_SINGLE;
+            THRESHOLDS.STANDING_KNEE_MIN = cfg.standing_leg?.knee_min ?? THRESHOLDS.STANDING_KNEE_MIN;
+            THRESHOLDS.LIFTED_KNEE_MIN = cfg.lifted_leg?.knee_min ?? THRESHOLDS.LIFTED_KNEE_MIN;
+            THRESHOLDS.LIFTED_KNEE_MAX = cfg.lifted_leg?.knee_max ?? THRESHOLDS.LIFTED_KNEE_MAX;
+            THRESHOLDS.FOOT_ON_THIGH_MIN = cfg.foot_placement?.on_thigh_min ?? THRESHOLDS.FOOT_ON_THIGH_MIN;
+            THRESHOLDS.KNEE_ZONE_HI = cfg.foot_placement?.knee_zone_hi ?? THRESHOLDS.KNEE_ZONE_HI;
+            THRESHOLDS.KNEE_ZONE_LO = cfg.foot_placement?.knee_zone_lo ?? THRESHOLDS.KNEE_ZONE_LO;
+            THRESHOLDS.FOOT_CALF_MAX = cfg.foot_placement?.calf_max ?? THRESHOLDS.FOOT_CALF_MAX;
+            THRESHOLDS.FOOT_CALF_LOW = cfg.foot_placement?.calf_low ?? THRESHOLDS.FOOT_CALF_LOW;
+            THRESHOLDS.FOOT_HORIZ_MAX = cfg.foot_placement?.horiz_max ?? THRESHOLDS.FOOT_HORIZ_MAX;
+            THRESHOLDS.KNEE_OPEN_MIN = cfg.knee_opening?.open_min ?? THRESHOLDS.KNEE_OPEN_MIN;
+            THRESHOLDS.TORSO_MAX_LEAN = cfg.torso_max_lean ?? THRESHOLDS.TORSO_MAX_LEAN;
+            THRESHOLDS.HEAD_ALIGNMENT_MAX_OFFSET = cfg.head?.max_offset ?? THRESHOLDS.HEAD_ALIGNMENT_MAX_OFFSET;
+            THRESHOLDS.HEAD_MIN_VISIBILITY = cfg.head?.min_visibility ?? THRESHOLDS.HEAD_MIN_VISIBILITY;
+            THRESHOLDS.HANDS_TOGETHER_MAX = cfg.hands?.together_max ?? THRESHOLDS.HANDS_TOGETHER_MAX;
+            THRESHOLDS.PRAYER_Y_MIN = cfg.hands?.prayer_y_min ?? THRESHOLDS.PRAYER_Y_MIN;
+            THRESHOLDS.PRAYER_Y_MAX = cfg.hands?.prayer_y_max ?? THRESHOLDS.PRAYER_Y_MAX;
+            THRESHOLDS.EMA_ALPHA = cfg.ema_alpha ?? THRESHOLDS.EMA_ALPHA;
+            THRESHOLDS.CONFIRM_FRAMES = cfg.confirm_frames ?? THRESHOLDS.CONFIRM_FRAMES;
+            THRESHOLDS.BREAK_FRAMES = cfg.break_frames ?? THRESHOLDS.BREAK_FRAMES;
+        }
+    }
+} catch (e) {
+    // Fall back to default thresholds
+}
 
 // Candidate stance gate: minimum ankle height difference to nominate a
 // standing leg (preserved from the original engine).
@@ -132,6 +166,14 @@ function lmVisibility(lm) {
 let ASPECT = 16 / 9;
 function setStreamAspect(width, height) {
     if (width > 0 && height > 0) ASPECT = width / height;
+}
+
+/** Dynamically updates thresholds and returns the updated set. */
+function setThresholds(custom) {
+    if (custom && typeof custom === "object") {
+        Object.assign(THRESHOLDS, custom);
+    }
+    return THRESHOLDS;
 }
 
 // ---------------------------------------------------------------------------
@@ -734,6 +776,8 @@ if (typeof module !== "undefined" && module.exports) {
         classifyFootPlacement,
         classifyHands,
         setStreamAspect,
+        setThresholds,
+        DEFAULT_THRESHOLDS,
         THRESHOLDS,
         LM,
         ANKLE_DIFF_MIN

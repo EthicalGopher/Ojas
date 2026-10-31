@@ -33,6 +33,7 @@ import { recordDailyChallengeProgress, recordCaloriesToProfile } from '../../../
 import { calculateExerciseCalories } from '../../../utils/calorieService';
 import { BACKEND_URL } from '../../../utils/matchmaking';
 import { TREE_POSE_ENGINE_SOURCE } from '../poseEngines/treePoseEngineSource';
+import { WARRIOR2_ENGINE_SOURCE } from '../poseEngines/warrior2EngineSource';
 
 export type ModelComplexity = 'light' | 'medium' | 'high';
 
@@ -73,10 +74,14 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
   } else if (norm.includes('tree') || norm.includes('vriksh') || norm === '9') {
     exerciseMode = 'tree_pose';
     exerciseTitle = 'Tree Pose';
+  } else if (norm.includes('warrior') || norm.includes('virabhadra') || norm === '10') {
+    exerciseMode = 'warrior2';
+    exerciseTitle = 'Warrior II';
   }
 
-  // Tree Pose runs the dedicated MediaPipe geometry engine (backend/Pose/tree_pose/web).
+  // Dedicated MediaPipe geometry engines
   const treePoseEngineScript = exerciseMode === 'tree_pose' ? `<script>${TREE_POSE_ENGINE_SOURCE}</script>` : '';
+  const warrior2EngineScript = exerciseMode === 'warrior2' ? `<script>${WARRIOR2_ENGINE_SOURCE}</script>` : '';
 
   return `
 <!DOCTYPE html>
@@ -191,9 +196,11 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
   </div>
 
   ${treePoseEngineScript}
+  ${warrior2EngineScript}
   <script>
     const EXERCISE_MODE = '${exerciseMode}';
     const TREE_CLASSIFY_URL = '${BACKEND_URL}/api/tree-pose/classify';
+    const WARRIOR_CLASSIFY_URL = '${BACKEND_URL}/api/warrior2/classify';
     const video = document.getElementById('video');
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d');
@@ -1168,6 +1175,278 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
 
     if (EXERCISE_MODE === 'tree_pose') initLocalTreeClassifier();
 
+    // 10. Warrior II Engine (Virabhadrasana II)
+    const WARRIOR2_LOCAL_BASE = 'http://127.0.0.1:8888/warrior2/';
+    const WARRIOR2_CLASSIFY_MIN_GAP_MS = 350;
+    const WARRIOR2_VERDICT_STALE_MS = 5000;
+    const WARRIOR2_WRONG_THRESHOLD = 0.5;
+    const warrior2Ai = {
+      local: 'idle',
+      session: null,
+      remote: true,
+      remoteFailures: 0,
+      busy: false,
+      lastAt: 0,
+      verdict: null
+    };
+    let warrior2Engine = null;
+    let warrior2AttemptStart = 0;
+    let warrior2InputCanvas = null;
+    let warrior2UploadCanvas = null;
+    let warrior2HoldFrames = 0;
+    let warrior2BestFrames = 0;
+
+    function postWarrior2Hold() {
+      if (!window.ReactNativeWebView) return;
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'POSE_HOLD_TIME',
+        holdSeconds: parseFloat((warrior2HoldFrames / 25).toFixed(1)),
+        bestHoldSeconds: parseFloat((warrior2BestFrames / 25).toFixed(1)),
+        poseName: 'Warrior II'
+      }));
+    }
+
+    function breakWarrior2Hold() {
+      if (warrior2HoldFrames === 0) return;
+      warrior2HoldFrames = 0;
+      postWarrior2Hold();
+    }
+
+    async function initLocalWarrior2Classifier() {
+      if (warrior2Ai.local !== 'idle') return;
+      warrior2Ai.local = 'loading';
+      try {
+        if (typeof ort === 'undefined') {
+          await loadScriptTag('https://cdn.jsdelivr.net/npm/onnxruntime-web@1.19.2/dist/ort.min.js');
+        }
+        warrior2Ai.session = await Promise.race([
+          ort.InferenceSession.create(WARRIOR2_LOCAL_BASE + 'warrior2_classifier.onnx', {
+            executionProviders: ['wasm']
+          }),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 5000))
+        ]);
+        warrior2Ai.local = 'ready';
+      } catch (err) {
+        warrior2Ai.local = 'failed';
+      }
+    }
+
+    function warrior2FrameTensor() {
+      const size = 224;
+      if (!warrior2InputCanvas) {
+        warrior2InputCanvas = document.createElement('canvas');
+        warrior2InputCanvas.width = size;
+        warrior2InputCanvas.height = size;
+      }
+      const c = warrior2InputCanvas.getContext('2d', { willReadFrequently: true });
+      c.drawImage(video, 0, 0, size, size);
+      const id = c.getImageData(0, 0, size, size).data;
+      const f = new Float32Array(3 * size * size);
+      const mean = [0.485, 0.456, 0.406];
+      const std = [0.229, 0.224, 0.225];
+      const plane = size * size;
+      for (let i = 0, p = 0; i < id.length; i += 4, p++) {
+        f[p] = (id[i] / 255.0 - mean[0]) / std[0];
+        f[plane + p] = (id[i + 1] / 255.0 - mean[1]) / std[1];
+        f[2 * plane + p] = (id[i + 2] / 255.0 - mean[2]) / std[2];
+      }
+      return new ort.Tensor('float32', f, [1, 3, size, size]);
+    }
+
+    async function runLocalWarrior2Classify() {
+      const out = await warrior2Ai.session.run({ input: warrior2FrameTensor() });
+      const p = out.probs.data;
+      return { correct: p[0], wrong: p[1] };
+    }
+
+    async function runRemoteWarrior2Classify() {
+      if (!warrior2UploadCanvas) warrior2UploadCanvas = document.createElement('canvas');
+      const scale = 224 / Math.max(video.videoWidth, video.videoHeight);
+      warrior2UploadCanvas.width = Math.round(video.videoWidth * scale);
+      warrior2UploadCanvas.height = Math.round(video.videoHeight * scale);
+      warrior2UploadCanvas.getContext('2d').drawImage(video, 0, 0, warrior2UploadCanvas.width, warrior2UploadCanvas.height);
+      const image = warrior2UploadCanvas.toDataURL('image/jpeg', 0.8);
+      const controller = new AbortController();
+      const t = setTimeout(() => controller.abort(), 2500);
+      try {
+        const resp = await fetch(WARRIOR_CLASSIFY_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain' },
+          body: JSON.stringify({ image }),
+          signal: controller.signal
+        });
+        clearTimeout(t);
+        if (!resp.ok) throw new Error('status ' + resp.status);
+        const data = await resp.json();
+        if (!data.available) throw new Error(data.reason || 'classifier unavailable');
+        return data;
+      } catch (err) {
+        clearTimeout(t);
+        throw err;
+      }
+    }
+
+    function warrior2ClassifierAvailable() {
+      return warrior2Ai.local === 'ready' || warrior2Ai.local === 'loading' || warrior2Ai.remote;
+    }
+
+    function requestWarrior2Classification() {
+      const now = Date.now();
+      if (warrior2Ai.busy || now - warrior2Ai.lastAt < WARRIOR2_CLASSIFY_MIN_GAP_MS) return;
+      const useLocal = warrior2Ai.local === 'ready';
+      if (!useLocal && !warrior2Ai.remote) return;
+      warrior2Ai.busy = true;
+      warrior2Ai.lastAt = now;
+      const capturedAt = now;
+      const p = useLocal ? runLocalWarrior2Classify() : runRemoteWarrior2Classify();
+      p.then((r) => {
+        warrior2Ai.verdict = { correct: r.correct, wrong: r.wrong, capturedAt, source: useLocal ? 'device' : 'server' };
+        if (!useLocal) warrior2Ai.remoteFailures = 0;
+      }).catch(() => {
+        if (useLocal) {
+          warrior2Ai.local = 'failed';
+        } else {
+          warrior2Ai.remoteFailures += 1;
+          if (warrior2Ai.remoteFailures >= 3) warrior2Ai.remote = false;
+        }
+      }).then(() => { warrior2Ai.busy = false; });
+    }
+
+    function warrior2Hint(text) {
+      if (!text) return 'Hold steady in Warrior II';
+      if (text.includes('BEND FRONT KNEE') || text.includes('DEEPEN FRONT LUNGE')) return 'Bend front knee deeply (90°-145°)';
+      if (text.includes('FRONT KNEE TOO DEEP')) return 'Raise hips slightly — front knee stacked over ankle';
+      if (text.includes('LOCK REAR KNEE') || text.includes('STRAIGHTEN REAR LEG')) return 'Straighten rear leg completely';
+      if (text.includes('EXTEND ARMS HORIZONTAL') || text.includes('RAISE ARMS')) return 'Extend arms parallel to the floor (T-shape)';
+      if (text.includes('LOCK ELBOWS') || text.includes('STRAIGHTEN ELBOWS')) return 'Straighten arms through the elbows';
+      if (text.includes('WIDEN STANCE')) return 'Step feet further apart into a wide stance';
+      if (text.includes('GROUND FEET')) return 'Keep both feet firmly grounded on the floor';
+      if (text.includes('STRAIGHTEN SPINE') || text.includes('UPRIGHT')) return 'Stand tall — keep torso vertical, do not lean';
+      if (text.includes('LEVEL YOUR HEAD') || text.includes('CENTER HEAD')) return 'Keep head centered over shoulders and gaze forward';
+      return text;
+    }
+
+    function markWarrior2Errors(reason, activeStance) {
+      if (!reason) return;
+      const isLeftFront = activeStance ? activeStance.includes('LEFT') : true;
+      const frontKnee = isLeftFront ? 25 : 26;
+      const frontAnkle = isLeftFront ? 27 : 28;
+      const rearKnee = isLeftFront ? 26 : 25;
+      const rearAnkle = isLeftFront ? 28 : 27;
+
+      if (reason.includes('FRONT KNEE')) {
+        errorLandmarks.add(frontKnee); errorLandmarks.add(frontAnkle);
+      } else if (reason.includes('REAR')) {
+        errorLandmarks.add(rearKnee); errorLandmarks.add(rearAnkle);
+      } else if (reason.includes('STANCE') || reason.includes('GROUND') || reason.includes('FEET')) {
+        errorLandmarks.add(frontAnkle); errorLandmarks.add(rearAnkle);
+      } else if (reason.includes('ARM') || reason.includes('ELBOW')) {
+        errorLandmarks.add(13); errorLandmarks.add(14); errorLandmarks.add(15); errorLandmarks.add(16);
+      } else if (reason.includes('SPINE') || reason.includes('TORSO')) {
+        errorLandmarks.add(11); errorLandmarks.add(12); errorLandmarks.add(23); errorLandmarks.add(24);
+      } else if (reason.includes('HEAD')) {
+        errorLandmarks.add(0);
+      }
+    }
+
+    function endWarrior2Attempt() {
+      warrior2AttemptStart = 0;
+      breakWarrior2Hold();
+    }
+
+    function updateWarrior2Engine(pose, worldPose) {
+      errorLandmarks.clear();
+      if (typeof MediaPipeWarrior2EngineJS === 'undefined') return;
+      if (!warrior2Engine) warrior2Engine = new MediaPipeWarrior2EngineJS();
+      if (video && video.videoWidth && video.videoHeight && typeof setStreamAspect !== 'undefined') {
+        setStreamAspect(video.videoWidth, video.videoHeight);
+      }
+
+      const mirrored = pose.map((pt) => ({ x: 1.0 - pt.x, y: pt.y, z: pt.z, visibility: pt.visibility }));
+      const features = warrior2Engine.analyzePose(mirrored, worldPose || null);
+      warrior2Engine.updateWarrior2State(features);
+      const validation = warrior2Engine.lastValidation || { state: 'READY', issues: [] };
+
+      if (currentSmoothVisibility < 0.40 || validation.state === 'UNCERTAIN') {
+        renderState('LOW_VISIBILITY');
+        endWarrior2Attempt();
+        return;
+      }
+
+      if (!features.isWarriorStance || features.isSitting) {
+        renderState('SETUP');
+        setHint(features.isSitting ? 'Stand up to begin Warrior II' : 'Step feet wide, bend front knee & extend arms in T-shape', '#A7F3D0');
+        endWarrior2Attempt();
+        return;
+      }
+
+      const now = Date.now();
+      if (!warrior2AttemptStart) warrior2AttemptStart = now;
+      requestWarrior2Classification();
+
+      if (validation.state === 'INCORRECT') {
+        renderState('ADJUST');
+        const reason = validation.issues && validation.issues[0];
+        markWarrior2Errors(reason, features.activeStance);
+        setHint(warrior2Hint(reason || 'Adjust your Warrior II posture'), '#FBBF24');
+        breakWarrior2Hold();
+        return;
+      }
+
+      if (!warrior2Engine.inWarrior2) {
+        renderState('ADJUST');
+        setHint('Hold steady, confirming Warrior II…', '#FBBF24');
+        return;
+      }
+
+      const useAi = warrior2ClassifierAvailable();
+      const v = warrior2Ai.verdict;
+      const verdictForAttempt = v && v.capturedAt >= warrior2AttemptStart ? v : null;
+      if (useAi) {
+        if (!verdictForAttempt) {
+          renderState('ADJUST');
+          setHint('AI verifying your Warrior II… hold still', '#38BDF8');
+          return;
+        }
+        if (verdictForAttempt.wrong > WARRIOR2_WRONG_THRESHOLD) {
+          renderState('ADJUST');
+          markWarrior2Errors('FRONT KNEE', features.activeStance);
+          setHint('AI check: flawed pose (' + Math.round(verdictForAttempt.wrong * 100) + '%). Deepen lunge, extend arms & keep torso upright', '#FBBF24');
+          breakWarrior2Hold();
+          return;
+        }
+        if (now - verdictForAttempt.capturedAt > WARRIOR2_VERDICT_STALE_MS) {
+          renderState('ADJUST');
+          setHint('AI re-checking your pose… hold steady (' + (warrior2HoldFrames / 25).toFixed(1) + 's)', '#38BDF8');
+          return;
+        }
+      }
+
+      renderState('PERFECT');
+      warrior2HoldFrames += 1;
+      const prevBestSecs = Math.floor(warrior2BestFrames / 25);
+      if (warrior2HoldFrames > warrior2BestFrames) warrior2BestFrames = warrior2HoldFrames;
+      const holdSecs = (warrior2HoldFrames / 25).toFixed(1);
+      const isRecord = warrior2HoldFrames === warrior2BestFrames && warrior2BestFrames > 25;
+      setHint((useAi ? 'AI verified! ' : '') + (isRecord ? 'New best! Hold: ' : 'Warrior power! Hold: ') + holdSecs + 's', '#34D399');
+      if (warrior2HoldFrames % 5 === 0 || warrior2HoldFrames === 1) postWarrior2Hold();
+
+      const bestSecs = Math.floor(warrior2BestFrames / 25);
+      if (bestSecs > prevBestSecs) {
+        repCount = bestSecs;
+        if (window.ReactNativeWebView) {
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'SQUAT_REP',
+            repCount: bestSecs,
+            bestHoldSeconds: bestSecs,
+            poseName: 'Warrior II'
+          }));
+        }
+      }
+    }
+
+    if (EXERCISE_MODE === 'warrior2') initLocalWarrior2Classifier();
+
     // ---------- Dynamic Script Loading Helper ----------
     async function ensurePoseScriptLoaded() {
       if (typeof window.Pose !== 'undefined') return true;
@@ -1337,6 +1616,8 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
                 updateChildPoseEngine(landmarks);
               } else if (EXERCISE_MODE === 'tree_pose') {
                 updateTreePoseEngine(landmarks, results.poseWorldLandmarks);
+              } else if (EXERCISE_MODE === 'warrior2') {
+                updateWarrior2Engine(landmarks, results.poseWorldLandmarks);
               } else {
                 updateSquatEngine(landmarks);
               }
@@ -1381,6 +1662,7 @@ export const getPoseHtmlBundle = (exercise: string = 'squats', isMatch: boolean 
           } else {
             renderVisibility(0);
             if (treeEngine) { treeEngine.handleFrameWithoutPerson(); endTreeAttempt(); }
+            if (warrior2Engine) { warrior2Engine.handleFrameWithoutPerson(); endWarrior2Attempt(); }
             if (window.ReactNativeWebView && Date.now() - lastVisMsgTime > 200) {
               lastVisMsgTime = Date.now();
               window.ReactNativeWebView.postMessage(JSON.stringify({
@@ -1589,16 +1871,22 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
     exerciseName.toLowerCase().includes('balasana') ||
     exerciseName.toLowerCase().includes('tree') ||
     exerciseName.toLowerCase().includes('vriksh') ||
+    exerciseName.toLowerCase().includes('warrior') ||
+    exerciseName.toLowerCase().includes('virabhadra') ||
     exerciseId === '3' ||
     exerciseId === '6' ||
     exerciseId === '8' ||
-    exerciseId === '9';
+    exerciseId === '9' ||
+    exerciseId === '10';
 
-  // Tree Pose is a "who holds longest" pose: the score is the best unbroken hold.
+  // Tree Pose and Warrior II are "who holds longest" poses: the score is the best unbroken hold.
   const isLongestHold =
     exerciseName.toLowerCase().includes('tree') ||
     exerciseName.toLowerCase().includes('vriksh') ||
-    exerciseId === '9';
+    exerciseName.toLowerCase().includes('warrior') ||
+    exerciseName.toLowerCase().includes('virabhadra') ||
+    exerciseId === '9' ||
+    exerciseId === '10';
   const countLabel = isLongestHold ? 'BEST HOLD' : isHoldPose ? 'POINTS' : isStepCount ? 'STEPS' : 'REPS';
 
   const MOTIVATIONAL_PHRASES = [

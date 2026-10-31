@@ -11,6 +11,7 @@ const DEFAULT_EXERCISE_COUNTS: Record<string, number> = {
   '7': 0,
   '8': 0,
   '9': 0,
+  '10': 0,
 };
 
 export const DEFAULT_QUEUE_COUNTS: QueueCounts = {

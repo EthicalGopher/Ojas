@@ -30,8 +30,8 @@ interface DuelOpponentViewProps {
 }
 
 const REP_MS = 1300;
-// Holds (triangle, cobra, child's, tree) score once a second: the rival keeps the pose while points arrive.
-const HOLD_IDS = ['3', '6', '8', '9'];
+// Holds (triangle, cobra, child's, tree, warrior) score once a second: the rival keeps the pose while points arrive.
+const HOLD_IDS = ['3', '6', '8', '9', '10'];
 const HOLD_MS = 2500;
 
 /** The 1v1 duel opponent in 3D, in their own shop look, like the AI in Human vs AI. */

@@ -1,0 +1,29 @@
+{
+  "_description": "Warrior II (Virabhadrasana II) shared configuration. Single source of truth for ALL biomechanical thresholds, loaded by BOTH the Python implementation (warrior2_tracker.py, warrior2_image.py) and the JavaScript implementation (warrior2_engine.js via app.js). Changing a value here changes both engines identically - this is the Python<->JS connection.",
+  "aspect_default": 1.7778,
+  "quality": {
+    "vis_min": 0.60,
+    "vis_min_single": 0.40
+  },
+  "stance": {
+    "min_ratio": 1.25,
+    "ankle_level_max": 0.15
+  },
+  "front_knee": {
+    "min": 90.0,
+    "max": 145.0
+  },
+  "rear_knee_min": 160.0,
+  "knee_over_ankle_max": 0.55,
+  "elbow_min": 150.0,
+  "arm_horizontal_max": 30.0,
+  "torso_max_lean": 18.0,
+  "head": {
+    "_description": "Head/nose alignment relative to shoulder midpoint. max_offset is the ratio of |nose_x - mid_shoulder_x| * aspect / torso_len (shoulder-to-hip distance). Torso length is used instead of shoulder width for robustness: it is stable regardless of arm position or body rotation. Allows natural head movement while catching excessive forward/backward lean. min_visibility is the minimum nose landmark visibility for the head check to be evaluated.",
+    "max_offset": 0.50,
+    "min_visibility": 0.40
+  },
+  "ema_alpha": 0.35,
+  "confirm_frames": 5,
+  "break_frames": 3
+}
