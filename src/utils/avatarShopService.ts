@@ -285,7 +285,7 @@ export function lookOf(catalog: AvatarModel[], profile: Pick<UserProfile, 'equip
   return { model, items: loadoutItems(catalog, getLoadout(profile as UserProfile | null, model.id), model) };
 }
 
-/** A stable random look for a name (simulated rivals): character, face and maybe an outfit. */
+/** A stable random look for a name (simulated rivals): character, face and an outfit. */
 export function lookForName(catalog: AvatarModel[], name: string) {
   let h = 2166136261;
   for (let i = 0; i < name.length; i++) h = Math.imul(h ^ name.charCodeAt(i), 16777619) >>> 0;
@@ -294,8 +294,6 @@ export function lookForName(catalog: AvatarModel[], name: string) {
   const starters = catalog.filter((m) => m.category === 'character');
   const model = pick(starters, 1) ?? BUNDLED_AVATARS[0];
   const fits = (cat: string) => catalog.filter((m) => m.category === cat && m.character_id === model.id);
-  const items = [pick(fits('face'), 2), (h >> 3) % 3 ? pick(fits('kit'), 3) : undefined].filter(
-    (m): m is AvatarModel => !!m,
-  );
+  const items = [pick(fits('face'), 2), pick(fits('kit'), 3)].filter((m): m is AvatarModel => !!m);
   return { model, items };
 }
