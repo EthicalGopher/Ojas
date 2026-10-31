@@ -22,9 +22,6 @@
 - Gives live audio and visual form tips to keep your posture safe.
 - **100% On-Device**: Camera frames never leave your phone.
 
-<p align="center">
-  <img src="./assets/screenshots/ai_rep_tracking.png" width="280" alt="AI Camera Rep Tracking Screen" />
-</p>
 
 ---
 
@@ -45,9 +42,6 @@
 - Checks shoulder level, knee alignment, and spine straightness.
 - Suggests targeted daily exercises to fix posture issues.
 
-<p align="center">
-  <img src="./assets/screenshots/ai_body_scan.png" width="280" alt="AI Body Posture Scan Screen" />
-</p>
 
 ---
 

@@ -155,7 +155,7 @@ const styles = StyleSheet.create({
   fill: { flex: 1, width: '100%', backgroundColor: '#0A0D14' },
   liveChip: {
     position: 'absolute',
-    top: 120,
+    top: 152, // below the timer and the pose-state pill (top 72, ~60 tall)
     alignSelf: 'center',
     flexDirection: 'row',
     alignItems: 'center',
