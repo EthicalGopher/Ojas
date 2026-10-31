@@ -31,10 +31,11 @@
 ### 2. Human vs AI Duels
 - Jump into a 2-minute workout battle against an AI opponent.
 - 4 difficulty levels: **Beginner**, **Intermediate**, **Advanced**, and **Pro**.
+- Your rival is a full-screen 3D AI instructor that performs the exercise with you: squats, push-ups, lunges, yoga poses and more.
 - Real-time calorie burn and rep comparison.
 
 <p align="center">
-  <img src="./assets/screenshots/human_vs_ai.png" width="280" alt="Human vs AI Duel Screen" />
+  <img src="./assets/screenshots/human_vs_ai_3d.png" width="280" alt="Human vs AI duel with the 3D AI instructor" />
 </p>
 
 ---
@@ -51,9 +52,13 @@
 ---
 
 ### 4. Live 1v1 Multiplayer Battles
-- Real-time 2-minute split-screen battles with friends or matched players.
-- Live video stream and rep counter synchronization.
-- Compete to see who gets the highest clean rep count.
+- Real-time 2-minute battles with friends or matched players. Your rival is shown as their own 3D character, mirroring their live moves.
+- Rep counters stay in sync; the player with the most clean reps (or the longest hold in yoga poses) wins.
+- Wins are worth +10 rank points, draws +5, and defeats -10.
+
+<p align="center">
+  <img src="./assets/screenshots/duel_1v1.png" width="280" alt="1v1 Duel with a 3D rival" />
+</p>
 
 ---
 
@@ -70,7 +75,12 @@
 
 ### 6. 3D Avatars & Shop
 - Your 3D character is shown in Profile wearing its current outfit, hair and accessory.
-- The **Shop** tab sells **Characters**, **Outfits**, **Hair** and **Accessories** for coins (1 coin per 10 XP). Tap any item to try it on the 3D model before buying.
+- The **Shop** tab has **Avatar**, **Face**, **Outfits**, **Colours** and **Extras** sections, paid for in coins (1 coin per 10 XP). Tap any item to try it on the 3D model before buying or wearing it.
+- Face and outfit models are downloaded on demand from the public `avatar-models` storage bucket, so the first view of one needs a network connection.
+
+<p align="center">
+  <img src="./assets/screenshots/shop_faces.png" width="280" alt="Avatar shop: trying on a face" />
+</p>
 - Each character keeps its own loadout. Purchases and equips are checked on the server (`purchase_avatar()`, `equip_avatar()`, `unequip_avatar_slot()`).
 
 **Adding items (admins)** — every item is a row in `avatar_models`; upload files to the `avatar-models` bucket first.
@@ -85,7 +95,7 @@
 
 ```sql
 INSERT INTO public.avatar_models (id, name, description, rarity, price_coins, category, character_id, config, sort_order)
-VALUES ('aiko_hoodie_violet', 'Violet Hoodie', 'Limited drop.', 'rare', 280, 'outfit', 'starter_aiko',
+VALUES ('ojas_hoodie_violet', 'Violet Hoodie', 'Limited drop.', 'rare', 280, 'outfit', 'starter_ojas',
         '{"recolor": {"Tops": "#7C3AED"}, "swatch": ["#7C3AED", "#FFFFFF"]}', 14);
 ```
 
@@ -102,6 +112,9 @@ VALUES ('aiko_hoodie_violet', 'Violet Hoodie', 'Limited drop.', 'rare', 280, 'ou
 | **Triangle Pose** | Leg straightness, lateral hip hinge, arm reach |
 | **Cobra Pose** | Chest elevation, lower back arch, neck alignment |
 | **Child's Pose** | Deep hip rest, arm stretch, relaxing hold timer |
+| **Sit-ups** | Torso lift angle, controlled return |
+| **Tree Pose** | Standing-leg straightness, foot placement above the knee, balance hold timer |
+| **Warrior II** | Front knee bend, rear leg straightness, level arm span, hold timer |
 
 <p align="center">
   <img src="./assets/screenshots/exercise_catalog.png" width="280" alt="Exercise Catalog Screen" />
