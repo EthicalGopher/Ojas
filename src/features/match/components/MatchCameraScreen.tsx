@@ -78,6 +78,9 @@ import { SimulatedOpponent } from '../../../utils/simulatedOpponent';
 import { getAvatarUri } from '../../../components/Avatar';
 
 import CalorieIcon from '../../../../assets/icons/calorie.svg';
+
+// Mirrors record_exercise_match_result on the server, so the summary shows what is recorded.
+const MATCH_POINTS = { win: 10, draw: 5, defeat: -10 } as const;
 export type MatchMode = 'faceoff' | 'quickjoin' | 'ffa' | 'ai_battle';
 
 type MatchPhase = 'loading_resources' | 'setup_countdown' | 'active_match' | 'match_ended';
@@ -282,8 +285,8 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
     return calculateExerciseCalories(exId, reps, holdSecs);
   }, []);
 
-  // Tree Pose is scored by the longest unbroken hold (seconds), not reps/points.
-  const isTimedScore = exerciseId === '9';
+  // Tree Pose and Warrior II are scored by the longest unbroken hold (seconds), not reps/points.
+  const isTimedScore = exerciseId === '9' || exerciseId === '10';
 
   const getExerciseDisplayName = useCallback((exId?: string) => {
     switch (exId) {
@@ -296,6 +299,7 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
       case '7': return 'Push-ups';
       case '8': return "Child's Pose";
       case '9': return 'Tree Pose';
+      case '10': return 'Warrior II';
       default: return 'Workout';
     }
   }, []);
@@ -315,7 +319,7 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
         // In FFA: Top 3 or highest score is win/podium
         const myRank = ffaLeaderboard.findIndex((p) => p.username === selfUsername || p.username === user.id) + 1;
         const result = myRank === 1 ? 'win' : myRank > 0 && myRank <= 3 ? 'draw' : 'defeat';
-        const pointsEarned = result === 'win' ? 10 : result === 'draw' ? 5 : -5;
+        const pointsEarned = MATCH_POINTS[result];
 
         setLastMatchSummary({
           exerciseId: exerciseId || '1',
@@ -337,7 +341,7 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
       } else if (mode === 'ai_battle') {
         const result =
           selfScore > opponentScore ? 'win' : selfScore === opponentScore ? 'draw' : 'defeat';
-        const pointsEarned = result === 'win' ? 10 : result === 'draw' ? 5 : 0;
+        const pointsEarned = MATCH_POINTS[result];
         const aiQuote = aiSimulationRef.current?.getFinalQuote(result === 'win') || currentBot.quotes.onWin[0];
 
         setLastMatchSummary({
@@ -362,7 +366,7 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
       } else {
         const result =
           selfScore > opponentScore ? 'win' : selfScore === opponentScore ? 'draw' : 'defeat';
-        const pointsEarned = result === 'win' ? 10 : result === 'draw' ? 0 : -10;
+        const pointsEarned = MATCH_POINTS[result];
 
         setLastMatchSummary({
           exerciseId: exerciseId || '1',
@@ -499,6 +503,9 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
             case '5': return 'Crunches';
             case '6': return 'Cobra Pose';
             case '7': return 'Push-ups';
+            case '8': return "Child's Pose";
+            case '9': return 'Tree Pose';
+            case '10': return 'Warrior II';
             default: return 'the Match';
           }
         };
@@ -1276,7 +1283,7 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
                   <Dumbbell size={15} color="#38BDF8" />
                 </View>
                 <Text style={styles.matchWorkoutStatVal}>{selfScore}{isTimedScore ? 's' : ''}</Text>
-                <Text style={styles.matchWorkoutStatLbl}>{exerciseId === '9' ? 'BEST HOLD' : 'TOTAL REPS'}</Text>
+                <Text style={styles.matchWorkoutStatLbl}>{isTimedScore ? 'BEST HOLD' : 'TOTAL REPS'}</Text>
               </View>
 
               <View style={styles.matchWorkoutStatDivider} />
