@@ -16,6 +16,9 @@ import com.facebook.react.defaults.DefaultReactNativeHost
 import expo.modules.ApplicationLifecycleDispatcher
 import expo.modules.ExpoReactHostFactory
 
+import com.sankhyah.expocameratest.packs.AssetPackPackage
+import com.sankhyah.expocameratest.packs.PackManager
+
 class MainApplication : Application(), ReactApplication {
 
   override val reactNativeHost: ReactNativeHost =
@@ -24,6 +27,7 @@ class MainApplication : Application(), ReactApplication {
             PackageList(this).packages.apply {
               // Packages that cannot be autolinked yet can be added manually here, for example:
               // add(MyReactNativePackage())
+              add(AssetPackPackage())
             }
 
           override fun getJSMainModuleName(): String = ".expo/.virtual-metro-entry"
@@ -36,7 +40,7 @@ class MainApplication : Application(), ReactApplication {
   override val reactHost: ReactHost
     get() = ExpoReactHostFactory.getDefaultReactHost(
         applicationContext,
-        PackageList(this).packages,
+        PackageList(this).packages + AssetPackPackage(),
         jsMainModulePath = ".expo/.virtual-metro-entry"
     )
 
@@ -51,6 +55,8 @@ class MainApplication : Application(), ReactApplication {
     ApplicationLifecycleDispatcher.onApplicationCreate(this)
     // Start local embedded asset server for offline MediaPipe execution
     LocalAssetServer.start(this)
+    // Play asset packs (heavy pose model, Tree Pose classifier): state, location and fetch
+    PackManager.start(this)
   }
 
   override fun onConfigurationChanged(newConfig: Configuration) {

@@ -53,6 +53,8 @@ import {
   FFALeaderboardPlayer,
 } from '../../../utils/matchmaking';
 import { getPoseHtmlBundle } from '../../camera/components/CameraScreen';
+import { PackGate } from '../../../components/PackGate';
+import { packForExercise } from '../../../utils/assetPacksLogic';
 import { recordExerciseMatchResult } from '../../../utils/rankingService';
 import { recordCaloriesToProfile, recordDailyChallengeProgress } from '../../../utils/profileService';
 import { calculateExerciseCalories } from '../../../utils/calorieService';
@@ -934,7 +936,7 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
 
   const htmlBundle = getPoseHtmlBundle(exerciseId || 'squats', true);
 
-  return (
+  const screen = (
     <View style={styles.container}>
       <StatusBar hidden />
 
@@ -1404,6 +1406,17 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
       />
     </View>
   );
+
+  // Tree Pose's form checker is a Play asset pack. The pose WebView (and so MODEL_READY and peer_ready)
+  // only starts once it is ready; until then the player sees the download and can still leave.
+  if (packForExercise(exerciseId || '') === 'tree_pose') {
+    return (
+      <PackGate pack="tree_pose" title="Tree Pose form checker" onClose={() => { handleClose(); }}>
+        {screen}
+      </PackGate>
+    );
+  }
+  return screen;
 };
 
 // ---------------------------------------------------------------------------

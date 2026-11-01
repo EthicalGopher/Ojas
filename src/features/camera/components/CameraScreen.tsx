@@ -34,6 +34,9 @@ import { calculateExerciseCalories } from '../../../utils/calorieService';
 import { BACKEND_URL } from '../../../utils/matchmaking';
 import { TREE_POSE_ENGINE_SOURCE } from '../poseEngines/treePoseEngineSource';
 import { WARRIOR2_ENGINE_SOURCE } from '../poseEngines/warrior2EngineSource';
+import { PackGate } from '../../../components/PackGate';
+import { usePack } from '../../../utils/assetPacks';
+import { PACK_SIZES, effectiveModel, formatProgress, packForExercise } from '../../../utils/assetPacksLogic';
 
 export type ModelComplexity = 'light' | 'medium' | 'high';
 
@@ -1974,7 +1977,11 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
     return () => clearTimeout(safetyTimer);
   }, []);
 
-  const numericComplexity = selectedModel === 'light' ? 0 : selectedModel === 'high' ? 2 : 1;
+  // "High" needs the heavy pose model, which Play delivers as an asset pack; until it is ready, run Medium.
+  // The user's stored choice is untouched, so "high" applies again from the next session once it arrives.
+  const heavyPack = usePack('pose_heavy');
+  const { model: effectiveSelectedModel, downgraded: modelDowngraded } = effectiveModel(selectedModel, heavyPack);
+  const numericComplexity = effectiveSelectedModel === 'light' ? 0 : effectiveSelectedModel === 'high' ? 2 : 1;
 
   const triggerRepBump = () => {
     repScaleAnim.setValue(1.3);
@@ -2161,7 +2168,7 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
 
   const htmlBundle = getPoseHtmlBundle(exerciseName || exerciseId || 'squats');
 
-  return (
+  const screen = (
     <View style={styles.container}>
       <StatusBar hidden />
 
@@ -2260,6 +2267,14 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
         }}
       />
 
+      {modelDowngraded && (
+        <View style={styles.modelNotice} pointerEvents="none">
+          <Text style={styles.modelNoticeText}>
+            High model downloading ({formatProgress(heavyPack, PACK_SIZES.pose_heavy)}); using Medium for now
+          </Text>
+        </View>
+      )}
+
       {/* Unified Animated Loading Screen for Solo Mode */}
       {isModelLoading && (
         <LoadingScreen
@@ -2271,6 +2286,16 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
       )}
     </View>
   );
+
+  // Tree Pose's form checker (ONNX classifier + runtime) is a Play asset pack: the whole screen waits for it.
+  if (packForExercise(exerciseName || exerciseId || 'squats') === 'tree_pose') {
+    return (
+      <PackGate pack="tree_pose" title="Tree Pose form checker" onClose={handleClose}>
+        {screen}
+      </PackGate>
+    );
+  }
+  return screen;
 };
 
 // ---------------------------------------------------------------------------
@@ -2438,6 +2463,16 @@ const SoloDraggableActionsWidget: React.FC<SoloDraggableWidgetProps> = ({
 };
 
 const styles = StyleSheet.create({
+  modelNotice: {
+    position: 'absolute',
+    top: 96,
+    alignSelf: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 14,
+    backgroundColor: 'rgba(15,23,42,0.85)',
+  },
+  modelNoticeText: { color: '#FBBF24', fontSize: 12, fontWeight: '700' },
   container: {
     flex: 1,
     backgroundColor: '#0f172a',

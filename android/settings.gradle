@@ -36,4 +36,7 @@ rootProject.name = 'Expo Camera Test'
 expoAutolinking.useExpoVersionCatalog()
 
 include ':app'
+// Play Asset Delivery packs (fast-follow). Their files mirror app/src/main/assets/web; see app/build.gradle.
+include ':pose_heavy'
+include ':tree_pose'
 includeBuild(expoAutolinking.reactNativeGradlePlugin)

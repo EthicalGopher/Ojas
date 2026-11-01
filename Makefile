@@ -16,10 +16,17 @@ KEY_ALIAS     := ojas
 APK_NAME  := ojas-v$(VERSION)-universal.apk
 ARCH_FLAG := -PreactNativeArchitectures=armeabi-v7a,arm64-v8a,x86,x86_64
 
+# Play App Bundle: only the ARM ABIs real phones use (Play serves each phone just its own ABI).
+VERSION_CODE ?=
+AAB_ABIS     := armeabi-v7a,arm64-v8a
+RELEASE_AAB  := $(ANDROID_DIR)/app/build/outputs/bundle/release/app-release.aab
+AAB_NAME     := ojas-v$(VERSION)-$(VERSION_CODE).aab
+BUNDLETOOL   ?= bundletool
+
 .PHONY: db-check uninstall help install start android web typecheck doctor check \
-        keystore apk apk-debug install-apk run-apk logs clean clean-android \
+        keystore apk apk-debug aab aab-test install-apk run-apk logs clean clean-android \
         backend backend-install migrate tree-pose-engine tree-pose-test tree-pose-onnx \
-        warrior2-engine warrior2-test warrior2-python-test warrior2-onnx
+        warrior2-engine warrior2-test warrior2-python-test warrior2-onnx pack-logic-test
 
 help: ## Show this help
 	@echo "Ojas v$(VERSION) - available commands:"
@@ -71,7 +78,11 @@ warrior2-test: ## Run the Warrior II geometry engine tests
 warrior2-python-test: ## Run the Warrior II Python biomechanical test suite
 	/home/sankhyahrick/Python/bin/python3 backend/Pose/warrior_pose/test/test_warrior2_python.py
 
-check: typecheck ## Run all checks (typecheck + expo-doctor)
+pack-logic-test: ## Run the Play asset pack logic tests (needs Node >= 22.18, which strips TypeScript types)
+	@node -e "const [a,b]=process.versions.node.split('.').map(Number); process.exit(a>22||(a===22&&b>=18)?0:1)" || { echo "pack-logic-test needs Node >= 22.18 (found $$(node -v))"; exit 1; }
+	node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON src/utils/assetPacksLogic.test.mjs
+
+check: typecheck pack-logic-test ## Run all checks (typecheck + pack logic tests + expo-doctor)
 	-npx expo-doctor
 
 # ---------- Android release ----------
@@ -99,6 +110,25 @@ apk-debug: ## Build a debug APK -> build_output/
 	cd $(ANDROID_DIR) && ./gradlew assembleDebug $(ARCH_FLAG)
 	@mkdir -p $(OUT_DIR)
 	cp $(DEBUG_APK) $(OUT_DIR)/ojas-v$(VERSION)-debug.apk
+
+aab: ## Build the Play App Bundle (needs VERSION_CODE=n) -> build_output/
+	@test -n "$(VERSION_CODE)" || { echo "Set VERSION_CODE=<n>: Play rejects a repeated versionCode. Example: make aab VERSION_CODE=2"; exit 1; }
+	@if [ ! -f "$(KEYSTORE_PROPS)" ]; then echo "WARNING: no release key - the bundle will be signed with the DEBUG key and Play will reject it. Run 'make keystore' first."; fi
+	cd $(ANDROID_DIR) && ./gradlew bundleRelease -PversionCode=$(VERSION_CODE) -PreactNativeArchitectures=$(AAB_ABIS) -PabiFilters=$(AAB_ABIS)
+	BUNDLETOOL=$(BUNDLETOOL) scripts/check-aab.sh $(RELEASE_AAB) $(VERSION_CODE) $(AAB_ABIS)
+	@mkdir -p $(OUT_DIR)
+	cp $(RELEASE_AAB) $(OUT_DIR)/$(AAB_NAME)
+	@echo "App Bundle: $(OUT_DIR)/$(AAB_NAME) ($$(du -h $(OUT_DIR)/$(AAB_NAME) | cut -f1), built $$(date '+%d %b %H:%M'))"
+
+aab-test: ## Build a test bundle (x86_64 + arm64, versionCode 1) and install it on the emulator via bundletool
+	@command -v $(BUNDLETOOL) >/dev/null || { echo "bundletool not found. Install it (for example 'yay -S bundletool') or set BUNDLETOOL=/path/to/bundletool."; exit 1; }
+	cd $(ANDROID_DIR) && ./gradlew bundleRelease -PversionCode=1 -PreactNativeArchitectures=x86_64,arm64-v8a -PabiFilters=x86_64,arm64-v8a
+	@mkdir -p $(OUT_DIR)
+	$(BUNDLETOOL) build-apks --bundle=$(RELEASE_AAB) --local-testing --overwrite --output=$(OUT_DIR)/ojas-test.apks
+	$(BUNDLETOOL) install-apks --apks=$(OUT_DIR)/ojas-test.apks
+	@# Keep this test bundle (x86_64, versionCode 1) away from the path a Play upload would pick up.
+	mv $(RELEASE_AAB) $(OUT_DIR)/ojas-test.aab
+	@echo "Installed the test bundle. It is saved as $(OUT_DIR)/ojas-test.aab (never upload this one)."
 
 install-apk: ## Install the universal APK on the connected device (adb)
 	@scripts/ensure-signature.sh release

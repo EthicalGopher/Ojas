@@ -13,6 +13,8 @@ import { Flame, X, Dumbbell, Trophy, Wrench } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { ModelComplexity } from '../utils/deviceSpecs';
 import { getDeviceInfo, getRecommendedModel } from '../utils/deviceSpecs';
+import { usePack } from '../utils/assetPacks';
+import { PACK_SIZES, formatProgress, isReady } from '../utils/assetPacksLogic';
 import {
   connectMatchSocket,
   connectPresenceSocket,
@@ -89,6 +91,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [deviceName, setDeviceName] = useState<string>('Mobile Device');
   const [totalRamGb, setTotalRamGb] = useState<number>(4.0);
   const [recommendedModel, setRecommendedModel] = useState<ModelComplexity>('medium');
+  // The "high" pose model is a Play asset pack (fast-follow); it is only used once it has arrived.
+  const heavyPack = usePack('pose_heavy');
   const onlineCount = useMatchmakingStore((state) => state.total_online);
   const queueCounts = useMatchmakingStore((state) => state.exercise_counts);
   const setCounts = useMatchmakingStore((state) => state.setCounts);
@@ -452,6 +456,15 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                   <View style={styles.optionHeaderRow}>
                     <Text style={styles.optionTitle}>{model === 'light' ? 'Light Model (Lite)' : model === 'medium' ? 'Medium Model (Full)' : 'High Model (Heavy)'}</Text>
                     {recommendedModel === model && <View style={styles.recommendBadge}><Text style={styles.recommendBadgeText}>Recommended</Text></View>}
+                    {model === 'high' && !isReady(heavyPack) && (
+                      <View style={styles.recommendBadge}>
+                        <Text style={styles.recommendBadgeText}>
+                          {heavyPack.status === 'failed' || heavyPack.status === 'unavailable'
+                            ? 'Download failed'
+                            : `Downloading ${formatProgress(heavyPack, PACK_SIZES.pose_heavy)}`}
+                        </Text>
+                      </View>
+                    )}
                   </View>
                   <Text style={styles.optionDescription}>
                     {model === 'light' ? 'Fastest FPS & lowest memory (~2.7 MB). Best for entry-level phones.' : model === 'medium' ? 'Balanced speed & joint accuracy (~6.2 MB). Ideal for mid-range phones.' : 'Maximum joint precision (~27 MB). Best for high-end flagship phones.'}

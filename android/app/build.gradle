@@ -80,6 +80,34 @@ def enableMinifyInReleaseBuilds = (findProperty('android.enableMinifyInReleaseBu
  */
 def jscFlavor = 'io.github.react-native-community:jsc-android:2026004.+'
 
+// ---------- Play Asset Delivery packs ----------
+// The two optional asset packs (pose_heavy, tree_pose) live in their own Gradle modules under android/.
+//  - packsAsAssets=true  (APK builds, the default): their files are added to this app's assets, so the app
+//    works with no Play Store and the native side reports every pack as ready.
+//  - packsAsAssets=false (bundle builds): they are real Play asset packs, delivered fast-follow.
+// The default follows the requested task; the task graph is checked again below, so an abbreviation, an
+// IDE run or a wrapper can never ship the packs inside the base module (or ship an APK without them).
+def requestedTasks = gradle.startParameter.taskNames
+def isBundleRequest = requestedTasks.any { it ==~ /^(:app:)?bundle(Debug|Release)$/ }
+def packsAsAssets = (findProperty('packsAsAssets') ?: (isBundleRequest ? 'false' : 'true')).toBoolean()
+// Packs whose delivery is install-time are served from the APK assets after install.
+def installTimePacks = ['pose_heavy', 'tree_pose'].findAll { (findProperty("packDelivery_${it}") ?: 'fast-follow') == 'install-time' }
+
+if (findProperty('abiFilters') && findProperty('reactNativeArchitectures') && findProperty('abiFilters') != findProperty('reactNativeArchitectures')) {
+    throw new GradleException('abiFilters and reactNativeArchitectures must match (a mismatch drops libreactnative.so).')
+}
+
+gradle.taskGraph.whenReady { graph ->
+    def names = graph.allTasks.findAll { it.project.path == ':app' }*.name
+    if (names.any { it ==~ /^bundle(Debug|Release)$/ }) {
+        if (packsAsAssets) throw new GradleException('Bundle builds need packsAsAssets=false: the packs would end up inside the base module.')
+        if (!findProperty('versionCode')) throw new GradleException('Bundle builds need -PversionCode=<n> (Play rejects repeated codes). Use `make aab VERSION_CODE=<n>`.')
+    }
+    if (!packsAsAssets && names.any { it ==~ /^(assemble|install|package)(Debug|Release)$/ }) {
+        throw new GradleException('APK builds need packsAsAssets=true: the pack files would be missing from the APK.')
+    }
+}
+
 android {
     ndkVersion rootProject.ext.ndkVersion
 
@@ -93,6 +121,17 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
         versionName "1.0.0"
+
+        buildConfigField "boolean", "PACKS_AS_ASSETS", "${packsAsAssets}"
+        buildConfigField "String", "INSTALL_TIME_PACKS", "\"${installTimePacks.join(',')}\""
+
+        // Bundle builds (make aab) pass -PabiFilters so third-party libraries ship only the listed ABIs;
+        // reactNativeArchitectures only limits React Native's own native build.
+        if (findProperty('abiFilters')) {
+            ndk {
+                abiFilters.addAll(findProperty('abiFilters').split(',').toList())
+            }
+        }
 
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
     }
@@ -123,11 +162,14 @@ android {
     }
     buildTypes {
         debug {
+            // Dev-only fault injection for the pack states (see PackFault.kt); release builds never read it.
+            buildConfigField "String", "PACK_FAULT", "\"${findProperty('packFault') ?: ''}\""
             // Same key as release when it's available, so the dev build and the release APK can
             // replace each other on a device (Android rejects updates signed by a different key).
             signingConfig hasReleaseKeystore ? signingConfigs.release : signingConfigs.debug
         }
         release {
+            buildConfigField "String", "PACK_FAULT", "\"\""
             if (hasReleaseKeystore) {
                 signingConfig signingConfigs.release
             } else {
@@ -147,6 +189,13 @@ android {
             def enableLegacyPackaging = findProperty('expo.useLegacyPackaging') ?: 'false'
             useLegacyPackaging enableLegacyPackaging.toBoolean()
         }
+    }
+    // See the Play Asset Delivery note above: pack files come in as plain assets, or as real asset packs.
+    if (packsAsAssets) {
+        sourceSets.main.assets.srcDir("$rootDir/pose_heavy/src/main/assets")
+        sourceSets.main.assets.srcDir("$rootDir/tree_pose/src/main/assets")
+    } else {
+        assetPacks = [':pose_heavy', ':tree_pose']
     }
     androidResources {
         ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:!CVS:!thumbs.db:!picasa.ini:!*~'
@@ -175,7 +224,51 @@ android {
     }
 }
 
+// Play needs a higher versionCode on every upload. The literals above stay in place (so tools that edit
+// them keep working); -PversionCode / -PversionName override them per build (see `make aab`).
+androidComponents {
+    onVariants(selector().all()) { variant ->
+        variant.outputs.each { output ->
+            if (findProperty('versionCode')) output.versionCode.set(findProperty('versionCode').toInteger())
+            if (findProperty('versionName')) output.versionName.set(findProperty('versionName'))
+        }
+    }
+}
+
+// Bundle verification (plain file access only). Fails if no .aab is found, if a pack file is inside the
+// base module, or if a pack module's file is missing from the bundle.
+def bundleOutputDir = layout.buildDirectory.dir('outputs/bundle')
+tasks.register('verifyBundleContents') {
+    doLast {
+        def root = bundleOutputDir.get().asFile
+        def aabs = []
+        if (root.exists()) {
+            root.eachFileRecurse(groovy.io.FileType.FILES) { if (it.name.endsWith('.aab')) aabs << it }
+        }
+        if (aabs.isEmpty()) throw new GradleException('verifyBundleContents found no .aab to inspect.')
+        aabs.each { aab ->
+            def zip = new java.util.zip.ZipFile(aab)
+            try {
+                def entries = zip.entries().collect { it.name }
+                if (entries.any { it == 'base/assets/web/pose_landmark_heavy.tflite' || it.startsWith('base/assets/web/tree_pose/') }) {
+                    throw new GradleException("Pack files found in the base module of ${aab.name}")
+                }
+                ['pose_heavy/assets/web/pose_landmark_heavy.tflite', 'tree_pose/assets/web/tree_pose/tree_pose_classifier.onnx'].each { need ->
+                    if (!entries.contains(need)) throw new GradleException("Missing ${need} in ${aab.name}")
+                }
+            } finally {
+                zip.close()
+            }
+        }
+    }
+}
+tasks.matching { it.name ==~ /^bundle(Debug|Release)$/ }.configureEach { it.finalizedBy('verifyBundleContents') }
+
 dependencies {
+    // Play Asset Delivery client (pack state, location, fetch).
+    implementation 'com.google.android.play:asset-delivery:2.3.0'
+    testImplementation 'junit:junit:4.13.2'
+
     // The version of react-native is set by the React Native Gradle Plugin
     implementation("com.facebook.react:react-android")
 

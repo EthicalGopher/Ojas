@@ -1,0 +1,9 @@
+plugins { id 'com.android.asset-pack' }
+
+assetPack {
+    packName = "pose_heavy"
+    dynamicDelivery {
+        // fast-follow: Play downloads it right after install. Change with -PpackDelivery_pose_heavy=install-time|on-demand
+        deliveryType = (findProperty('packDelivery_pose_heavy') ?: 'fast-follow')
+    }
+}

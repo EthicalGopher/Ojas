@@ -12,3 +12,6 @@
 -keep class com.facebook.react.turbomodule.** { *; }
 
 # Add any project specific keep options here:
+
+# Play asset pack bridge (React Native finds the module by reflection)
+-keep class com.sankhyah.expocameratest.packs.** { *; }

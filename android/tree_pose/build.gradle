@@ -1,0 +1,9 @@
+plugins { id 'com.android.asset-pack' }
+
+assetPack {
+    packName = "tree_pose"
+    dynamicDelivery {
+        // fast-follow: Play downloads it right after install. Change with -PpackDelivery_tree_pose=install-time|on-demand
+        deliveryType = (findProperty('packDelivery_tree_pose') ?: 'fast-follow')
+    }
+}
