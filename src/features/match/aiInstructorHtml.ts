@@ -9,8 +9,8 @@
 //   cheer  loop: fists overhead (the AI won)
 // Switching clips crossfades over CROSSFADE seconds.
 //
-// Behind the transparent canvas sits a gym photo (web/backdrops/, see CREDITS.md there), picked
-// at random per match, with a vignette so the scoreboard and widgets stay readable.
+// Behind the transparent canvas sits the empty stage from the match intro (web/arena/both.jpg), with a
+// vignette so the scoreboard and widgets stay readable.
 //
 // The same page shows a 1v1 duel opponent: their shop character (modelUrl) wearing their face
 // and outfit (loadout: { category, config } items, as in avatarViewerHtml.ts: skinned GLBs rebound
@@ -33,11 +33,13 @@ export type AiInstructorMode = 'squat' | 'idle' | 'rest' | 'cheer' | 'stand' | '
 
 import { ASSET_BUST } from '../../utils/avatarShopService';
 import { EXERCISE_MOVES_SOURCE } from './exerciseMovesSource';
+import { materialRuntimeJs } from '../avatar/avatarViewerHtml';
 
 // Per-launch query, shared with the shop / VS viewers (see ASSET_BUST).
 export const BUST = ASSET_BUST;
 export const AI_INSTRUCTOR_MODEL_URL = `http://127.0.0.1:8888/avatars/instructor_ai.glb${BUST}`;
-export const AI_BACKDROPS = ['gym_turf', 'gym_rig', 'gym_hall'].map((n) => `/backdrops/${n}.jpg${BUST}`);
+/** Everyone's opponent stands in the same place: the empty stage from the match intro. */
+export const AI_BACKDROP = `/arena/both.jpg${BUST}`;
 
 /** MediaPipe pose indices streamed for live moves, in order (CameraScreen POSE_WORLD). */
 export const LIVE_JOINTS = [0, 7, 8, 11, 12, 13, 14, 15, 16, 19, 20, 23, 24, 25, 26, 27, 28, 31, 32];
@@ -48,13 +50,14 @@ export interface AiLoadoutItem {
     model_url?: string;
     hide?: string[];
     tint?: Record<string, [number, number, number]>;
+    dye?: Record<string, string>;
     recolor?: Record<string, string>;
   };
 }
 
 export function getAiInstructorHtml(
   modelUrl: string = AI_INSTRUCTOR_MODEL_URL,
-  backdrop: string = AI_BACKDROPS[Math.floor(Math.random() * AI_BACKDROPS.length)],
+  backdrop: string = AI_BACKDROP,
   loadout: AiLoadoutItem[] = [],
 ): string {
   return `<!DOCTYPE html>
@@ -146,11 +149,13 @@ export function getAiInstructorHtml(
     var fov = camera.fov * Math.PI / 180;
     var aspect = camera.aspect;
     // Fit the standing height, and the width of the crouch on narrow (landscape split) views.
-    var fitH = (TARGET_HEIGHT * 0.6) / Math.tan(fov / 2);
+    // Full-screen views have the timer over the top of the frame: leave headroom so it clears the head.
+    var headroom = aspect > 1.6 ? 0.11 : 0;
+    var fitH = (TARGET_HEIGHT * (0.6 + headroom * 1.1)) / Math.tan(fov / 2);
     var fitW = (viewHalfW / aspect) / Math.tan(fov / 2);
     var dist = Math.max(fitH, fitW);
-    camera.position.set(0, TARGET_HEIGHT * viewCam, dist);
-    camera.lookAt(0, TARGET_HEIGHT * viewLook, 0);
+    camera.position.set(0, TARGET_HEIGHT * (viewCam + headroom), dist);
+    camera.lookAt(0, TARGET_HEIGHT * (viewLook + headroom), 0);
   }
 
   // Scale to a common height, stand on y = 0, centred. Measured on the posed bones: the skinned
@@ -173,6 +178,8 @@ export function getAiInstructorHtml(
     root.position.z -= center.z;
     root.position.y -= box.min.y - 0.03; // toe bones sit a little above the soles
   }
+
+${materialRuntimeJs()}
 
   // ---------- Loadout: face / outfit GLBs on the same Bip01 skeleton ----------
   var LOADOUT = ${JSON.stringify(loadout)};
@@ -204,6 +211,17 @@ export function getAiInstructorHtml(
       });
     });
     root.traverse(function (o) { if (o.isMesh) tintMesh(o); });
+    // dyes: a textured material repainted in a colour (the CC base body's top and hair)
+    LOADOUT.forEach(function (it) {
+      var dye = (it.config || {}).dye;
+      if (!dye) return;
+      root.traverse(function (o) {
+        if (!o.isMesh) return;
+        (Array.isArray(o.material) ? o.material : [o.material]).forEach(function (m) {
+          Object.keys(dye).forEach(function (part) { if (m && matches(m.name, part)) dyeMaterial(m, dye[part]); });
+        });
+      });
+    });
     LOADOUT.forEach(function (it) {
       var c = it.config || {};
       if (!c.model_url) return;
@@ -245,6 +263,16 @@ export function getAiInstructorHtml(
     });
     root.updateMatrixWorld(true);
     // body frames, in each bone's own space: across = character's left, up = toward the head
+    // CC rigs (the base body): the same joints under their own names
+    if (!B.bip01pelvis && B.cchip) {
+      var CC = { pelvis: 'hip', spine: 'waist', spine1: 'spine01', spine2: 'spine02', neck: 'necktwist01', head: 'head' };
+      ['l', 'r'].forEach(function (s) {
+        CC[s + 'thigh'] = s + 'thigh'; CC[s + 'calf'] = s + 'calf'; CC[s + 'foot'] = s + 'foot'; CC[s + 'toe0'] = s + 'toebase';
+        CC[s + 'upperarm'] = s + 'upperarm'; CC[s + 'forearm'] = s + 'forearm'; CC[s + 'hand'] = s + 'hand';
+        CC[s + 'finger2'] = s + 'mid1'; CC[s + 'finger21'] = s + 'mid2'; CC[s + 'finger22'] = s + 'mid3';
+      });
+      Object.keys(CC).forEach(function (k) { if (B['cc' + CC[k]]) B['bip01' + k] = B['cc' + CC[k]]; });
+    }
     function wp(n) { return B[n] ? B[n].getWorldPosition(new THREE.Vector3()) : null; }
     function frame(bn, across, up) {
       var b = B[bn];
@@ -467,7 +495,7 @@ export function getAiInstructorHtml(
       gltf.animations.forEach(function (clip) {
         var a = mixer.clipAction(clip);
         a.play();
-        if (clip.name === 'squat') a.timeScale = 0; // driven by rep progress, not the clock
+        if (clip.name === 'squat' || /^ex_/.test(clip.name)) a.timeScale = 0; // driven by rep progress, not the clock
         a.setEffectiveWeight(0);
         actions[clip.name] = a;
         weights[clip.name] = 0;
@@ -480,13 +508,14 @@ export function getAiInstructorHtml(
         weights[k] = k === mode ? 1 : 0;
         actions[k].setEffectiveWeight(weights[k]);
       });
-      var pivot = new THREE.Group();
+      var pivot = modelPivot = new THREE.Group();
       pivot.rotation.y = YAW;
       pivot.add(root);
       scene.add(pivot);
       model = root;
       floorY = root.position.y;
       if (shadow) shadow.position.z = root.position.z;
+      upgradeMaterials(root);
       applyLoadout(root);
       // for remote debugging (chrome://inspect): window.__ai.state()
       window.__ai = { actions: actions, weights: weights, state: function () {
@@ -504,10 +533,32 @@ export function getAiInstructorHtml(
     }
   );
 
+  // Exercises with a motion-capture clip on this model (Mixamo, Makefile MIXAMO_SHARED) play it, driven by
+  // rep progress like the squat and side-on so a body on the floor reads. Between reps: the start pose.
+  var EX_CLIPS = { '7': 'ex_pushup', '2': 'ex_situp', '5': 'ex_crunch' };
+  var clipEx = null, modelPivot = null;
+  function useClipView(clip, ex) {
+    if (clipEx === clip) return;
+    clipEx = clip;
+    moveId = null;
+    var info = clip && window.OjasMoves ? OjasMoves.info(ex) : null;
+    viewHalfW = info ? info.wide : 0.75;
+    viewCam = info && info.lying ? 0.42 : 0.55;
+    viewLook = info && info.lying ? 0.24 : 0.47;
+    if (modelPivot) modelPivot.rotation.y = clip ? YAW + Math.PI / 2 : YAW;
+    frameCamera();
+  }
+
   window.setAnim = function (m, p, ex) {
+    var exClip = ex && EX_CLIPS[ex];
+    if (exClip && actions[exClip] && (m === 'move' || m === 'rest')) {
+      useClipView(exClip, ex);
+      if (m === 'rest') p = 0;
+      m = exClip;
+    } else if (clipEx) useClipView(null);
     if ((m === 'move' || m === 'rest') && ex && ex !== '1') setMove(String(ex), m === 'rest');
     else if (moveId) { moveId = null; viewHalfW = 0.75; viewCam = 0.55; viewLook = 0.47; frameCamera(); }
-    if (m !== mode && actions[m] && m !== 'squat') actions[m].time = 0; // loops start from their top
+    if (m !== mode && actions[m] && m !== 'squat' && !/^ex_/.test(m)) actions[m].time = 0; // loops start from their top
     if (actions[m] || !mixer) mode = m;
     p = Math.max(0, Math.min(1, +p || 0));
     // A new rep starts at 0 after the last one ended at 1: both are the standing pose, so jump.
@@ -547,8 +598,11 @@ export function getAiInstructorHtml(
       return;
     }
     if (mixer) {
-      var sq = actions.squat;
-      if (sq) sq.time = Math.max(0, Math.min(1, shown)) * sq.getClip().duration * 0.9999;
+      // rep-driven clips follow the progress
+      Object.keys(actions).forEach(function (k) {
+        if (k !== 'squat' && !/^ex_/.test(k)) return;
+        actions[k].time = Math.max(0, Math.min(1, shown)) * actions[k].getClip().duration * 0.9999;
+      });
       var step = dt / CROSSFADE;
       Object.keys(actions).forEach(function (k) {
         var w = weights[k] + (k === mode ? step : -step);

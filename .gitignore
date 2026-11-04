@@ -39,3 +39,5 @@ android/app/*.keystore
 *.pth
 __pycache__/
 *.pyc
+scripts/blender/.cache/
+.arena-render/

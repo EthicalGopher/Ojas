@@ -46,6 +46,7 @@ import {
   Medal,
 } from 'lucide-react-native';
 import { makeStyles, radius, ThemeColors, useColors } from '../theme';
+import { GameTopBar, ScreenBackground } from '../components/game';
 import * as ImagePicker from 'expo-image-picker';
 import { Avatar } from '../components/Avatar';
 import { supabase } from '../utils/supabase';
@@ -870,32 +871,29 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
 
   return (
     <View style={styles.container}>
+      <ScreenBackground style={StyleSheet.absoluteFill} />
       <ThemedStatusBar />
 
-      {/* Top Header */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={onBack} activeOpacity={0.7}>
-          <ArrowLeft size={20} color={colors.text} />
-        </TouchableOpacity>
-        <View style={styles.headerTitleBox}>
-          <Text style={styles.headerTitle}>SQUADS</Text>
-          <Text style={styles.headerSubtitle}>Build your crew. Climb the ladder.</Text>
-        </View>
-        <TouchableOpacity
-          style={styles.createHeaderBtn}
-          onPress={() => {
-            if (userStatus.hasCommunity) {
-              Alert.alert('Already in Community', 'You are already in a community. Leave your current community first before creating a new one.');
-            } else {
-              setShowCreateModal(true);
-            }
-          }}
-          activeOpacity={0.8}
-        >
-          <Plus size={16} color="#FFFFFF" strokeWidth={3} />
-          <Text style={styles.createHeaderBtnText}>NEW</Text>
-        </TouchableOpacity>
-      </View>
+      <GameTopBar
+        title="Squads"
+        onBack={onBack}
+        right={
+          <TouchableOpacity
+            style={styles.createHeaderBtn}
+            onPress={() => {
+              if (userStatus.hasCommunity) {
+                Alert.alert('Already in Community', 'You are already in a community. Leave your current community first before creating a new one.');
+              } else {
+                setShowCreateModal(true);
+              }
+            }}
+            activeOpacity={0.8}
+          >
+            <Plus size={16} color="#FFFFFF" strokeWidth={3} />
+            <Text style={styles.createHeaderBtnText}>NEW</Text>
+          </TouchableOpacity>
+        }
+      />
 
       {isLoading ? (
         <View style={styles.loadingContainer}>
@@ -1148,7 +1146,8 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
             </View>
           ) : (
             /* 2. DEFAULT VIEW: EXPLORE COMMUNITIES FIRST, THEN TOURNAMENTS BELOW */
-            <>
+            <View style={styles.landRow}>
+              <View style={styles.landLeft}>
               {/* YOUR SQUAD HERO */}
               {userStatus.community ? (
                 (() => {
@@ -1226,6 +1225,8 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
                 </View>
               ) : null}
 
+              </View>
+              <View style={styles.landRight}>
               {/* SQUAD RANKINGS / EXPLORE */}
               <View style={styles.exploreSection}>
                 <View style={styles.sectionTitleBar}>
@@ -1761,7 +1762,8 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
                       )}
                     </View>
                   )}
-                </>
+              </View>
+            </View>
               )}
             </ScrollView>
       )}
@@ -2234,6 +2236,10 @@ const useStyles = makeStyles((colors: ThemeColors) =>
     flex: 1,
     backgroundColor: colors.bg,
   },
+  // Landscape: your squad on the left, leaderboard and tournaments on the right.
+  landRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 16 },
+  landLeft: { width: '40%' },
+  landRight: { flex: 1 },
   tabsContainer: {
     flexDirection: 'row',
     backgroundColor: colors.surface,
@@ -2294,7 +2300,7 @@ const useStyles = makeStyles((colors: ThemeColors) =>
   },
   contentContainer: {
     padding: 16,
-    paddingBottom: 100,
+    paddingBottom: 40,
   },
   pendingBanner: {
     flexDirection: 'row',

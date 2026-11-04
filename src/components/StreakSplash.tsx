@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, BackHandler, Easing, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Animated, BackHandler, Easing, StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useGameStats } from '../hooks/useGameStats';
 import { useUserStore } from '../store/userStore';
@@ -38,6 +38,9 @@ export const StreakSplash: React.FC = () => {
   const [visible, setVisible] = useState(false);
   const [displayCount, setDisplayCount] = useState(0);
   const fireRef = useRef<StreakFireHandle>(null);
+  const { height } = useWindowDimensions();
+  // the fire fills the left column of the landscape screen
+  const fireSize = Math.round(Math.min(124, height * 0.24));
 
   const backdrop = useRef(new Animated.Value(0)).current;
   const countIn = useRef(new Animated.Value(0)).current;
@@ -157,116 +160,116 @@ export const StreakSplash: React.FC = () => {
           <GlowSpot color="#FF6A1F" size={640} strength={0.2} style={{ alignSelf: 'center', top: '6%' }} />
         </View>
 
+        {/* Landscape: the fire and the count on the left, the message, the week and the buttons on the right */}
         <View style={styles.content}>
-        <View style={styles.center}>
-          <Text style={styles.eyebrow}>DAILY STREAK</Text>
-
-          <View style={styles.fireSlot}>
+          <View style={styles.left}>
+            <View style={[styles.fireSlot, { height: height * 0.5 }]}>
+              {lit ? (
+                <StreakFire ref={fireRef} size={fireSize} strong={strong} logsWidth={fireSize * 1.55} />
+              ) : (
+                <StreakFire ref={fireRef} size={Math.round(fireSize * 0.75)} strong={false} logsWidth={fireSize * 1.4} />
+              )}
+            </View>
             {lit ? (
-              <StreakFire ref={fireRef} size={124} strong={strong} logsWidth={190} />
-            ) : (
-              <StreakFire ref={fireRef} size={54} strong={false} logsWidth={150} />
-            )}
+              <Animated.View
+                style={{
+                  alignItems: 'center',
+                  opacity: countIn,
+                  transform: [{ scale: countIn.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1] }) }],
+                }}
+              >
+                <Text style={styles.count}>{displayCount}</Text>
+                <Text style={styles.countLabel}>DAY STREAK</Text>
+              </Animated.View>
+            ) : null}
           </View>
 
-          {lit ? (
+          <View style={styles.right}>
             <Animated.View
               style={{
-                alignItems: 'center',
-                opacity: countIn,
-                transform: [{ scale: countIn.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1] }) }],
+                opacity: contentIn,
+                transform: [{ translateY: contentIn.interpolate({ inputRange: [0, 1], outputRange: [18, 0] }) }],
               }}
             >
-              <Text style={styles.count}>{displayCount}</Text>
-              <Text style={styles.countLabel}>DAY STREAK</Text>
-            </Animated.View>
-          ) : null}
-
-          <Animated.View
-            style={{
-              alignItems: 'center',
-              opacity: contentIn,
-              transform: [{ translateY: contentIn.interpolate({ inputRange: [0, 1], outputRange: [18, 0] }) }],
-            }}
-          >
-            <Text style={[styles.headline, !lit && styles.headlineHero]}>{headline}</Text>
-            <Text style={styles.sub}>{sub}</Text>
-            {!lit && streak.best > 0 && (
-              <View style={styles.bestChip}>
-                <Text style={styles.bestChipText}>
-                  Best streak {streak.best} {streak.best === 1 ? 'day' : 'days'}
-                </Text>
-              </View>
-            )}
-          </Animated.View>
-
-          {/* WEEK: consecutive active days are joined into one burning chain */}
-          <View style={styles.weekCard}>
-            {week.map((d, i) => {
-              const joinNext = d.active && week[i + 1]?.active;
-              return (
-                <Animated.View
-                  key={d.key}
-                  style={[styles.day, { opacity: dayAnims[i], transform: [{ translateY: dayAnims[i].interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) }] }]}
-                >
-                  <Text style={[styles.dayLetter, d.isToday && { color: C.ember2 }]}>{d.letter}</Text>
-                  <View style={styles.dayCellRow}>
-                    {joinNext && <View style={styles.chain} />}
-                    <View
-                      style={[
-                        styles.dayCell,
-                        d.active && styles.dayCellActive,
-                        d.isToday && !d.active && styles.dayCellToday,
-                        d.isFuture && styles.dayCellFuture,
-                      ]}
-                    >
-                      {d.active ? <MiniFlame size={15} /> : null}
-                    </View>
-                  </View>
-                </Animated.View>
-              );
-            })}
-          </View>
-
-          {/* MILESTONE (only once there is a streak to grow) */}
-          {lit && nextMilestone && (
-            <Animated.View style={[styles.milestone, { opacity: contentIn }]}>
-              <View style={styles.milestoneTop}>
-                <Text style={styles.milestoneText}>
-                  {nextMilestone - streak.current} {nextMilestone - streak.current === 1 ? 'day' : 'days'} to a {nextMilestone}-day streak
-                </Text>
-                <Text style={styles.milestoneBest}>Best {streak.best}</Text>
-              </View>
-              <View style={styles.milestoneTrack}>
-                <View
-                  style={[
-                    styles.milestoneFill,
-                    { width: `${Math.max(4, ((streak.current - prevMilestone) / (nextMilestone - prevMilestone)) * 100)}%` },
-                  ]}
-                >
-                  <GradientFill colors={['#D7261B', '#FF7A1A', '#FFB13B']} />
+              <Text style={styles.eyebrow}>DAILY STREAK</Text>
+              <Text style={[styles.headline, !lit && styles.headlineHero]}>{headline}</Text>
+              <Text style={styles.sub}>{sub}</Text>
+              {!lit && streak.best > 0 && (
+                <View style={styles.bestChip}>
+                  <Text style={styles.bestChipText}>
+                    Best streak {streak.best} {streak.best === 1 ? 'day' : 'days'}
+                  </Text>
                 </View>
-              </View>
+              )}
             </Animated.View>
-          )}
-        </View>
 
-        <Animated.View style={[styles.actions, { opacity: contentIn }]}>
-          {strong ? (
-            <TouchableOpacity style={styles.primaryBtn} activeOpacity={0.9} onPress={() => dismiss()}>
-              <Text style={styles.primaryText}>KEEP GOING</Text>
-            </TouchableOpacity>
-          ) : (
-            <>
-              <TouchableOpacity style={styles.primaryBtn} activeOpacity={0.9} onPress={() => dismiss(true)}>
-                <Text style={styles.primaryText}>{lit ? "TRAIN NOW" : 'START A WORKOUT'}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.secondaryBtn} activeOpacity={0.8} onPress={() => dismiss()}>
-                <Text style={styles.secondaryText}>Later</Text>
-              </TouchableOpacity>
-            </>
-          )}
-        </Animated.View>
+            {/* WEEK: consecutive active days are joined into one burning chain */}
+            <View style={styles.weekCard}>
+              {week.map((d, i) => {
+                const joinNext = d.active && week[i + 1]?.active;
+                return (
+                  <Animated.View
+                    key={d.key}
+                    style={[styles.day, { opacity: dayAnims[i], transform: [{ translateY: dayAnims[i].interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) }] }]}
+                  >
+                    <Text style={[styles.dayLetter, d.isToday && { color: C.ember2 }]}>{d.letter}</Text>
+                    <View style={styles.dayCellRow}>
+                      {joinNext && <View style={styles.chain} />}
+                      <View
+                        style={[
+                          styles.dayCell,
+                          d.active && styles.dayCellActive,
+                          d.isToday && !d.active && styles.dayCellToday,
+                          d.isFuture && styles.dayCellFuture,
+                        ]}
+                      >
+                        {d.active ? <MiniFlame size={15} /> : null}
+                      </View>
+                    </View>
+                  </Animated.View>
+                );
+              })}
+            </View>
+
+            {/* MILESTONE (only once there is a streak to grow) */}
+            {lit && nextMilestone && (
+              <Animated.View style={[styles.milestone, { opacity: contentIn }]}>
+                <View style={styles.milestoneTop}>
+                  <Text style={styles.milestoneText}>
+                    {nextMilestone - streak.current} {nextMilestone - streak.current === 1 ? 'day' : 'days'} to a {nextMilestone}-day streak
+                  </Text>
+                  <Text style={styles.milestoneBest}>Best {streak.best}</Text>
+                </View>
+                <View style={styles.milestoneTrack}>
+                  <View
+                    style={[
+                      styles.milestoneFill,
+                      { width: `${Math.max(4, ((streak.current - prevMilestone) / (nextMilestone - prevMilestone)) * 100)}%` },
+                    ]}
+                  >
+                    <GradientFill colors={['#D7261B', '#FF7A1A', '#FFB13B']} />
+                  </View>
+                </View>
+              </Animated.View>
+            )}
+
+            <Animated.View style={[styles.actions, { opacity: contentIn }]}>
+              {strong ? (
+                <TouchableOpacity style={[styles.primaryBtn, { flex: 1 }]} activeOpacity={0.9} onPress={() => dismiss()}>
+                  <Text style={styles.primaryText}>KEEP GOING</Text>
+                </TouchableOpacity>
+              ) : (
+                <>
+                  <TouchableOpacity style={[styles.primaryBtn, { flex: 1 }]} activeOpacity={0.9} onPress={() => dismiss(true)}>
+                    <Text style={styles.primaryText}>{lit ? 'TRAIN NOW' : 'START A WORKOUT'}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.secondaryBtn} activeOpacity={0.8} onPress={() => dismiss()}>
+                    <Text style={styles.secondaryText}>Later</Text>
+                  </TouchableOpacity>
+                </>
+              )}
+            </Animated.View>
+          </View>
         </View>
       </Animated.View>
   );
@@ -274,10 +277,11 @@ export const StreakSplash: React.FC = () => {
 
 const styles = StyleSheet.create({
   backdrop: { ...StyleSheet.absoluteFill, backgroundColor: '#1F0B05', zIndex: 100, elevation: 100 },
-  content: { flex: 1, alignItems: 'center', paddingTop: 56, paddingBottom: 44 },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24, width: '100%' },
+  content: { flex: 1, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 48, paddingVertical: 24, gap: 40 },
+  left: { flex: 0.9, alignItems: 'center', justifyContent: 'center' },
+  right: { flex: 1.1, maxWidth: 480, justifyContent: 'center' },
   eyebrow: { color: C.faint, fontSize: 11, fontWeight: '900', letterSpacing: 3 },
-  fireSlot: { height: 270, justifyContent: 'flex-end', alignItems: 'center', marginTop: 4 },
+  fireSlot: { justifyContent: 'flex-end', alignItems: 'center' },
   count: {
     color: C.text,
     fontSize: 88,
@@ -289,18 +293,18 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   countLabel: { color: C.ember, fontSize: 13, fontWeight: '900', letterSpacing: 6, marginTop: -2 },
-  headline: { color: C.text, fontSize: 22, fontWeight: '900', marginTop: 18 },
-  headlineHero: { fontSize: 30, marginTop: 22, textAlign: 'center' },
-  bestChip: { marginTop: 14, paddingHorizontal: 12, height: 28, borderRadius: 14, justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.06)' },
+  headline: { color: C.text, fontSize: 26, fontWeight: '900', marginTop: 8 },
+  headlineHero: { fontSize: 30 },
+  bestChip: { alignSelf: 'flex-start', marginTop: 10, paddingHorizontal: 12, height: 28, borderRadius: 14, justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.06)' },
   bestChipText: { color: C.soft, fontSize: 12, fontWeight: '800' },
-  sub: { color: C.soft, fontSize: 13.5, textAlign: 'center', lineHeight: 19, marginTop: 6, maxWidth: 300 },
+  sub: { color: C.soft, fontSize: 13.5, lineHeight: 19, marginTop: 4 },
 
   weekCard: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignSelf: 'stretch',
-    marginTop: 26,
-    paddingVertical: 14,
+    marginTop: 16,
+    paddingVertical: 12,
     paddingHorizontal: 12,
     borderRadius: 20,
     backgroundColor: 'rgba(255,255,255,0.04)',
@@ -323,7 +327,7 @@ const styles = StyleSheet.create({
   milestoneTrack: { height: 8, borderRadius: 4, backgroundColor: C.cell, overflow: 'hidden' },
   milestoneFill: { height: '100%', borderRadius: 4, overflow: 'hidden' },
 
-  actions: { alignSelf: 'stretch', paddingHorizontal: 24, gap: 6 },
+  actions: { flexDirection: 'row', alignItems: 'center', marginTop: 16, gap: 10 },
   primaryBtn: {
     height: 54,
     borderRadius: 16,
@@ -334,6 +338,6 @@ const styles = StyleSheet.create({
     borderBottomColor: '#B4380E',
   },
   primaryText: { color: '#1A0A05', fontSize: 15, fontWeight: '900', letterSpacing: 1.4 },
-  secondaryBtn: { height: 40, alignItems: 'center', justifyContent: 'center' },
+  secondaryBtn: { height: 54, paddingHorizontal: 18, alignItems: 'center', justifyContent: 'center' },
   secondaryText: { color: C.soft, fontSize: 13.5, fontWeight: '800' },
 });

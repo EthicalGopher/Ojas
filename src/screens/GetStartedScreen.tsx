@@ -11,6 +11,7 @@ import LottieView from 'lottie-react-native';
 
 import { makeStyles, ThemeColors, useColors } from '../theme';
 import { ThemedStatusBar } from '../components/ThemedStatusBar';
+import { GText, ScreenBackground } from '../components/game';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -30,13 +31,16 @@ export const GetStartedScreen: React.FC<GetStartedScreenProps> = ({
 
   return (
     <SafeAreaView style={styles.safeArea}>
+      <ScreenBackground style={StyleSheet.absoluteFill} />
       <ThemedStatusBar />
 
+      {/* Landscape: brand + animation on the left, headline and actions on the right. */}
       <View style={styles.container}>
+        <View style={styles.leftCol}>
 
         {/* Top Brand Logo */}
         <View style={styles.header}>
-          <Text style={styles.brandLogo}>Ojas</Text>
+          <GText variant="hero" size={52} tone="accent">Ojas</GText>
         </View>
 
         {/* Personal Training Animation */}
@@ -49,6 +53,8 @@ export const GetStartedScreen: React.FC<GetStartedScreenProps> = ({
             resizeMode="contain"
             style={styles.mascotAnimation}
           />
+        </View>
+
         </View>
 
         {/* Bottom Content */}
@@ -116,16 +122,18 @@ const useStyles = makeStyles((colors: ThemeColors) =>
 
     safeArea: {
       flex: 1,
-      backgroundColor: colors.bg,
+      backgroundColor: 'transparent',
     },
 
     container: {
       flex: 1,
-      paddingHorizontal: 20,
-      paddingTop: 16,
-      paddingBottom: 28,
-      justifyContent: 'space-between',
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 32,
+      paddingVertical: 16,
+      gap: 24,
     },
+    leftCol: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 
     /* ---------------- HEADER ---------------- */
 
@@ -151,15 +159,15 @@ const useStyles = makeStyles((colors: ThemeColors) =>
     },
 
     mascotAnimation: {
-      width: SCREEN_WIDTH - 40,
-      height: 280,
+      width: SCREEN_WIDTH * 0.42,
+      height: 250,
     },
 
     /* ---------------- BOTTOM CONTENT ---------------- */
 
     bottomContent: {
       alignItems: 'center',
-      width: '100%',
+      width: '46%',
     },
 
     headline: {

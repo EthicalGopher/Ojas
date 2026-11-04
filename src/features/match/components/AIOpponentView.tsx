@@ -1,6 +1,11 @@
 import React from 'react';
 import { AIBotProfile, AIBotState } from '../../../utils/aiBotService';
 import { AIInstructor3D } from './AIInstructor3D';
+import { AI_RIVAL_MODEL, baseLookItems, resolveModelUrl } from '../../../utils/avatarShopService';
+
+// The AI coach: the base body in the coach's look.
+const COACH_URL = resolveModelUrl(AI_RIVAL_MODEL.model_url);
+const COACH_LOADOUT = baseLookItems(AI_RIVAL_MODEL).map((it) => ({ category: it.category, config: it.config }));
 
 interface AIOpponentViewProps {
   bot: AIBotProfile;
@@ -41,5 +46,14 @@ export const AIOpponentView: React.FC<AIOpponentViewProps> = ({
     : resting ? 'rest'
     : exerciseId === '1' ? 'squat'
     : 'move';
-  return <AIInstructor3D mode={mode} exerciseId={exerciseId} phaseProgress={botState.phaseProgress} onReady={onReady} />;
+  return (
+    <AIInstructor3D
+      mode={mode}
+      exerciseId={exerciseId}
+      phaseProgress={botState.phaseProgress}
+      modelUrl={COACH_URL}
+      loadout={COACH_LOADOUT}
+      onReady={onReady}
+    />
+  );
 };

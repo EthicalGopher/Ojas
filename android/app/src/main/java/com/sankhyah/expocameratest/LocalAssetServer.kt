@@ -245,6 +245,7 @@ object LocalAssetServer {
             path.endsWith(".png") -> "image/png"
             path.endsWith(".jpg") || path.endsWith(".jpeg") -> "image/jpeg"
             path.endsWith(".svg") -> "image/svg+xml"
+            path.endsWith(".mp4") -> "video/mp4"
             else -> "application/octet-stream"
         }
     }

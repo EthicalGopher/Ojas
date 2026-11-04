@@ -36,6 +36,8 @@ export interface UserProfile {
   /** Per-character loadout: { [characterId]: { top?, pants?, shoes?, hair?, accessory? } } */
   equipped_items?: Record<string, Record<string, string>>;
   coins_spent?: number;
+  /** Stand-in built on the device because the row could not be read: see store/profileMerge.ts */
+  load_failed?: boolean;
   /** true once the first-run tutorial was completed or skipped */
   is_tutorial?: boolean;
   created_at?: string;
@@ -132,6 +134,9 @@ export async function getOrCreateUserProfile(user: any): Promise<UserProfile> {
       };
     }
 
+    // A failed read says nothing about the row: only build a new profile when there really is none.
+    if (error) throw error;
+
     // Construct profile from Google / Auth metadata
     const initialProfile: UserProfile = {
       id: user.id,
@@ -168,7 +173,7 @@ export async function getOrCreateUserProfile(user: any): Promise<UserProfile> {
       console.warn('Could not insert initial profile to Supabase table:', e);
     }
 
-    return initialProfile;
+    return { ...initialProfile, load_failed: true };
   } catch (err) {
     console.error('Error fetching profile:', err);
     return {
@@ -180,6 +185,7 @@ export async function getOrCreateUserProfile(user: any): Promise<UserProfile> {
       avatar_url: null,
       bio: 'Ready to crush daily fitness milestones with Ojas!',
       fitness_goal: 'Strength & Stamina',
+      load_failed: true,
     };
   }
 }

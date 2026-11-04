@@ -6,10 +6,24 @@ import { UserProfile, getOrCreateUserProfile, markTutorialDone } from '../utils/
 /** Guests have no profile row, so their tutorial flag lives on the device. */
 const GUEST_TUTORIAL_KEY = 'ojas_guest_tutorial_done';
 import { useDailyChallengeStore } from './dailyChallengeStore';
+import { SavedLook, resolveProfile } from './profileMerge';
+
+/** The hero last confirmed for this player, so a restart shows it before the server answers. */
+const savedLookKey = (userId: string) => `ojas_saved_look_${userId}`;
+const PROFILE_RETRY_MS = [3000, 10000, 30000];
+let profileRetries = 0;
+let profileRetryTimer: ReturnType<typeof setTimeout> | null = null;
+let latestProfileRead = 0;
+const cancelProfileRetry = () => {
+  if (profileRetryTimer) clearTimeout(profileRetryTimer);
+  profileRetryTimer = null;
+};
 
 export type MainTab = 'home' | 'explore' | 'workouts' | 'shop' | 'social' | 'profile';
 export type ShopFilter = 'all' | 'owned';
-export type HomeSubTab = 'feed' | 'news';
+export type HomeSubTab = 'lobby' | 'news';
+/** Where a camera/match session was started from; sessions from the lobby return to the lobby. */
+export type SessionOrigin = 'lobby' | 'train' | 'detail' | 'other';
 
 export interface MatchSummaryStats {
   exerciseId: string;
@@ -36,6 +50,10 @@ interface UserState {
   shopFilter: ShopFilter;
   setUser: (user: any | null) => void;
   setProfile: (profile: UserProfile | null) => void;
+  /** The look saved on this device; stands in until the profile has loaded. */
+  savedLook: SavedLook | null;
+  /** The server accepted a new hero: show it now, whatever happens to the next read. */
+  noteEquipped: (avatarId: string) => void;
   setActiveTab: (tab: MainTab) => void;
   setHomeSubTab: (tab: HomeSubTab) => void;
   /** Jump to the News feed from anywhere in the app. */
@@ -59,8 +77,9 @@ interface UserState {
 export const useUserStore = create<UserState>((set, get) => ({
   user: null,
   profile: null,
+  savedLook: null,
   activeTab: 'home',
-  homeSubTab: 'feed',
+  homeSubTab: 'lobby',
   selectedExerciseId: null,
   isGuest: false,
   lastMatchSummary: null,
@@ -83,7 +102,16 @@ export const useUserStore = create<UserState>((set, get) => ({
   setUser: (user) => {
     set({ user, isGuest: user?.isGuest || false });
     if (user && !user?.isGuest) {
-      get().refreshProfile();
+      if (get().savedLook) {
+        get().refreshProfile();
+      } else {
+        AsyncStorage.getItem(savedLookKey(user.id))
+          .then((v) => {
+            if (v) set({ savedLook: JSON.parse(v) });
+          })
+          .catch(() => {})
+          .finally(() => get().refreshProfile());
+      }
     } else if (user?.isGuest) {
       AsyncStorage.getItem(GUEST_TUTORIAL_KEY)
         .then((v) => set({ guestTutorialDone: v === '1' }))
@@ -105,14 +133,23 @@ export const useUserStore = create<UserState>((set, get) => ({
         } as any,
       });
     } else {
-      set({ profile: null });
+      cancelProfileRetry();
+      latestProfileRead += 1;
+      set({ profile: null, savedLook: null });
     }
   },
-  setProfile: (profile) => {
+  setProfile: (incoming) => {
+    const profile = incoming && resolveProfile(get().profile, incoming, get().savedLook);
     set({ profile });
     if (profile?.daily_challenges) {
       useDailyChallengeStore.getState().hydrateFromProfile(profile.daily_challenges);
     }
+  },
+  noteEquipped: (avatarId) => {
+    const { user, profile, savedLook } = get();
+    const look: SavedLook = { equipped_items: profile?.equipped_items ?? savedLook?.equipped_items, equipped_avatar_id: avatarId };
+    set({ savedLook: look, profile: profile && { ...profile, equipped_avatar_id: avatarId } });
+    if (user?.id) AsyncStorage.setItem(savedLookKey(user.id), JSON.stringify(look)).catch(() => {});
   },
   setActiveTab: (activeTab) => set({ activeTab }),
   setHomeSubTab: (homeSubTab) => set({ homeSubTab }),
@@ -125,8 +162,25 @@ export const useUserStore = create<UserState>((set, get) => ({
   refreshProfile: async () => {
     const { user, isGuest } = get();
     if (!user || isGuest) return null;
+    const read = ++latestProfileRead;
+    cancelProfileRetry();
     try {
-      const profileData = await getOrCreateUserProfile(user);
+      const fetched = await getOrCreateUserProfile(user);
+      // Sign-in events each start a read: only the newest one may set the profile.
+      if (read !== latestProfileRead) return get().profile;
+      if (fetched.load_failed) {
+        if (profileRetries < PROFILE_RETRY_MS.length) {
+          profileRetryTimer = setTimeout(() => get().refreshProfile(), PROFILE_RETRY_MS[profileRetries++]);
+        }
+      } else {
+        profileRetries = 0;
+        if (fetched.equipped_avatar_id) {
+          const look: SavedLook = { equipped_avatar_id: fetched.equipped_avatar_id, equipped_items: fetched.equipped_items };
+          set({ savedLook: look });
+          AsyncStorage.setItem(savedLookKey(user.id), JSON.stringify(look)).catch(() => {});
+        }
+      }
+      const profileData = resolveProfile(get().profile, fetched, get().savedLook);
       set({ profile: profileData });
       if (profileData?.daily_challenges) {
         useDailyChallengeStore.getState().hydrateFromProfile(profileData.daily_challenges);

@@ -2102,7 +2102,7 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
         current === ScreenOrientation.Orientation.LANDSCAPE_LEFT ||
         current === ScreenOrientation.Orientation.LANDSCAPE_RIGHT;
       if (isLandscape) {
-        await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
+        await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
       } else {
         await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE_RIGHT);
       }
@@ -2125,7 +2125,7 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
   const handleClose = async () => {
     try {
       Speech.stop();
-      await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
+      await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
     } catch (e) {}
 
     // Persist full cumulative daily challenge progress across all sessions to Supabase
@@ -2281,6 +2281,7 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
           title={`PREPARING ${exerciseName.toUpperCase()}`}
           message={isAiTutor ? "Loading AI voice coach and pose tracking engine..." : "Loading AI camera and pose tracking engine..."}
           fullScreen={false}
+          versus={false}
           onCancel={handleClose}
         />
       )}

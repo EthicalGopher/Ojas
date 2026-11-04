@@ -862,7 +862,7 @@ export const DeformityScannerModal: React.FC<DeformityScannerModalProps> = ({
 
   useEffect(() => {
     if (visible) {
-      ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => {});
+      ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE).catch(() => {});
       setIsModelLoading(true);
       setScanProgress(0);
       setSummaryReport(null);

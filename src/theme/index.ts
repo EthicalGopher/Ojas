@@ -4,63 +4,14 @@ import { useColorScheme } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 
-const darkColors = {
-  bg: '#1A1C20',
-  surface: '#161B22',
-  surfaceHi: '#262A32',
-  surfaceSunken: '#0D111A',
-  border: 'rgba(255, 255, 255, 0.07)',
-  borderStrong: 'rgba(255, 255, 255, 0.14)',
+import { darkColors, palettes, type Palette } from './palettes';
 
-  text: '#FFFFFF',
-  textMuted: '#8E95A0',
-  textDim: '#64748B',
-  textOnLight: '#11141A',
-
-  accent: '#E25822',
-  onAccent: '#FFFFFF',
-  flame: '#E25822',
-  lavender: '#C8B6FF',
-  pink: '#FFD6E0',
-  navy: '#354394',
-  gold: '#F59E0B',
-  sky: '#38BDF8',
-  success: '#10B981',
-  danger: '#EF4444',
-};
-
-export type Palette = typeof darkColors;
+export { darkColors, lightColors, palettes } from './palettes';
+export type { Palette } from './palettes';
 /** Alias that avoids clashing with the lucide `Palette` icon. */
 export type ThemeColors = Palette;
 
-const lightColors: Palette = {
-  bg: '#F4F5F9',
-  surface: '#FFFFFF',
-  surfaceHi: '#ECEEF3',
-  surfaceSunken: '#E6E8EF',
-  border: 'rgba(17, 20, 26, 0.08)',
-  borderStrong: 'rgba(17, 20, 26, 0.16)',
-
-  text: '#11141A',
-  textMuted: '#5B6474',
-  textDim: '#8A93A5',
-  textOnLight: '#11141A',
-
-  accent: '#E25822',
-  onAccent: '#FFFFFF',
-  flame: '#E25822',
-  lavender: '#C8B6FF',
-  pink: '#FFD6E0',
-  navy: '#354394',
-  gold: '#D97706',
-  sky: '#0284C7',
-  success: '#059669',
-  danger: '#DC2626',
-};
-
-export const palettes = { dark: darkColors, light: lightColors };
-
-/** Dark palette, for screens that stay dark in every mode (camera, matches). */
+/** Dark palette, for screens that stay dark in every mode. */
 export const colors: Palette = darkColors;
 
 // ---------- Appearance preference ----------
@@ -120,8 +71,17 @@ export const radius = {
   md: 16,
   lg: 22,
   xl: 26,
+  panel: 20,
   pill: 999,
 } as const;
+
+export const space = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 } as const;
+
+/** Soft panel shadow (RN boxShadow, New Architecture). */
+export const softShadow = (c: Palette) => ({ boxShadow: `0 6px 16px ${c.shadowTint}` });
+
+export { typeStyle, typeMfm } from './typography';
+export type { TextVariant } from './typography';
 
 export const shadow = (elevation: number = 6) => ({
   shadowColor: '#000',

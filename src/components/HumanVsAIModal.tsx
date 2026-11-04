@@ -251,10 +251,13 @@ const useStyles = makeStyles((colors: ThemeColors) =>
     marginBottom: 10,
     marginTop: 10,
   },
+  // Landscape: the four difficulty levels side by side.
   botGrid: {
+    flexDirection: 'row',
     gap: 8,
   },
   botCard: {
+    flex: 1,
     backgroundColor: colors.surface,
     borderWidth: 1.5,
     borderColor: colors.border,
@@ -275,9 +278,8 @@ const useStyles = makeStyles((colors: ThemeColors) =>
     flex: 1,
   },
   botTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 2,
   },
   botNameText: {
     color: colors.text,

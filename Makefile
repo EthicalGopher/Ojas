@@ -23,10 +23,11 @@ RELEASE_AAB  := $(ANDROID_DIR)/app/build/outputs/bundle/release/app-release.aab
 AAB_NAME     := ojas-v$(VERSION)-$(VERSION_CODE).aab
 BUNDLETOOL   ?= bundletool
 
-.PHONY: db-check uninstall help install start android web typecheck doctor check \
+.PHONY: arena-athletes db-check uninstall help install start android web typecheck doctor check \
         keystore apk apk-debug aab aab-test install-apk run-apk logs clean clean-android \
         backend backend-install migrate tree-pose-engine tree-pose-test tree-pose-onnx \
-        warrior2-engine warrior2-test warrior2-python-test warrior2-onnx pack-logic-test
+        warrior2-engine warrior2-test warrior2-python-test warrior2-onnx pack-logic-test \
+        juice-test moment-word-test theme-test lobby-test profile-test arena fc1 arjun
 
 help: ## Show this help
 	@echo "Ojas v$(VERSION) - available commands:"
@@ -82,7 +83,56 @@ pack-logic-test: ## Run the Play asset pack logic tests (needs Node >= 22.18, wh
 	@node -e "const [a,b]=process.versions.node.split('.').map(Number); process.exit(a>22||(a===22&&b>=18)?0:1)" || { echo "pack-logic-test needs Node >= 22.18 (found $$(node -v))"; exit 1; }
 	node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON src/utils/assetPacksLogic.test.mjs
 
-check: typecheck pack-logic-test ## Run all checks (typecheck + pack logic tests + expo-doctor)
+juice-test: ## Run the juice (sound/haptics/music) logic tests (Node >= 22.18)
+	@node -e "const [a,b]=process.versions.node.split('.').map(Number); process.exit(a>22||(a===22&&b>=18)?0:1)" || { echo "$@ needs Node >= 22.18 (found $$(node -v))"; exit 1; }
+	node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON src/juice/juiceLogic.test.mjs
+
+BLENDER ?= $(HOME)/blender/blender
+
+arena: ## Path-trace the match-intro arena plates in Blender (GPU) and encode them into the app assets; needs an APK rebuild
+	$(BLENDER) -b -P scripts/blender/render_arena.py -- .arena-render
+	scripts/blender/encode_plates.sh .arena-render
+
+arena-athletes: ## Render the heroes onto the arena stage (every pairing) as the match intro's stills; needs an APK rebuild
+	$(BLENDER) -b -P scripts/blender/render_arena.py -- .arena-render --athletes --samples 160
+	scripts/blender/encode_plates.sh .arena-render
+
+FC1_SRC ?= scripts/blender/.cache/ludovisions_FC1.glb
+
+CLIPS_SRC = android/app/src/main/assets/web/avatars/ojas_female.glb
+CLIPS_DIR = scripts/blender/.cache
+# Mixamo clips (FBX, without skin) that replace the authored ones
+MIXAMO ?= scripts/blender/.cache/mixamo
+MIXAMO_SHARED = cheer=$(MIXAMO)/Cheering.fbx stand=$(MIXAMO)/StandingIdle.fbx idle=$(MIXAMO)/BreathingIdle.fbx rest=$(MIXAMO)/BreathingIdle.fbx squat=$(MIXAMO)/AirSquat.fbx,inplace ex_pushup=$(MIXAMO)/PushUp.fbx,inplace ex_situp=$(MIXAMO)/Situps.fbx,inplace ex_crunch=$(MIXAMO)/BicycleCrunch.fbx,inplace hero_move2=$(MIXAMO)/Victory.fbx
+MEERA_MIXAMO = $(MIXAMO_SHARED) hero_idle=$(MIXAMO)/FastRun.fbx,inplace hero_move1=$(MIXAMO)/FastRun.fbx,inplace,x6
+ARJUN_MIXAMO = $(MIXAMO_SHARED) hero_idle=$(MIXAMO)/Walking.fbx,inplace hero_world=$(MIXAMO)/Climbing.fbx,still,from=60,to=112 hero_move1=$(MIXAMO)/Climbing.fbx,still,from=60,to=112,x3
+
+fc1: ## Build the base character (Meera) with her own clips from the FC1 download into the app assets; needs an APK rebuild
+	$(BLENDER) -b -P scripts/blender/author_hero_clips.py -- $(CLIPS_SRC) meera $(CLIPS_DIR)/clips_meera.glb
+	$(BLENDER) -b -P scripts/blender/build_fc1.py -- $(FC1_SRC) $(CLIPS_DIR)/clips_meera.glb android/app/src/main/assets/web/avatars/ojas_fc1.glb $(MEERA_MIXAMO)
+
+ARJUN_SRC ?= scripts/blender/.cache/survival_character
+
+arjun: ## Build Arjun with his own clips from the Survival Character FBX + textures into the app assets; needs an APK rebuild
+	$(BLENDER) -b -P scripts/blender/author_hero_clips.py -- $(CLIPS_SRC) arjun $(CLIPS_DIR)/clips_arjun.glb
+	$(BLENDER) -b -P scripts/blender/build_arjun.py -- $(ARJUN_SRC)/Survival_Character.fbx $(ARJUN_SRC)/textures $(CLIPS_DIR)/clips_arjun.glb android/app/src/main/assets/web/avatars/arjun.glb $(ARJUN_MIXAMO)
+
+moment-word-test: ## Run the MomentWord layout tests (Node >= 22.18)
+	@node -e "const [a,b]=process.versions.node.split('.').map(Number); process.exit(a>22||(a===22&&b>=18)?0:1)" || { echo "$@ needs Node >= 22.18 (found $$(node -v))"; exit 1; }
+	node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON src/components/game/momentWordLayout.test.mjs
+
+theme-test: ## Run the theme contrast and typography tests (Node >= 22.18)
+	@node -e "const [a,b]=process.versions.node.split('.').map(Number); process.exit(a>22||(a===22&&b>=18)?0:1)" || { echo "$@ needs Node >= 22.18 (found $$(node -v))"; exit 1; }
+	node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON src/theme/theme.test.mjs
+
+lobby-test: ## Run the lobby logic tests (Node >= 22.18)
+	@node -e "const [a,b]=process.versions.node.split('.').map(Number); process.exit(a>22||(a===22&&b>=18)?0:1)" || { echo "$@ needs Node >= 22.18 (found $$(node -v))"; exit 1; }
+	node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON src/screens/lobbyLogic.test.mjs
+
+profile-test: ## Run the profile read logic tests (Node >= 22.18)
+	node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON src/store/profileMerge.test.mjs
+
+check: typecheck pack-logic-test juice-test moment-word-test theme-test lobby-test profile-test ## Run all checks (typecheck + logic tests + expo-doctor)
 	-npx expo-doctor
 
 # ---------- Android release ----------
@@ -120,15 +170,8 @@ aab: ## Build the Play App Bundle (needs VERSION_CODE=n) -> build_output/
 	cp $(RELEASE_AAB) $(OUT_DIR)/$(AAB_NAME)
 	@echo "App Bundle: $(OUT_DIR)/$(AAB_NAME) ($$(du -h $(OUT_DIR)/$(AAB_NAME) | cut -f1), built $$(date '+%d %b %H:%M'))"
 
-aab-test: ## Build a test bundle (x86_64 + arm64, versionCode 1) and install it on the emulator via bundletool
-	@command -v $(BUNDLETOOL) >/dev/null || { echo "bundletool not found. Install it (for example 'yay -S bundletool') or set BUNDLETOOL=/path/to/bundletool."; exit 1; }
-	cd $(ANDROID_DIR) && ./gradlew bundleRelease -PversionCode=1 -PreactNativeArchitectures=x86_64,arm64-v8a -PabiFilters=x86_64,arm64-v8a
-	@mkdir -p $(OUT_DIR)
-	$(BUNDLETOOL) build-apks --bundle=$(RELEASE_AAB) --local-testing --overwrite --output=$(OUT_DIR)/ojas-test.apks
-	$(BUNDLETOOL) install-apks --apks=$(OUT_DIR)/ojas-test.apks
-	@# Keep this test bundle (x86_64, versionCode 1) away from the path a Play upload would pick up.
-	mv $(RELEASE_AAB) $(OUT_DIR)/ojas-test.aab
-	@echo "Installed the test bundle. It is saved as $(OUT_DIR)/ojas-test.aab (never upload this one)."
+aab-test: ## Build a test bundle (x86_64 + arm64, versionCode 1) and install it on the emulator via bundletool --local-testing
+	BUNDLETOOL=$(BUNDLETOOL) ANDROID_DIR=$(ANDROID_DIR) OUT_DIR=$(OUT_DIR) scripts/aab-test.sh
 
 install-apk: ## Install the universal APK on the connected device (adb)
 	@scripts/ensure-signature.sh release

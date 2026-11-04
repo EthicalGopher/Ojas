@@ -1,5 +1,5 @@
 import React from 'react';
-import { Modal, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Modal, StatusBar, StyleSheet, Text, TouchableOpacity, View, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChevronRight, Dumbbell, Flame, ShoppingBag, Swords, Users, type LucideIcon } from 'lucide-react-native';
 import LogoMark from '../../assets/logo-mark.svg';
@@ -30,21 +30,29 @@ interface AppTutorialProps {
 export const AppTutorial: React.FC<AppTutorialProps> = ({ visible, onStart, onSkip }) => {
   const insets = useSafeAreaInsets();
   return (
-    <Modal visible={visible} animationType="fade" statusBarTranslucent onRequestClose={onSkip}>
+    <Modal visible={visible} animationType="fade" statusBarTranslucent supportedOrientations={['landscape', 'portrait']} onRequestClose={onSkip}>
       <StatusBar barStyle="light-content" backgroundColor={BG} />
-      <View style={[styles.container, { paddingTop: insets.top + 24, paddingBottom: insets.bottom + 24 }]}>
-        <View style={styles.content}>
+      <View style={[styles.container, { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 12, paddingLeft: Math.max(insets.left, 24), paddingRight: Math.max(insets.right, 24) }]}>
+        {/* welcome and buttons on the left, what the tour covers on the right, so it fits a landscape phone */}
+        <ScrollView style={styles.side} contentContainerStyle={styles.sideContent} showsVerticalScrollIndicator={false}>
           <View style={styles.halo}>
-            <View style={styles.haloInner}>
-              <LogoMark width={110} height={110} />
-            </View>
+            <LogoMark width={46} height={46} />
           </View>
           <Text style={styles.tag}>WELCOME TO OJAS</Text>
           <Text style={styles.title}>Your AI coach lives in your camera</Text>
           <Text style={styles.body}>
             Let's walk through the app together. We'll point at each button and you tap it to see what it does.
           </Text>
+          <TouchableOpacity style={styles.startBtn} onPress={onStart} activeOpacity={0.9} accessibilityRole="button">
+            <Text style={styles.startText}>Start the tour</Text>
+            <ChevronRight size={20} color="#11141A" strokeWidth={2.6} />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={onSkip} hitSlop={12} activeOpacity={0.7} accessibilityRole="button">
+            <Text style={styles.skip}>Skip for now</Text>
+          </TouchableOpacity>
+        </ScrollView>
 
+        <ScrollView style={styles.side} contentContainerStyle={styles.sideContent} showsVerticalScrollIndicator={false}>
           <View style={styles.covers}>
             {COVERS.map(({ Icon, label, color }) => (
               <View key={label} style={styles.cover}>
@@ -55,58 +63,41 @@ export const AppTutorial: React.FC<AppTutorialProps> = ({ visible, onStart, onSk
               </View>
             ))}
           </View>
-        </View>
-
-        <View style={styles.actions}>
-          <TouchableOpacity style={styles.startBtn} onPress={onStart} activeOpacity={0.9} accessibilityRole="button">
-            <Text style={styles.startText}>Start the tour</Text>
-            <ChevronRight size={20} color="#11141A" strokeWidth={2.6} />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={onSkip} hitSlop={12} activeOpacity={0.7} accessibilityRole="button">
-            <Text style={styles.skip}>Skip for now</Text>
-          </TouchableOpacity>
-        </View>
+        </ScrollView>
       </View>
     </Modal>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: BG, paddingHorizontal: 28 },
-  content: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  container: { flex: 1, backgroundColor: BG, flexDirection: 'row', gap: 24 },
+  side: { flex: 1 },
+  sideContent: { flexGrow: 1, justifyContent: 'center', alignItems: 'center' },
   halo: {
-    width: 168,
-    height: 168,
-    borderRadius: 84,
+    width: 72,
+    height: 72,
+    borderRadius: 36,
     borderWidth: 1,
     borderColor: GOLD + '55',
     backgroundColor: GOLD + '1F',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 28,
+    marginBottom: 8,
   },
-  haloInner: {
-    width: 124,
-    height: 124,
-    borderRadius: 62,
-    backgroundColor: GOLD + '26',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  tag: { color: GOLD, fontSize: 12, fontWeight: '900', letterSpacing: 2, marginBottom: 10 },
-  title: { color: TEXT, fontSize: 28, lineHeight: 34, fontWeight: '800', textAlign: 'center', marginBottom: 12 },
-  body: { color: MUTED, fontSize: 15.5, lineHeight: 23, textAlign: 'center', marginBottom: 24 },
+  tag: { color: GOLD, fontSize: 12, fontWeight: '900', letterSpacing: 2, marginBottom: 4 },
+  title: { alignSelf: 'stretch', color: TEXT, fontSize: 22, lineHeight: 27, fontWeight: '800', textAlign: 'center', marginBottom: 6 },
+  body: { color: MUTED, fontSize: 14, lineHeight: 19, textAlign: 'center', marginBottom: 12 },
   covers: { alignSelf: 'stretch', backgroundColor: CARD, borderRadius: 18, padding: 14, gap: 10 },
   cover: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   coverIcon: { width: 30, height: 30, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   coverText: { color: TEXT, fontSize: 14.5, fontWeight: '600' },
-  actions: { alignItems: 'center', gap: 16 },
   startBtn: {
     alignSelf: 'center',
     width: '100%',
     maxWidth: 320,
-    height: 56,
-    borderRadius: 18,
+    height: 48,
+    borderRadius: 16,
+    marginBottom: 10,
     backgroundColor: GOLD,
     flexDirection: 'row',
     alignItems: 'center',

@@ -73,7 +73,7 @@ import {
   AIBotState,
 } from '../../../utils/aiBotService';
 import { AIOpponentView } from './AIOpponentView';
-import { VersusIntro } from './VersusIntro';
+import { ArenaIntro } from './ArenaIntro';
 import { DuelOpponentView } from './DuelOpponentView';
 import type { AIInstructor3DHandle } from './AIInstructor3D';
 import { SimulatedOpponent } from '../../../utils/simulatedOpponent';
@@ -751,7 +751,7 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
   const handleToggleOrientation = async () => {
     try {
       if (isLandscape) {
-        await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
+        await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
       } else {
         await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE_RIGHT);
       }
@@ -800,7 +800,7 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
               }
 
               try {
-                await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
+                await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
               } catch (e) {}
               onClose();
             },
@@ -828,7 +828,7 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
     sendMatchMessage({ type: 'match_leave', sender: selfUsername });
 
     try {
-      await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
+      await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
     } catch (e) {}
     onClose();
   };
@@ -1064,9 +1064,9 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
         </View>
       )}
 
-      {/* OVERLAY 1: Versus card while players sync (replaces the old loading screen) */}
+      {/* OVERLAY 1: arena intro (championship stage) while players sync */}
       {showVersus && (
-        <VersusIntro
+        <ArenaIntro
           mode={mode}
           opponentUsername={opponentUsername}
           exerciseId={exerciseId}
@@ -1379,8 +1379,8 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
         </View>
       )}
 
-      {/* FLOATING DRAGGABLE ACTIONS WIDGET */}
-      <DraggableActionsWidget
+      {/* FLOATING DRAGGABLE ACTIONS WIDGET (hidden while the arena intro plays) */}
+      {!showVersus && <DraggableActionsWidget
         isAiBattle={mode === 'ai_battle'}
         onLeave={handleClose}
         onFlipCamera={handleFlipCamera}
@@ -1403,7 +1403,7 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
         }}
         onSendFriendRequest={handleSendFriendRequest}
         canAddFriend={!isSimulated}
-      />
+      />}
     </View>
   );
 

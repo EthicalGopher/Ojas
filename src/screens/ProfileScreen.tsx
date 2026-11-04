@@ -11,10 +11,11 @@ import {
   StatusBar,
   RefreshControl,
   Switch,
+  Modal,
+  useWindowDimensions,
 } from 'react-native';
 import {
   Activity,
-  ArrowLeft,
   AtSign,
   Award,
   Bell,
@@ -45,15 +46,26 @@ import {
   Sun,
   Moon,
   Smartphone,
-  Coins,
   PersonStanding,
   ShoppingBag,
   GraduationCap,
   ChevronRight,
+  Music,
+  Volume2,
+  Vibrate,
+  FileText,
 } from 'lucide-react-native';
 import { ProgressRing } from '../components/ui/ProgressRing';
 import { useGameStats } from '../hooks/useGameStats';
-import { makeStyles, radius, ThemeColors, ThemeMode, useColors, useThemeStore } from '../theme';
+import { useCharacterCreator } from '../features/avatar/components/CharacterCreator';
+import { HeroCard } from '../features/avatar/components/HeroCard';
+import { GameButton, GameTopBar, GText, MeterBar, NamePlate, Panel, PillOption, ScreenBackground, SectionHeader } from '../components/game';
+import { GradientFill as ArenaGradient } from '../components/game/Gradient';
+import { useJuiceSettings } from '../juice/juiceSettingsStore';
+import { VOLUME_STEPS } from '../juice/juiceLogic';
+import { juice } from '../juice/juice';
+import { LICENSES } from '../legal/licenses';
+import { makeStyles, radius, softShadow, ThemeColors, ThemeMode, typeStyle, useColors, useThemeStore } from '../theme';
 
 type IconType = React.ComponentType<{ size?: number; color?: string; strokeWidth?: number }>;
 import { Avatar } from '../components/Avatar';
@@ -95,7 +107,6 @@ import {
   isAvatarOwned,
   loadoutItems,
 } from '../utils/avatarShopService';
-import { computeCoinBalance } from '../utils/gamification';
 import { areRemindersEnabled, setRemindersEnabled } from '../utils/streakReminders';
 
 import { ThemedStatusBar } from '../components/ThemedStatusBar';
@@ -146,16 +157,20 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const { level, streak } = useGameStats();
   const themeMode = useThemeStore((s) => s.mode);
   const setThemeMode = useThemeStore((s) => s.setMode);
+  const juiceSettings = useJuiceSettings();
+  const [showCredits, setShowCredits] = useState(false);
 
   // 3D avatar
   const storeProfile = useUserStore((s) => s.profile);
   const [avatarCatalog, setAvatarCatalog] = useState<AvatarModel[]>(BUNDLED_AVATARS);
   const openShop = useUserStore((s) => s.openShop);
   const openTutorial = useUserStore((s) => s.openTutorial);
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const isShort = windowHeight < 400;
+  const isNarrow = windowWidth < 700;
   const equippedAvatar = findAvatar(avatarCatalog, getEquippedAvatarId(storeProfile));
   const equippedItems = loadoutItems(avatarCatalog, getLoadout(storeProfile, equippedAvatar.id), equippedAvatar);
   const ownedAvatarCount = avatarCatalog.filter((m) => isAvatarOwned(storeProfile, m)).length;
-  const coinBalance = computeCoinBalance(storeProfile);
 
   useEffect(() => {
     fetchAvatarCatalog().then(setAvatarCatalog);
@@ -523,32 +538,101 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
   return (
     <View style={styles.container}>
+      <ScreenBackground style={StyleSheet.absoluteFill} />
       <ThemedStatusBar />
+      <GameTopBar
+        title="Profile"
+        onBack={onBack}
+        right={
+          <TouchableOpacity
+            style={[styles.editButton, isEditing && styles.editButtonActive]}
+            activeOpacity={0.8}
+            onPress={() => (isEditing ? handleSaveProfile() : setIsEditing(true))}
+            disabled={isSaving}
+          >
+            {isSaving ? (
+              <ActivityIndicator size="small" color={colors.onAccent} />
+            ) : (
+              <>
+                {isEditing ? <Save size={13} color={colors.onAccent} /> : <Edit3 size={13} color={colors.text} />}
+                <Text style={[styles.editButtonText, isEditing && { color: colors.onAccent }]}>
+                  {isEditing ? 'Save' : 'Edit'}
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
+        }
+      />
+      <View style={[styles.split, { flex: 1 }]}>
 
-      {/* HEADER */}
-      <View style={styles.topHeader}>
-        <TouchableOpacity style={styles.iconButton} activeOpacity={0.8} onPress={onBack}>
-          <ArrowLeft size={18} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Profile</Text>
-        <TouchableOpacity
-          style={[styles.editButton, isEditing && styles.editButtonActive]}
-          activeOpacity={0.8}
-          onPress={() => (isEditing ? handleSaveProfile() : setIsEditing(true))}
-          disabled={isSaving}
-        >
-          {isSaving ? (
-            <ActivityIndicator size="small" color={colors.onAccent} />
+      {/* HERO STAGE (landscape game profile): character, level, rank, XP and shop actions */}
+      <View style={styles.heroSide}>
+        <Panel tone="raised" padding={0} radius={26} style={styles.heroStage}>
+          <ArenaGradient from={colors.bgTop} to={colors.surfaceHi} direction="vertical" radius={26} />
+          {isShort ? (
+            // a short phone has no room for the 3D hero between the plate and the buttons: their card instead
+            <View style={styles.heroShort}>
+              <View style={styles.heroShortRow}>
+                <HeroCard hero={equippedAvatar} width={isNarrow ? 72 : 84} onPress={() => useCharacterCreator.getState().show()} />
+                <View style={{ flex: 1, minWidth: 0, gap: 8 }}>
+                  <View style={[styles.heroTop, { padding: 0, flexWrap: 'wrap', gap: 6 }]}>
+            <TouchableOpacity activeOpacity={0.85} onPress={handlePickAndUploadPhoto} disabled={isUploadingPhoto} accessibilityLabel="Change profile photo">
+              <ProgressRing size={54} strokeWidth={3} progress={level.progress} color={colors.accentFrom} trackColor={colors.surfaceSunken}>
+                <Avatar username={username || currentUser?.email || 'athlete'} size={46} config={avatarConfig} avatarUrl={avatarUrl} />
+              </ProgressRing>
+              <View style={styles.cameraBadge}>
+                {isUploadingPhoto ? <ActivityIndicator size="small" color={colors.onAccent} /> : <CameraIcon size={11} color={colors.onAccent} />}
+              </View>
+            </TouchableOpacity>
+            <View style={styles.rankBadge}>
+              <RankEmblem tier={rankTierFromTitle(level.title)} size={26} />
+              <GText variant="label">{tierNameFromTitle(level.title)}</GText>
+            </View>
+                  </View>
+                  <NamePlate name={fullName || username || 'Ojas Athlete'} tag={`@${username || 'athlete'} · Lv ${level.level} ${level.title}`} side="you" maxWidth={260} />
+                </View>
+              </View>
+              <MeterBar value={level.progress} height={6} />
+              <View style={[styles.heroActions, { marginTop: 0 }]}>
+                <GameButton label={isNarrow ? 'Avatar' : 'Customize'} variant="secondary" size="md" icon={PersonStanding} onPress={() => useCharacterCreator.getState().show()} style={{ flex: 1, minWidth: 0 }} />
+              <GameButton label={isNarrow ? 'Shop' : 'Style shop'} size="md" icon={ShoppingBag} onPress={() => openShop('all')} style={{ flex: 1, minWidth: 0 }} />
+              </View>
+            </View>
           ) : (
             <>
-              {isEditing ? <Save size={13} color={colors.onAccent} /> : <Edit3 size={13} color={colors.text} />}
-              <Text style={[styles.editButtonText, isEditing && { color: colors.onAccent }]}>
-                {isEditing ? 'Save' : 'Edit'}
-              </Text>
+          <AvatarViewer3D model={equippedAvatar} items={equippedItems} style={styles.heroViewer} interactive={false} />
+          <View style={styles.heroTop}>
+            <TouchableOpacity activeOpacity={0.85} onPress={handlePickAndUploadPhoto} disabled={isUploadingPhoto} accessibilityLabel="Change profile photo">
+              <ProgressRing size={54} strokeWidth={3} progress={level.progress} color={colors.accentFrom} trackColor={colors.surfaceSunken}>
+                <Avatar username={username || currentUser?.email || 'athlete'} size={46} config={avatarConfig} avatarUrl={avatarUrl} />
+              </ProgressRing>
+              <View style={styles.cameraBadge}>
+                {isUploadingPhoto ? <ActivityIndicator size="small" color={colors.onAccent} /> : <CameraIcon size={11} color={colors.onAccent} />}
+              </View>
+            </TouchableOpacity>
+            <View style={styles.rankBadge}>
+              <RankEmblem tier={rankTierFromTitle(level.title)} size={26} />
+              <GText variant="label">{tierNameFromTitle(level.title)}</GText>
+            </View>
+          </View>
+          <View style={styles.heroBottom}>
+            <NamePlate name={fullName || username || 'Ojas Athlete'} tag={`@${username || 'athlete'} · Lv ${level.level} ${level.title}`} side="you" maxWidth={260} />
+            <View style={styles.heroXpRow}>
+              <GText variant="caption" tone="muted">{level.xpIntoLevel} / {level.xpForNextLevel} XP</GText>
+              <GText variant="caption" tone="muted">Lv {level.level + 1} next</GText>
+            </View>
+            <MeterBar value={level.progress} height={8} />
+            <View style={styles.heroActions}>
+              <GameButton label={isNarrow ? 'Avatar' : 'Customize'} variant="secondary" size="md" icon={PersonStanding} onPress={() => useCharacterCreator.getState().show()} style={{ flex: 1, minWidth: 0 }} />
+              <GameButton label={isNarrow ? 'Shop' : 'Style shop'} size="md" icon={ShoppingBag} onPress={() => openShop('all')} style={{ flex: 1, minWidth: 0 }} />
+            </View>
+          </View>
             </>
           )}
-        </TouchableOpacity>
+        </Panel>
       </View>
+
+      <View style={{ flex: 1 }}>
 
       <ScrollView
         style={styles.scrollContent}
@@ -559,140 +643,44 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.accent} colors={[colors.accent]} />
         }
       >
-        {/* HERO */}
-        <View style={styles.heroCard}>
-          <View style={styles.heroTopRow}>
-            <TouchableOpacity activeOpacity={0.85} onPress={handlePickAndUploadPhoto} disabled={isUploadingPhoto}>
-              <ProgressRing size={96} strokeWidth={4} progress={level.progress} color="#FFFFFF" trackColor="rgba(0,0,0,0.2)">
-                <Avatar
-                  username={username || currentUser?.email || 'athlete'}
-                  size={82}
-                  config={avatarConfig}
-                  avatarUrl={avatarUrl}
-                />
-              </ProgressRing>
-              <View style={styles.cameraBadge}>
-                {isUploadingPhoto ? (
-                  <ActivityIndicator size="small" color={colors.onAccent} />
-                ) : (
-                  <CameraIcon size={13} color={colors.onAccent} />
-                )}
-              </View>
-              <View style={styles.levelBadgeRow} pointerEvents="none">
-                <View style={styles.levelBadge}>
-                  <Text style={styles.levelBadgeText}>LV {level.level}</Text>
-                </View>
-              </View>
-            </TouchableOpacity>
-
-            <View style={styles.heroInfo}>
-              <Text style={styles.heroName} numberOfLines={1}>{fullName || username || 'Ojas Athlete'}</Text>
-              <Text style={styles.heroUsername} numberOfLines={1}>@{username || 'athlete'}</Text>
-              <View style={styles.titleChip}>
-                <RankEmblem tier={rankTierFromTitle(level.title)} size={22} />
-                <Text style={styles.titleChipText}>{tierNameFromTitle(level.title).toUpperCase()}</Text>
-              </View>
-            </View>
-          </View>
-
-          {!!bio && !isEditing && <Text style={styles.heroBio}>{bio}</Text>}
-
-          <View style={styles.xpLabelRow}>
-            <Text style={styles.xpLabel}>
-              {level.xpIntoLevel} / {level.xpForNextLevel} XP
-            </Text>
-            <Text style={styles.xpNext}>Level {level.level + 1} next</Text>
-          </View>
-          <View style={styles.xpTrack}>
-            <View style={[styles.xpFill, { width: `${Math.max(3, level.progress * 100)}%` }]} />
-          </View>
-
-          <View style={styles.statGrid}>
-            {[
-              { label: 'TOTAL XP', value: level.totalXp.toLocaleString() },
-              { label: 'STREAK', value: `${streak.current}d` },
-              { label: 'BEST', value: `${streak.best}d` },
-              { label: 'KCAL', value: totalCalories.toLocaleString() },
-            ].map(({ label, value }) => (
-              <View key={label} style={styles.statTile}>
-                <Text style={styles.statValue}>{value}</Text>
-                <Text style={styles.statLabel}>{label}</Text>
-              </View>
-            ))}
-          </View>
+        {/* STATS */}
+        <View style={styles.statRow}>
+          {[
+            { label: 'Total XP', value: level.totalXp.toLocaleString(), tone: 'accent' as const },
+            { label: 'Streak', value: `${streak.current}d`, tone: 'accent' as const },
+            { label: 'Best streak', value: `${streak.best}d`, tone: 'text' as const },
+            { label: 'Calories', value: totalCalories.toLocaleString(), tone: 'text' as const },
+          ].map(({ label, value, tone }) => (
+            <Panel key={label} tone="raised" radius={18} padding={12} style={styles.statPanel}>
+              <GText variant="number" size={26} tone={tone} numberOfLines={1} adjustsFontSizeToFit>{value}</GText>
+              <GText variant="caption" tone="muted">{label}</GText>
+            </Panel>
+          ))}
         </View>
+        {!!bio && !isEditing && <GText variant="body" tone="muted" style={styles.bioText}>{bio}</GText>}
 
         {/* TABS */}
-        <View style={styles.subTabBar}>
-          {PROFILE_TABS.map(({ key, label, Icon, badge }) => {
-            const active = activeTab === key;
-            return (
-              <TouchableOpacity
-                key={key}
-                style={[styles.subTabItem, active && styles.subTabItemActive]}
-                activeOpacity={0.85}
-                onPress={() => setActiveTab(key)}
-              >
-                <Icon size={14} color={active ? colors.onAccent : colors.textMuted} />
-                <Text style={[styles.subTabText, active && styles.subTabTextActive]} numberOfLines={1}>
-                  {label}
-                </Text>
-                {!!badge && badge > 0 && (
-                  <View style={styles.badgeCountPill}>
-                    <Text style={styles.badgeCountText}>{badge}</Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-            );
-          })}
+        <View style={styles.pillTabs}>
+          {PROFILE_TABS.map(({ key, label, Icon, badge }) => (
+            <View key={key}>
+              <PillOption label={label} icon={Icon} selected={activeTab === key} underline onPress={() => setActiveTab(key)} />
+              {!!badge && badge > 0 && (
+                <View style={styles.badgeCountPill} pointerEvents="none">
+                  <Text style={styles.badgeCountText}>{badge}</Text>
+                </View>
+              )}
+            </View>
+          ))}
         </View>
 
         {activeTab === 'profile' ? (
           <>
-            {/* 3D AVATAR */}
-            {!isEditing && (
-              <View style={styles.sectionCard}>
-                <View style={styles.sectionHeaderRow}>
-                  <View style={styles.sectionTitleRow}>
-                    <View style={styles.sectionAccent} />
-                    <Text style={styles.sectionHeader}>3D AVATAR</Text>
-                  </View>
-                  <View style={styles.coinChip}>
-                    <CoinDot size={12} />
-                    <Text style={styles.coinChipText}>{coinBalance.toLocaleString()}</Text>
-                  </View>
-                </View>
-                {/* PoGo-style trainer stage: sky, ground, the avatar and a floating name plate */}
-                <View style={styles.avatarStage}>
-                  <GradientFill colors={['#46C9C0', '#D7F5EE']} vertical />
-                  <View style={styles.avatarGround} pointerEvents="none" />
-                  <AvatarViewer3D model={equippedAvatar} items={equippedItems} style={{ flex: 1, marginBottom: 40 }} interactive={false} />
-                  <View style={styles.avatarPlate}>
-                    <Text style={styles.avatarName} numberOfLines={1}>{equippedAvatar.name}</Text>
-                    <View style={[styles.avatarRarityDot, { backgroundColor: RARITY_COLORS[equippedAvatar.rarity] }]} />
-                    <Text style={styles.avatarRarity}>{equippedAvatar.rarity}</Text>
-                    <Text style={styles.avatarOwned}>{ownedAvatarCount} items</Text>
-                  </View>
-                </View>
-                <View style={styles.avatarActions}>
-                  <TouchableOpacity style={styles.avatarSecondaryBtn} activeOpacity={0.85} onPress={() => openShop('owned')}>
-                    <PersonStanding size={16} color="#13877D" strokeWidth={2.5} />
-                    <Text style={styles.avatarSecondaryText}>Customize</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.avatarPrimaryBtn} activeOpacity={0.85} onPress={() => openShop('all')}>
-                    <ShoppingBag size={16} color="#FFFFFF" strokeWidth={2.5} />
-                    <Text style={styles.avatarPrimaryText}>Style Shop</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            )}
-
             {/* ACHIEVEMENTS */}
             <View style={styles.sectionCard}>
               <View style={styles.sectionHeaderRow}>
                 <View style={styles.sectionTitleRow}>
                   <View style={styles.sectionAccent} />
-                  <Text style={styles.sectionHeader}>ACHIEVEMENTS</Text>
+                  <Text style={styles.sectionHeader}>Achievements</Text>
                 </View>
                 <Text style={styles.sectionMeta}>{unlockedCount}/{ACHIEVEMENTS.length} unlocked</Text>
               </View>
@@ -727,7 +715,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
             <View style={styles.sectionCard}>
               <View style={styles.sectionTitleRow}>
                 <View style={styles.sectionAccent} />
-                <Text style={styles.sectionHeader}>PERSONAL DETAILS</Text>
+                <Text style={styles.sectionHeader}>Personal details</Text>
               </View>
 
               {renderDetailField({
@@ -773,7 +761,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
               <View style={styles.sectionHeaderRow}>
                 <View style={styles.sectionTitleRow}>
                   <View style={styles.sectionAccent} />
-                  <Text style={styles.sectionHeader}>HEALTH & POSTURE</Text>
+                  <Text style={styles.sectionHeader}>Health & posture</Text>
                 </View>
                 {!isEditing && (
                   <TouchableOpacity style={styles.linkBtn} activeOpacity={0.7} onPress={() => setIsEditing(true)}>
@@ -854,7 +842,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
               <View style={styles.sectionCard}>
                 <View style={styles.sectionTitleRow}>
                   <View style={styles.sectionAccent} />
-                  <Text style={styles.sectionHeader}>SETTINGS</Text>
+                  <Text style={styles.sectionHeader}>Settings</Text>
                 </View>
                 <View style={styles.themeSwitch}>
                   {([
@@ -900,6 +888,71 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                 </TouchableOpacity>
               </View>
             )}
+
+            {/* SOUND & FEEL (design 3.8) */}
+            {!isEditing && (
+              <Panel style={styles.soundPanel}>
+                <SectionHeader title="Sound & feel" />
+                {([
+                  { key: 'music', label: 'Music', Icon: Music },
+                  { key: 'sfx', label: 'Sound effects', Icon: Volume2 },
+                  { key: 'haptics', label: 'Haptics', Icon: Vibrate },
+                ] as const).map(({ key, label, Icon }) => (
+                  <View key={key} style={styles.soundRow}>
+                    <Icon size={20} color={colors.accent} />
+                    <GText style={{ flex: 1 }}>{label}</GText>
+                    <Switch
+                      value={juiceSettings[key]}
+                      onValueChange={(v) => {
+                        juiceSettings.set({ [key]: v });
+                        juice.play('toggle');
+                      }}
+                      trackColor={{ false: colors.surfaceHi, true: colors.accent }}
+                      thumbColor="#FFFFFF"
+                      accessibilityLabel={label}
+                    />
+                  </View>
+                ))}
+                <GText variant="label" tone="muted" style={styles.volumeLabel}>Music volume</GText>
+                <View style={styles.volumeRow}>
+                  {VOLUME_STEPS.map((step) => (
+                    <PillOption
+                      key={step}
+                      label={`${Math.round(step * 100)}%`}
+                      selected={juiceSettings.musicVolume === step}
+                      disabled={!juiceSettings.music}
+                      onPress={() => juiceSettings.set({ musicVolume: step })}
+                    />
+                  ))}
+                </View>
+                <TouchableOpacity style={styles.soundRow} activeOpacity={0.8} onPress={() => setShowCredits(true)}>
+                  <FileText size={20} color={colors.accent} />
+                  <GText style={{ flex: 1 }}>Font & sound credits</GText>
+                  <ChevronRight size={18} color={colors.textMuted} />
+                </TouchableOpacity>
+              </Panel>
+            )}
+
+            <Modal visible={showCredits} transparent animationType="fade" onRequestClose={() => setShowCredits(false)}>
+              <View style={[styles.creditsOverlay, { backgroundColor: colors.scrim }]}>
+                <Panel tone="raised" style={styles.creditsCard}>
+                  <View style={styles.creditsHeader}>
+                    <GText variant="title" style={{ flex: 1 }}>Font & sound credits</GText>
+                    <TouchableOpacity onPress={() => setShowCredits(false)} accessibilityLabel="Close" hitSlop={10}>
+                      <X size={20} color={colors.text} />
+                    </TouchableOpacity>
+                  </View>
+                  <ScrollView style={{ maxHeight: 460 }}>
+                    {LICENSES.map((l) => (
+                      <View key={l.title} style={{ marginBottom: 16 }}>
+                        <GText variant="bodyStrong" style={{ marginBottom: 6 }}>{l.title}</GText>
+                        <GText variant="caption" tone="muted">{l.body}</GText>
+                      </View>
+                    ))}
+                  </ScrollView>
+                </Panel>
+              </View>
+            </Modal>
 
             {isEditing ? (
               <TouchableOpacity style={styles.cancelEditBtn} activeOpacity={0.85} onPress={() => { setIsEditing(false); loadProfileData(); }}>
@@ -1045,7 +1098,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
             <View style={styles.sectionCard}>
               <View style={styles.sectionTitleRow}>
                 <View style={styles.sectionAccent} />
-                <Text style={styles.sectionHeader}>ADD A FRIEND</Text>
+                <Text style={styles.sectionHeader}>Add a friend</Text>
               </View>
               <Text style={styles.healthSectionDesc}>Enter the exact username of the athlete you want to connect with.</Text>
 
@@ -1085,7 +1138,9 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           </View>
         )}
       </ScrollView>
+      </View>
     </View>
+      </View>
   );
 };
 
@@ -1124,6 +1179,21 @@ const useStyles = makeStyles((colors: ThemeColors) =>
   reminderSub: { color: colors.textMuted, fontSize: 12, lineHeight: 17, marginTop: 2 },
   themeSwitch: { flexDirection: 'row', gap: 8, marginTop: 14, padding: 4, borderRadius: radius.pill, backgroundColor: colors.surfaceSunken },
   container: { flex: 1, backgroundColor: colors.bg },
+  split: { flexDirection: 'row' },
+  heroSide: { width: '36%', padding: 12, paddingRight: 0 },
+  heroStage: { flex: 1, overflow: 'hidden' },
+  heroShort: { flex: 1, padding: 10, gap: 8, justifyContent: 'space-between' },
+  heroShortRow: { flexDirection: 'row', gap: 10 },
+  heroViewer: { position: 'absolute', top: 40, left: 0, right: 0, bottom: 150 },
+  heroTop: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12 },
+  rankBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, height: 32, borderRadius: 16, backgroundColor: colors.raised, borderWidth: 1, borderColor: colors.edge },
+  heroBottom: { position: 'absolute', left: 12, right: 12, bottom: 12, gap: 6 },
+  heroXpRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 },
+  heroActions: { flexDirection: 'row', gap: 8, marginTop: 6 },
+  statRow: { flexDirection: 'row', gap: 10, marginBottom: 12 },
+  statPanel: { flex: 1 },
+  bioText: { marginBottom: 12 },
+  pillTabs: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
   loadingContainer: { flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center', gap: 12 },
   loadingText: { color: colors.textMuted, fontSize: 13, fontWeight: '600' },
 
@@ -1163,12 +1233,12 @@ const useStyles = makeStyles((colors: ThemeColors) =>
   editButtonText: { color: colors.text, fontSize: 13, fontWeight: '800' },
 
   scrollContent: { flex: 1 },
-  scrollContainer: { paddingHorizontal: 18, paddingBottom: 150 },
+  scrollContainer: { paddingHorizontal: 18, paddingBottom: 40 },
 
   // Hero
   heroCard: { padding: 22, borderRadius: radius.xl, backgroundColor: colors.flame },
   heroTopRow: { flexDirection: 'row', alignItems: 'center' },
-  cameraBadge: { position: 'absolute', right: -2, top: 2, width: 30, height: 30, borderRadius: 15, backgroundColor: '#11141A', borderWidth: 2, borderColor: colors.flame, alignItems: 'center', justifyContent: 'center' },
+  cameraBadge: { position: 'absolute', right: -4, bottom: -2, width: 22, height: 22, borderRadius: 11, backgroundColor: colors.accentFrom, borderWidth: 2, borderColor: colors.raised, alignItems: 'center', justifyContent: 'center' },
   levelBadgeRow: { position: 'absolute', left: 0, right: 0, bottom: -6, alignItems: 'center' },
   levelBadge: { paddingHorizontal: 8, height: 20, borderRadius: 10, backgroundColor: '#11141A', borderWidth: 2, borderColor: colors.flame, justifyContent: 'center' },
   levelBadgeText: { color: '#FFFFFF', fontSize: 10, fontWeight: '900' },
@@ -1195,6 +1265,9 @@ const useStyles = makeStyles((colors: ThemeColors) =>
   subTabText: { color: colors.textMuted, fontSize: 11.5, fontWeight: '900' },
   subTabTextActive: { color: colors.onAccent },
   badgeCountPill: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
     minWidth: 16,
     height: 16,
     paddingHorizontal: 4,
@@ -1206,11 +1279,11 @@ const useStyles = makeStyles((colors: ThemeColors) =>
   badgeCountText: { color: '#fff', fontSize: 9, fontWeight: '900' },
 
   // Sections
-  sectionCard: { padding: 20, borderRadius: radius.xl, marginBottom: 18, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
+  sectionCard: { padding: 18, borderRadius: radius.panel, marginBottom: 14, backgroundColor: colors.raised, borderWidth: 1, borderColor: colors.edge, ...softShadow(colors) },
   sectionHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   sectionTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
-  sectionHeader: { color: colors.text, fontSize: 12.5, fontWeight: '900', letterSpacing: 0.8 },
-  sectionAccent: { width: 4, height: 16, borderRadius: 2, backgroundColor: colors.accent },
+  sectionHeader: { ...typeStyle('title', 18), color: colors.text },
+  sectionAccent: { width: 4, height: 18, borderRadius: 2, backgroundColor: colors.accentFrom },
   sectionMeta: { color: colors.textMuted, fontSize: 11, fontWeight: '800' },
 
   // Achievements
@@ -1375,5 +1448,12 @@ const useStyles = makeStyles((colors: ThemeColors) =>
     borderColor: 'rgba(226, 88, 34, 0.25)',
   },
   infoTipText: { flex: 1, color: colors.textMuted, fontSize: 12.5, lineHeight: 18 },
+  soundPanel: { marginBottom: 18 },
+  soundRow: { minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  volumeLabel: { marginTop: 8, marginBottom: 8 },
+  volumeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 4 },
+  creditsOverlay: { flex: 1, justifyContent: 'center', paddingHorizontal: 16 },
+  creditsCard: { width: '100%', maxWidth: 420, alignSelf: 'center', padding: 20 },
+  creditsHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
 })
 );

@@ -28,7 +28,8 @@
     "plugins": [
       "expo-asset",
       "expo-status-bar",
-      "expo-web-browser"
+      "expo-web-browser",
+      "expo-video"
     ],
     "owner": "sankhyah",
     "extra": {

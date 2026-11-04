@@ -26,14 +26,14 @@ export interface TourStep {
 
 export const TOUR_STEPS: TourStep[] = [
   {
-    target: 'home-carousel',
-    title: 'Battle cards',
-    body: 'Swipe through the 1v1 Arena, Human vs AI against the 3D coach, and the 3-second Posture Scan. Tap a card to jump in.',
+    target: 'lobby-play',
+    title: 'Play',
+    body: 'Pick a mode and an exercise, then tap the big button: duel the AI, find a rival, enter the Battle Ground or train solo.',
   },
   {
-    target: 'home-activity',
-    title: 'Your activity',
-    body: 'Calories, reps and matches for the day, and your streak. Train once a day to keep the flame burning.',
+    target: 'lobby-quests',
+    title: 'Daily quests',
+    body: 'Three quests a day. Finish them for bonus XP and keep your streak flame burning.',
   },
   {
     target: 'home-level',
@@ -48,46 +48,34 @@ export const TOUR_STEPS: TourStep[] = [
   {
     target: 'tab-explore',
     title: 'Squad',
-    body: 'Add friends, join a squad and fight squad tournaments. Tap to open it.',
-    goTo: 'explore',
+    body: 'Add friends, join a squad and fight squad tournaments.',
     auth: true,
     round: true,
   },
   {
     target: 'tab-workouts',
     title: 'Train',
-    body: 'Every exercise lives here: squats, push-ups, lunges, crunches and yoga poses. Tap to open it.',
-    goTo: 'workouts',
+    body: 'Pick a stage: squats, push-ups, lunges, crunches and yoga poses. Train with the AI Tutor, go solo or battle.',
     auth: true,
     round: true,
-  },
-  {
-    target: 'train-first-exercise',
-    title: 'Pick an exercise',
-    body: 'Open one for the AI Tutor with live form corrections, Solo Practice, or a ranked battle. Stand 5 to 7 ft from the phone with your whole body in view.',
-    auth: true,
   },
   {
     target: 'tab-shop',
     title: 'Shop',
-    body: 'Spend your coins on 3D avatars, clothes and accessories. Tap to open it.',
-    goTo: 'shop',
+    body: 'Spend your coins on 3D avatars, clothes and accessories.',
     round: true,
   },
   {
     target: 'tab-profile',
-    title: 'Me',
+    title: 'Profile',
     body: 'Your profile, ranks per exercise, achievements and settings. Replay this tour any time from Settings.',
-    goTo: 'profile',
     auth: true,
     round: true,
   },
   {
-    target: 'tab-home',
+    target: 'lobby-play',
     title: "You're all set",
-    body: 'Head home and start your first workout. Tap Home to finish the tour.',
-    goTo: 'home',
-    round: true,
+    body: 'Tap the big button to start your first match.',
   },
 ];
 
@@ -184,7 +172,7 @@ export const CoachMarks: React.FC<{ onFinish: (how: 'done' | 'skipped') => void 
     if (current.goTo) {
       const u = useUserStore.getState();
       u.setActiveTab(current.goTo);
-      if (current.goTo === 'home') u.setHomeSubTab('feed');
+      if (current.goTo === 'home') u.setHomeSubTab('lobby');
     }
     if (step >= steps.length - 1) onFinish('done');
     else useTourStore.getState().next();

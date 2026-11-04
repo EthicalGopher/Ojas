@@ -10,10 +10,10 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  Pressable,
 } from 'react-native';
 import {
   Activity,
-  ArrowLeft,
   Award,
   BookOpen,
   Bot,
@@ -43,10 +43,13 @@ import { Avatar } from '../components/Avatar';
 import { ExerciseIcon } from '../components/ExerciseIcon';
 import { useUserStore } from '../store/userStore';
 import { TierIcon } from '../components/TierIcon';
-import { ProgressRing } from '../components/ui/ProgressRing';
 import { RankEmblem, RankTier, TIER_NAMES, TIER_PALETTES, clampTier } from '../components/RankEmblem';
 import { GlowSpot, GradientFill } from '../features/squad/components/SquadUI';
-import { exerciseCardThemes, makeStyles, radius, ThemeColors, useColors } from '../theme';
+import { makeStyles, radius, ThemeColors, useColors } from '../theme';
+import { GameTopBar, GText, ScreenBackground } from '../components/game';
+import { GradientFill as GameGradient } from '../components/game/Gradient';
+import { Slant } from '../components/game/Slant';
+import { juice } from '../juice/juice';
 import {
   calculateLevel,
   LEVEL_TIERS,
@@ -79,6 +82,16 @@ export interface ExerciseItem {
 }
 
 type IconType = React.ComponentType<{ size?: number; color?: string; style?: any; fill?: string }>;
+
+/** Card colours per mode (white text stays readable on both stops). */
+const MODE_COLORS: Record<string, [string, string]> = {
+  ai_tutor: ['#8A4FE0', '#4A2399'],
+  solo_practice: ['#2477E0', '#173E9E'],
+  ai_duel: ['#F0662A', '#B53214'],
+  ffa: ['#D99A0B', '#8F5A00'],
+  quick_start: ['#E0344A', '#8E1426'],
+  custom_friend: ['#14A394', '#0B5E56'],
+};
 
 interface QueueMode {
   id: string;
@@ -374,49 +387,45 @@ export const ExerciseDetailScreen: React.FC<ExerciseDetailScreenProps> = ({
     }
   };
 
-  const renderModeRow = (mode: QueueMode, index: number) => {
+  /** Game mode tile: a coloured card with the mode's icon, name and tag. */
+  const renderModeRow = (mode: QueueMode) => {
     const aiLocked = mode.kind === 'ai_duel' && !isSquat;
     const isOnline = mode.kind === 'queue' || mode.kind === 'friend';
     const locked = (isGuest && isOnline) || aiLocked;
     const { Icon } = mode;
-    // Colored cards in the same rhythm as the Train screen's workout cards.
-    const theme = exerciseCardThemes[index % exerciseCardThemes.length];
+    const [from, to] = MODE_COLORS[mode.id] ?? ['#E8452A', '#9E1F14'];
 
     return (
-      <TouchableOpacity
+      <Pressable
         key={mode.id}
-        style={[styles.modeRow, { backgroundColor: theme.bg }, locked && { opacity: 0.6 }]}
-        activeOpacity={0.88}
-        onPress={() => handleModePress(mode, locked, aiLocked)}
+        style={({ pressed }) => [styles.modeTile, pressed && { transform: [{ scale: 0.97 }] }]}
+        onPress={() => {
+          juice.play('tap');
+          handleModePress(mode, locked, aiLocked);
+        }}
+        accessibilityRole="button"
+        accessibilityLabel={`${mode.title}. ${mode.description}${locked ? '. Locked' : ''}`}
       >
-        <View style={[styles.modeIconTile, { backgroundColor: theme.chip }]}>
-          <Icon size={22} color={theme.text} />
-        </View>
-
-        <View style={styles.modeInfo}>
-          <Text style={[styles.modeTitle, { color: theme.text }]} numberOfLines={1}>{mode.title}</Text>
-          <Text style={[styles.modeDesc, { color: theme.sub }]} numberOfLines={1}>{mode.description}</Text>
-          <View style={[styles.modeBadge, { backgroundColor: theme.chip }]}>
-            {locked && <Lock size={9} color={theme.text} />}
-            <Text style={[styles.modeBadgeText, { color: theme.text }]}>
-              {aiLocked ? 'SQUATS ONLY' : locked ? 'LOCKED' : mode.badge}
-            </Text>
+        <GameGradient from={from} to={to} radius={16} />
+        <View style={styles.modeStreak} />
+        <View style={styles.modeTop}>
+          <View style={styles.modeIconTile}>
+            <Icon size={20} color="#FFFFFF" />
+          </View>
+          <View style={styles.modeBadge}>
+            {locked && <Lock size={9} color="#FFFFFF" />}
+            <Text style={styles.modeBadgeText}>{aiLocked ? 'SQUATS ONLY' : locked ? 'LOCKED' : mode.badge}</Text>
           </View>
         </View>
-
-        <View style={[styles.modeAction, { backgroundColor: theme.onDark ? '#FFFFFF' : '#11141A' }]}>
-          {locked ? (
-            <Lock size={15} color={theme.onDark ? '#11141A' : '#FFFFFF'} />
-          ) : (
-            <Play size={15} color={theme.onDark ? '#11141A' : '#FFFFFF'} fill={theme.onDark ? '#11141A' : '#FFFFFF'} />
-          )}
-        </View>
-      </TouchableOpacity>
+        <GText variant="display" size={19} numberOfLines={1} style={{ color: '#FFFFFF' }}>{mode.title}</GText>
+        <Text style={styles.modeDesc} numberOfLines={2}>{mode.description}</Text>
+        {locked && <View style={styles.modeLockShade} pointerEvents="none" />}
+      </Pressable>
     );
   };
 
   const SectionLabel = ({ title, first }: { Icon?: IconType; title: string; first?: boolean }) => (
-    <Text style={[styles.sectionTitle, { marginTop: first ? 4 : 28 }]}>{title}</Text>
+    <Text style={[styles.sectionTitle, { marginTop: first ? 2 : 14 }]}>{title}</Text>
   );
 
   const PODIUM_COLORS = ['#F59E0B', '#C0C0C0', '#CD7F32'];
@@ -467,124 +476,112 @@ export const ExerciseDetailScreen: React.FC<ExerciseDetailScreenProps> = ({
 
   return (
     <View style={styles.detailScreenContainer}>
-      {/* TOP BAR */}
-      <View style={styles.topNavBar}>
-        <TouchableOpacity style={styles.navButtonCircle} activeOpacity={0.8} onPress={onBack}>
-          <ArrowLeft size={18} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={styles.topNavTitle} numberOfLines={1}>{exercise.name}</Text>
-        <TouchableOpacity style={styles.navButtonCircle} activeOpacity={0.8} onPress={() => setShowRulesInfoModal(true)}>
-          <Info size={18} color={colors.text} />
-        </TouchableOpacity>
-      </View>
-
-      <ScrollView
-        style={styles.detailScrollView}
-        contentContainerStyle={styles.detailScrollContent}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.accent} colors={[colors.accent]} />
+      <ScreenBackground style={StyleSheet.absoluteFill} />
+      <GameTopBar
+        title={exercise.name}
+        onBack={onBack}
+        right={
+          <TouchableOpacity style={styles.navButtonCircle} activeOpacity={0.8} onPress={() => setShowRulesInfoModal(true)} accessibilityLabel="Scoring rules">
+            <Info size={18} color={colors.text} />
+          </TouchableOpacity>
         }
-      >
-        {/* RANK CARD: tier emblem is the hero */}
-        {(() => {
-          const tier = clampTier(levelInfo.level);
-          const pal = TIER_PALETTES[tier];
-          const nextTier = tier < 6 ? TIER_NAMES[(tier + 1) as RankTier] : null;
-          return (
-            <View style={styles.heroCard}>
-              <GradientFill colors={['#2A2470', '#14112B']} />
-              <GlowSpot color={pal.base} size={260} style={{ right: -50, top: -60 }} />
-              <View style={styles.heroTopRow}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.heroEyebrow}>{exercise.name.toUpperCase()} RANK</Text>
-                  <Text style={[styles.heroTitle, { color: pal.light }]}>{TIER_NAMES[tier]}</Text>
-                  <Text style={styles.heroPoints}>
-                    <Text style={styles.heroPointsNum}>{exercisePoints.toLocaleString()}</Text> rank points
+      />
+
+      <View style={styles.landRow}>
+        {/* LEFT: rank card + record */}
+        <View style={styles.landLeft}>
+          {(() => {
+            const tier = clampTier(levelInfo.level);
+            const pal = TIER_PALETTES[tier];
+            const nextTier = tier < 6 ? TIER_NAMES[(tier + 1) as RankTier] : null;
+            return (
+              <View style={styles.heroCard}>
+                <GradientFill colors={['#2A2470', '#14112B']} />
+                <GlowSpot color={pal.base} size={220} style={{ right: -60, top: -50 }} />
+                <View style={styles.heroTopRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.heroEyebrow}>{exercise.name.toUpperCase()} RANK</Text>
+                    <GText variant="display" size={30} style={{ color: pal.light }}>{TIER_NAMES[tier]}</GText>
+                    <Text style={styles.heroPoints}>
+                      <Text style={styles.heroPointsNum}>{exercisePoints.toLocaleString()}</Text> rank pts
+                    </Text>
+                  </View>
+                  <RankEmblem tier={tier} size={78} />
+                </View>
+                <View style={styles.progressLabelRow}>
+                  <Text style={styles.progressLabel}>{levelInfo.progressPercent}%</Text>
+                  <Text style={styles.progressSubLabel}>
+                    {nextTier ? `${levelInfo.pointsToNext || 0} pts to ${nextTier}` : 'Top rank reached'}
                   </Text>
                 </View>
-                <RankEmblem tier={tier} size={112} />
+                <View style={styles.rankProgressTrack}>
+                  <View
+                    style={[
+                      styles.rankProgressFill,
+                      { width: `${Math.min(100, Math.max(2, levelInfo.progressPercent))}%`, backgroundColor: pal.base },
+                    ]}
+                  />
+                </View>
               </View>
+            );
+          })()}
 
-              <View style={styles.progressLabelRow}>
-                <Text style={styles.progressLabel}>{levelInfo.progressPercent}%</Text>
-                <Text style={styles.progressSubLabel}>
-                  {nextTier ? `${levelInfo.pointsToNext || 0} pts to ${nextTier}` : 'Top rank reached'}
-                </Text>
-              </View>
-              <View style={styles.rankProgressTrack}>
-                <View
-                  style={[
-                    styles.rankProgressFill,
-                    { width: `${Math.min(100, Math.max(2, levelInfo.progressPercent))}%`, backgroundColor: pal.base },
-                  ]}
-                />
-              </View>
-            </View>
-          );
-        })()}
-
-        {/* STATS */}
-        <View style={styles.recordCard}>
-          <ProgressRing size={78} strokeWidth={7} progress={winRate / 100} color={colors.success} trackColor={colors.surfaceHi}>
-            <Text style={styles.recordRingValue}>{winRate}%</Text>
-            <Text style={styles.recordRingLabel}>WIN RATE</Text>
-          </ProgressRing>
-          <View style={styles.recordCols}>
+          <View style={styles.statGrid}>
             {[
-              { label: 'MATCHES', value: exerciseMatchesPlayed },
-              { label: 'WINS', value: exerciseMatchesWon },
-              { label: 'REPS', value: exerciseReps },
-            ].map(({ label, value }, i) => (
-              <View key={label} style={[styles.recordCol, i > 0 && styles.recordColDivider]}>
-                <Text style={styles.statValue}>{Number(value).toLocaleString()}</Text>
+              { label: 'WIN RATE', value: `${winRate}%`, tint: colors.success },
+              { label: 'MATCHES', value: Number(exerciseMatchesPlayed).toLocaleString(), tint: colors.text },
+              { label: 'WINS', value: Number(exerciseMatchesWon).toLocaleString(), tint: colors.accent },
+              { label: 'REPS', value: Number(exerciseReps).toLocaleString(), tint: colors.text },
+            ].map(({ label, value, tint }) => (
+              <View key={label} style={styles.statTile}>
+                <GText variant="number" size={22} style={{ color: tint }}>{value}</GText>
                 <Text style={styles.statLabel}>{label}</Text>
               </View>
             ))}
           </View>
         </View>
 
-        {/* TABS */}
-        <View style={styles.tabBar}>
-          {DETAIL_TABS.map(({ key, label, Icon, requiresAuth }) => {
-            const active = detailTab === key;
-            const locked = isGuest && requiresAuth;
-            return (
-              <TouchableOpacity
-                key={key}
-                style={[styles.tabItem, active && styles.tabItemActive]}
-                activeOpacity={0.85}
-                onPress={() => {
-                  if (locked) {
-                    Alert.alert(
-                      `${label} Locked`,
-                      key === 'leaderboard'
-                        ? 'Sign in or create an account to view global rankings and record your scores.'
-                        : 'Sign in to customize athlete gear and items.',
-                      [{ text: 'OK' }]
-                    );
-                    return;
-                  }
-                  onDetailTabChange(key);
-                }}
-              >
-                {locked ? (
-                  <Lock size={13} color={colors.textDim} />
-                ) : (
-                  <Icon size={14} color={active ? colors.onAccent : colors.textMuted} />
-                )}
-                <Text style={[styles.tabText, active && styles.tabTextActive, locked && { color: colors.textDim }]}>{label}</Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
+        {/* RIGHT: tabs + content */}
+        <View style={styles.landRight}>
+          <View style={styles.tabBar}>
+            {DETAIL_TABS.map(({ key, label, Icon, requiresAuth }) => {
+              const active = detailTab === key;
+              const locked = isGuest && requiresAuth;
+              return (
+                <Pressable
+                  key={key}
+                  style={styles.tabItem}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: active }}
+                  onPress={() => {
+                    if (locked) {
+                      Alert.alert(`${label} Locked`, 'Sign in or create an account to view global rankings and record your scores.', [{ text: 'OK' }]);
+                      return;
+                    }
+                    juice.play('toggle');
+                    onDetailTabChange(key);
+                  }}
+                >
+                  <Slant fill={active ? colors.text : colors.raised} stroke={active ? undefined : colors.edge} />
+                  {locked ? <Lock size={13} color={colors.textDim} /> : <Icon size={15} color={active ? colors.raised : colors.accent} />}
+                  <GText variant="label" size={13} style={{ color: active ? colors.raised : locked ? colors.textDim : colors.text }}>{label.toUpperCase()}</GText>
+                </Pressable>
+              );
+            })}
+          </View>
 
+          <ScrollView
+            style={styles.detailScrollView}
+            contentContainerStyle={styles.detailScrollContent}
+            showsVerticalScrollIndicator={false}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.accent} colors={[colors.accent]} />}
+          >
         {detailTab === 'workouts' ? (
           <>
             <SectionLabel title="Train" first />
-            {TRAIN_MODES.map((m, i) => renderModeRow(m, i))}
+            <View style={styles.modeGrid}>{TRAIN_MODES.map((m) => renderModeRow(m))}</View>
             <SectionLabel title="Compete" />
-            {COMPETE_MODES.map((m, i) => renderModeRow(m, i + TRAIN_MODES.length))}
+            <View style={styles.modeGrid}>{COMPETE_MODES.map((m) => renderModeRow(m))}</View>
           </>
         ) : detailTab === 'leaderboard' ? (
           <View>
@@ -752,7 +749,9 @@ export const ExerciseDetailScreen: React.FC<ExerciseDetailScreenProps> = ({
             </View>
           </View>
         )}
-      </ScrollView>
+          </ScrollView>
+        </View>
+      </View>
 
       {/* RULES INFO MODAL */}
       <Modal visible={showRulesInfoModal} transparent animationType="fade" onRequestClose={() => setShowRulesInfoModal(false)}>
@@ -918,9 +917,19 @@ export const ExerciseDetailScreen: React.FC<ExerciseDetailScreenProps> = ({
 
 const useStyles = makeStyles((colors: ThemeColors) =>
   StyleSheet.create({
-  sectionTitle: { color: colors.text, fontSize: 19, fontWeight: '900', marginBottom: 2 },
+  sectionTitle: { color: colors.textMuted, fontSize: 12, fontWeight: '900', letterSpacing: 1.2, marginBottom: 8, textTransform: 'uppercase' },
   heroVisual: { width: 100, alignItems: 'center', justifyContent: 'center', marginLeft: 8 },
   detailScreenContainer: { flex: 1, backgroundColor: colors.bg },
+  landRow: { flex: 1, flexDirection: 'row', gap: 12, paddingHorizontal: 12, paddingBottom: 10 },
+  landLeft: { width: '34%', gap: 10 },
+  landRight: { flex: 1 },
+  statGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  statTile: { width: '48%', flexGrow: 1, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 14, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
+  modeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  modeTile: { width: '48.5%', minHeight: 112, padding: 12, borderRadius: 16, overflow: 'hidden', gap: 4 },
+  modeStreak: { position: 'absolute', top: -40, bottom: -40, right: 30, width: 46, backgroundColor: '#FFFFFF', opacity: 0.1, transform: [{ rotate: '20deg' }] },
+  modeTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 },
+  modeLockShade: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(20,20,30,0.35)' },
 
   topNavBar: {
     flexDirection: 'row',
@@ -943,7 +952,7 @@ const useStyles = makeStyles((colors: ThemeColors) =>
   topNavTitle: { flex: 1, textAlign: 'center', color: colors.text, fontSize: 17, fontWeight: '900', marginHorizontal: 12 },
 
   // Hero
-  heroCard: { padding: 22, borderRadius: radius.xl, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
+  heroCard: { padding: 16, borderRadius: radius.xl, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
   heroEyebrow: { color: 'rgba(255,255,255,0.6)', fontSize: 11, fontWeight: '900', letterSpacing: 1.6 },
   heroTopRow: { flexDirection: 'row', alignItems: 'center' },
   heroIconTile: { width: 76, height: 76, borderRadius: 22, backgroundColor: 'rgba(255, 255, 255, 0.14)', alignItems: 'center', justifyContent: 'center' },
@@ -970,26 +979,26 @@ const useStyles = makeStyles((colors: ThemeColors) =>
   statLabel: { color: colors.textMuted, fontSize: 9.5, fontWeight: '900', letterSpacing: 0.8, marginTop: 2 },
 
   // Tabs
-  tabBar: { flexDirection: 'row', marginTop: 18, marginBottom: 6, padding: 5, borderRadius: radius.pill, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
-  tabItem: { flex: 1, height: 38, borderRadius: radius.pill, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5 },
+  tabBar: { flexDirection: 'row', gap: 6, marginBottom: 8 },
+  tabItem: { flex: 1, height: 34, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5 },
   tabItemActive: { backgroundColor: colors.accent },
   tabText: { color: colors.textMuted, fontSize: 12, fontWeight: '900' },
   tabTextActive: { color: colors.onAccent },
 
   detailScrollView: { flex: 1 },
-  detailScrollContent: { paddingHorizontal: 18, paddingTop: 6, paddingBottom: 140 },
+  detailScrollContent: { paddingTop: 4, paddingBottom: 24 },
 
   // Mode list
   sectionLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   sectionLabel: { color: colors.text, fontSize: 12.5, fontWeight: '900', letterSpacing: 0.8 },
   modeRow: { flexDirection: 'row', alignItems: 'center', padding: 16, borderRadius: radius.xl, marginTop: 14 },
-  modeIconTile: { width: 50, height: 50, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  modeIconTile: { width: 36, height: 36, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' },
   modeInfo: { flex: 1, marginHorizontal: 14 },
   modeTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   modeTitle: { fontSize: 16, fontWeight: '900' },
-  modeBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, alignSelf: 'flex-start', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 7, marginTop: 8 },
-  modeBadgeText: { fontSize: 9, fontWeight: '900', letterSpacing: 0.5 },
-  modeDesc: { fontSize: 12, marginTop: 3 },
+  modeBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 7, paddingVertical: 3, borderRadius: 7, backgroundColor: 'rgba(0,0,0,0.25)' },
+  modeBadgeText: { fontSize: 9, fontWeight: '900', letterSpacing: 0.5, color: '#FFFFFF' },
+  modeDesc: { fontSize: 12, color: 'rgba(255,255,255,0.85)', fontWeight: '600' },
   modeAction: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center' },
   modeActionLocked: { backgroundColor: colors.surfaceHi },
 

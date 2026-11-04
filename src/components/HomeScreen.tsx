@@ -1,15 +1,13 @@
 import React, { useEffect, useMemo, useCallback, useRef, useState } from 'react';
 import {
   Animated,
-  Modal,
-  ScrollView,
   StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
-import { Flame, X, Dumbbell, Trophy, Wrench } from 'lucide-react-native';
+import { Wrench } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { ModelComplexity } from '../utils/deviceSpecs';
 import { getDeviceInfo, getRecommendedModel } from '../utils/deviceSpecs';
@@ -29,22 +27,25 @@ import { useMatchmakingStore } from '../store/matchmakingStore';
 import { useUserStore } from '../store/userStore';
 import { ExerciseDetailScreen } from '../screens/ExerciseDetailScreen';
 import { ExercisesScreen, ExerciseItem } from '../screens/ExercisesScreen';
-import { HomeFeedScreen } from '../screens/HomeFeedScreen';
 import { ProfileScreen } from '../screens/ProfileScreen';
 import { CommunityScreen } from '../screens/CommunityScreen';
-import { DEFAULT_EXERCISES, fetchExercisesFromSupabase } from '../utils/exerciseService';
-import { Header } from './Header';
+import { fetchExercisesFromSupabase } from '../utils/exerciseService';
 import { HumanVsAIModal } from './HumanVsAIModal';
 import { MatchMode } from '../features/match/components/MatchCameraScreen';
 import { AIBotProfile } from '../utils/aiBotService';
 import { NewsScreen } from '../screens/NewsScreen';
 import { AvatarShopScreen } from '../features/avatar/components/AvatarShopScreen';
 import { LevelUpCelebration } from './LevelUpCelebration';
-import { selectUnreadCount, useNewsStore } from '../store/newsStore';
+import { useNewsStore } from '../store/newsStore';
 import { makeStyles, radius, ThemeColors, useColors } from '../theme';
+import { useExerciseListStore } from '../store/exerciseListStore';
+import { LobbyScreen } from '../screens/LobbyScreen';
+import { modeNeedsAuth, type LobbyMode } from '../screens/lobbyLogic';
+import { GameTopBar, ScreenBackground } from './game';
+import { GameSettingsModal } from './GameSettingsModal';
+import type { SessionOrigin } from '../store/userStore';
 
 import { ThemedStatusBar } from './ThemedStatusBar';
-import { TourTarget } from '../features/tour/TourTarget';
 export type MainTab = 'home' | 'explore' | 'workouts' | 'shop' | 'social' | 'profile';
 
 type DetailSubTab = 'workouts' | 'leaderboard' | 'how_to_play';
@@ -53,8 +54,8 @@ type ExerciseCategory = 'all' | 'strength' | 'cardio' | 'flexibility';
 interface HomeScreenProps {
   activeTab: MainTab;
   onTabChange: (tab: MainTab) => void;
-  onOpenCamera: (exerciseId?: string, exerciseName?: string, isTutor?: boolean) => void;
-  onOpenMatchCamera: (opponent: string, mode: MatchMode, exerciseId?: string, simulated?: SimulatedOpponent) => void;
+  onOpenCamera: (exerciseId?: string, exerciseName?: string, isTutor?: boolean, origin?: SessionOrigin) => void;
+  onOpenMatchCamera: (opponent: string, mode: MatchMode, exerciseId?: string, simulated?: SimulatedOpponent, origin?: SessionOrigin) => void;
   onEnterQueue: (title?: string, message?: string, badge?: string, subInfo?: string, isFFA?: boolean) => void;
   onUpdateQueueStatus?: (title?: string, message?: string, badge?: string, subInfo?: string, countdown?: number, playerCount?: number) => void;
   onCancelQueue: () => void;
@@ -81,7 +82,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 }) => {
   const colors = useColors();
   const styles = useStyles();
-  const [exercisesList, setExercisesList] = useState<ExerciseItem[]>(DEFAULT_EXERCISES);
+  // The shared store is the only source of the exercise list (lobby, Feed, Train and quest checks agree).
+  const exercisesList = useExerciseListStore((state) => state.exercises);
+  const isGuest = useUserStore((state) => state.isGuest);
   const activeSubTab = useUserStore((state) => state.homeSubTab);
   const setActiveSubTab = useUserStore((state) => state.setHomeSubTab);
   const [selectedCategory, setSelectedCategory] = useState<ExerciseCategory>('all');
@@ -98,7 +101,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const setCounts = useMatchmakingStore((state) => state.setCounts);
 
   const playerLevel = useGameStats().level.level;
-  const unreadNews = useNewsStore(selectUnreadCount);
   const initNews = useNewsStore((state) => state.init);
 
   useEffect(() => initNews(currentUser?.id ?? null), [currentUser?.id, initNews]);
@@ -110,7 +112,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     try {
       const data = await fetchExercisesFromSupabase();
       if (data && data.length > 0) {
-        setExercisesList(data);
+        useExerciseListStore.getState().setExercises(data);
       }
     } catch (e) {
       console.warn('Failed to load exercises from Supabase:', e);
@@ -180,19 +182,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     };
   }, [currentUser, setCounts]);
 
-  const getModelTitle = (model: ModelComplexity) => {
-    switch (model) {
-      case 'light':
-        return 'Light Model (Lite)';
-      case 'high':
-        return 'High Model (Heavy)';
-      case 'medium':
-      default:
-        return 'Medium Model (Full)';
-    }
-  };
-
-  const handleJoinQueue = (exercise: ExerciseItem, queue: 'quick_start' | 'ffa') => {
+  const handleJoinQueue = (exercise: ExerciseItem, queue: 'quick_start' | 'ffa', origin: SessionOrigin = 'detail') => {
     const userId =
       currentUser?.user_metadata?.username ||
       currentUser?.email ||
@@ -234,11 +224,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         ),
       onResult: (outcome) => {
         if (outcome.kind === 'simulated') {
-          onOpenMatchCamera(outcome.opponent.username, 'quickjoin', exercise.id, outcome.opponent);
+          onOpenMatchCamera(outcome.opponent.username, 'quickjoin', exercise.id, outcome.opponent, origin);
         } else if (outcome.kind === 'ffa') {
-          onOpenMatchCamera('Battle Ground', 'ffa', exercise.id);
+          onOpenMatchCamera('Battle Ground', 'ffa', exercise.id, undefined, origin);
         } else {
-          onOpenMatchCamera(outcome.opponent, 'quickjoin', exercise.id);
+          onOpenMatchCamera(outcome.opponent, 'quickjoin', exercise.id, undefined, origin);
         }
       },
     });
@@ -265,16 +255,44 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
   const [showAiModal, setShowAiModal] = useState<boolean>(false);
   const [aiModalExerciseId, setAiModalExerciseId] = useState<string>('1');
+  const [aiOrigin, setAiOrigin] = useState<SessionOrigin>('detail');
 
-  const handleOpenAiDuel = useCallback((exerciseId?: string) => {
+  const goLobby = useCallback(() => {
+    setActiveSubTab('lobby');
+    onTabChange('home');
+  }, [onTabChange, setActiveSubTab]);
+
+  const handleOpenAiDuel = useCallback((exerciseId?: string, origin: SessionOrigin = 'detail') => {
     if (exerciseId) setAiModalExerciseId(exerciseId);
+    setAiOrigin(origin);
     setShowAiModal(true);
   }, []);
 
   const handleStartAiDuel = useCallback((bot: AIBotProfile, exerciseId: string) => {
     setShowAiModal(false);
-    onOpenMatchCamera(bot.name, 'ai_battle', exerciseId);
-  }, [onOpenMatchCamera]);
+    onOpenMatchCamera(bot.name, 'ai_battle', exerciseId, undefined, aiOrigin);
+  }, [onOpenMatchCamera, aiOrigin]);
+
+  // Lobby play button (design 3.6). Guests are sent to sign in for online modes.
+  const handlePlay = (mode: LobbyMode, exercise: ExerciseItem) => {
+    if (isGuest && modeNeedsAuth(mode)) {
+      onShowAuthModal();
+      return;
+    }
+    switch (mode) {
+      case 'quick_duel':
+        handleJoinQueue(exercise, 'quick_start', 'lobby');
+        break;
+      case 'battle_ground':
+        handleJoinQueue(exercise, 'ffa', 'lobby');
+        break;
+      case 'ai_duel':
+        handleOpenAiDuel(exercise.id, 'lobby');
+        break;
+      default:
+        onOpenCamera(exercise.id, exercise.name, false, 'lobby');
+    }
+  };
 
   const renderUnderDevelopment = (featureName: string) => (
     <View style={styles.devContainer}>
@@ -283,8 +301,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         <Text style={styles.devTitle}>{featureName}</Text>
         <View style={styles.devPillTag}><Text style={styles.devPillTagText}>Under Development</Text></View>
         <Text style={styles.devSubtitle}>We are working hard to bring you the {featureName} module. Stay tuned for upcoming updates!</Text>
-        <TouchableOpacity style={styles.devBackButton} activeOpacity={0.8} onPress={() => { setSelectedExercise(null); onTabChange('home'); setActiveSubTab('feed'); }}>
-          <Text style={styles.devBackButtonText}>← Return to Feed</Text>
+        <TouchableOpacity style={styles.devBackButton} activeOpacity={0.8} onPress={() => { setSelectedExercise(null); goLobby(); }}>
+          <Text style={styles.devBackButtonText}>← Return to Lobby</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -319,6 +337,25 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           onCategoryChange={setSelectedCategory}
           onExerciseSelect={setSelectedExercise}
           onRefreshExercises={loadExercises}
+          onBack={goLobby}
+          onAction={(action, exercise) => {
+            switch (action) {
+              case 'tutor':
+                onOpenCamera(exercise.id, exercise.name, true, 'train');
+                break;
+              case 'solo':
+                onOpenCamera(exercise.id, exercise.name, false, 'train');
+                break;
+              case 'ai':
+                handleOpenAiDuel(exercise.id, 'train');
+                break;
+              case 'ranked':
+                handleJoinQueue(exercise, 'quick_start', 'train');
+                break;
+              default:
+                setSelectedExercise(exercise);
+            }
+          }}
         />
       );
     }
@@ -327,21 +364,21 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       return (
         <ProfileScreen
           currentUser={currentUser}
-          onBack={() => onTabChange('home')}
+          onBack={goLobby}
           onLogout={onLogout || (() => {})}
         />
       );
     }
 
     if (activeTab === 'shop') {
-      return <AvatarShopScreen onBack={() => onTabChange('home')} />;
+      return <AvatarShopScreen onBack={goLobby} />;
     }
 
     if (activeTab === 'explore') {
       return (
         <CommunityScreen
           currentUser={currentUser}
-          onBack={() => onTabChange('home')}
+          onBack={goLobby}
           onOpenMatchCamera={onOpenMatchCamera}
         />
       );
@@ -352,68 +389,47 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     }
 
     if (activeSubTab === 'news') {
-      return <NewsScreen />;
+      return (
+        <View style={{ flex: 1 }}>
+          <GameTopBar title="News" onBack={goLobby} />
+          <NewsScreen />
+        </View>
+      );
     }
 
     return (
-      <HomeFeedScreen
-        onlineCount={onlineCount}
-        selectedModel={selectedModel}
-        exercises={exercisesList}
-        onExerciseSelect={setSelectedExercise}
-        onSettingsPress={() => setShowSettingsModal(true)}
+      <LobbyScreen
+        isGuest={isGuest}
+        onPlay={handlePlay}
         onOpenCamera={onOpenCamera}
-        onNavigateToTab={onTabChange}
-        featuredExercise={exercisesList[0]}
-        onOpenAiDuel={handleOpenAiDuel}
+        onSettingsPress={() => setShowSettingsModal(true)}
+        onNavigate={(to) => {
+          if (to === 'news') {
+            setActiveSubTab(to);
+            return;
+          }
+          // Same rule as the tab bar: guests sign in for Train, Squad and Profile.
+          if (isGuest && to !== 'shop') {
+            onShowAuthModal();
+            return;
+          }
+          onTabChange(to);
+        }}
       />
     );
-  }, [activeSubTab, activeTab, currentUser, detailSubTab, exercisesList, handleOpenAiDuel, onlineCount, onLogout, onOpenCamera, onTabChange, playerLevel, queueCounts, selectedCategory, selectedExercise, selectedModel]);
+  }, [activeSubTab, activeTab, currentUser, detailSubTab, exercisesList, handleOpenAiDuel, isGuest, onlineCount, onLogout, onOpenCamera, onShowAuthModal, onTabChange, goLobby, playerLevel, queueCounts, selectedCategory, selectedExercise, selectedModel]);
+
+  const lobbyActive = activeTab === 'home' && activeSubTab === 'lobby' && !selectedExercise;
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView
+      // the lobby runs edge to edge at the bottom (its own bar keeps clear of the gesture area)
+      edges={lobbyActive ? ['top', 'left', 'right'] : undefined}
+      style={[styles.container, lobbyActive && styles.containerClear, activeTab === 'shop' && styles.containerHall]}
+    >
+      {/* Lobby: the gradient sits behind the whole screen, under the (edge-to-edge) status bar. */}
+      {lobbyActive && <ScreenBackground style={StyleSheet.absoluteFill} />}
       <ThemedStatusBar />
-
-      {activeTab === 'home' && !selectedExercise && (
-        <Header
-          onlineCount={onlineCount}
-          onProfilePress={() => onTabChange('profile')}
-          unreadNews={activeSubTab === 'news' ? 0 : unreadNews}
-        />
-      )}
-
-      {activeTab === 'home' && !selectedExercise && (
-        <View style={styles.subNavBar}>
-          {(['feed', 'news'] as const).map((tab) => {
-            const active = activeSubTab === tab;
-            const showBadge = tab === 'news' && !active && unreadNews > 0;
-            const button = (
-              <TouchableOpacity
-                key={tab}
-                style={[styles.subNavTab, active && styles.subNavTabActive]}
-                activeOpacity={0.85}
-                onPress={() => setActiveSubTab(tab)}
-              >
-                <Text style={[styles.subNavTabText, active && styles.subNavTabTextActive]}>
-                  {tab === 'feed' ? 'FEED' : 'NEWS'}
-                </Text>
-                {showBadge && (
-                  <View style={styles.newsBadge}>
-                    <Text style={styles.newsBadgeText}>{unreadNews > 9 ? '9+' : unreadNews}</Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-            );
-            return tab === 'news' ? (
-              <TourTarget key={tab} id="home-news" style={{ flex: 1 }}>
-                {button}
-              </TourTarget>
-            ) : (
-              button
-            );
-          })}
-        </View>
-      )}
 
       <View style={styles.mainContent}>{mainContent}</View>
 
@@ -427,63 +443,22 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         onStartMatch={handleStartAiDuel}
       />
 
-      <Modal visible={showSettingsModal} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Settings & Model Choice</Text>
-              <TouchableOpacity onPress={() => setShowSettingsModal(false)}>
-                <X size={16} color="#FFFFFF" />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView style={{ maxHeight: 320 }}>
-              <View style={styles.specCard}>
-                <Text style={styles.specCardTitle}>Detected Device Specs</Text>
-                <Text style={styles.specDetailText}>Model: <Text style={styles.specHighlightText}>{deviceName}</Text> | Memory: <Text style={styles.specHighlightText}>{totalRamGb} GB RAM</Text></Text>
-                <Text style={styles.specDetailText}>Hardware Recommendation: <Text style={styles.specRecommendText}>{getModelTitle(recommendedModel)}</Text></Text>
-              </View>
-
-              <Text style={styles.modelSectionHeading}>Select Pose Model:</Text>
-
-              {(['light', 'medium', 'high'] as const).map((model) => (
-                <TouchableOpacity
-                  key={model}
-                  style={[styles.optionCard, selectedModel === model && styles.optionCardSelected]}
-                  activeOpacity={0.85}
-                  onPress={() => onSelectModel(model)}
-                >
-                  <View style={styles.optionHeaderRow}>
-                    <Text style={styles.optionTitle}>{model === 'light' ? 'Light Model (Lite)' : model === 'medium' ? 'Medium Model (Full)' : 'High Model (Heavy)'}</Text>
-                    {recommendedModel === model && <View style={styles.recommendBadge}><Text style={styles.recommendBadgeText}>Recommended</Text></View>}
-                    {model === 'high' && !isReady(heavyPack) && (
-                      <View style={styles.recommendBadge}>
-                        <Text style={styles.recommendBadgeText}>
-                          {heavyPack.status === 'failed' || heavyPack.status === 'unavailable'
-                            ? 'Download failed'
-                            : `Downloading ${formatProgress(heavyPack, PACK_SIZES.pose_heavy)}`}
-                        </Text>
-                      </View>
-                    )}
-                  </View>
-                  <Text style={styles.optionDescription}>
-                    {model === 'light' ? 'Fastest FPS & lowest memory (~2.7 MB). Best for entry-level phones.' : model === 'medium' ? 'Balanced speed & joint accuracy (~6.2 MB). Ideal for mid-range phones.' : 'Maximum joint precision (~27 MB). Best for high-end flagship phones.'}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-
-              <View style={styles.specCard}>
-                <Text style={styles.specCardTitle}>3D Avatar System</Text>
-                <Text style={styles.specDetailText}>3D avatars are live in Profile and the Shop. Live full-body motion mirroring is <Text style={{ color: '#F59E0B', fontWeight: '700' }}>in development</Text>.</Text>
-              </View>
-            </ScrollView>
-
-            <TouchableOpacity style={styles.saveSettingsButton} activeOpacity={0.8} onPress={() => setShowSettingsModal(false)}>
-              <Text style={styles.saveSettingsButtonText}>Save & Apply Settings</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+      <GameSettingsModal
+        visible={showSettingsModal}
+        onClose={() => setShowSettingsModal(false)}
+        selectedModel={selectedModel}
+        onSelectModel={onSelectModel}
+        recommendedModel={recommendedModel}
+        deviceName={deviceName}
+        totalRamGb={totalRamGb}
+        heavyStatus={
+          isReady(heavyPack)
+            ? undefined
+            : heavyPack.status === 'failed' || heavyPack.status === 'unavailable'
+              ? 'Download failed'
+              : `Downloading ${formatProgress(heavyPack, PACK_SIZES.pose_heavy)}`
+        }
+      />
     </SafeAreaView>
   );
 };
@@ -491,13 +466,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 const useStyles = makeStyles((colors: ThemeColors) =>
   StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
-  subNavBar: { flexDirection: 'row', marginHorizontal: 16, marginBottom: 4, padding: 4, borderRadius: radius.pill, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
-  subNavTab: { flex: 1, height: 36, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderRadius: radius.pill, gap: 6 },
-  subNavTabActive: { backgroundColor: colors.accent },
-  subNavTabText: { color: colors.textMuted, fontSize: 12.5, fontWeight: '900', letterSpacing: 0.8 },
-  subNavTabTextActive: { color: colors.onAccent },
-  newsBadge: { minWidth: 18, height: 18, paddingHorizontal: 4, borderRadius: 9, backgroundColor: colors.danger, alignItems: 'center', justifyContent: 'center' },
-  newsBadgeText: { color: '#fff', fontSize: 9.5, fontWeight: '900' },
+  containerClear: { backgroundColor: 'transparent' },
+  // the Shop's deep-blue hero hall reaches under the system bars
+  containerHall: { backgroundColor: '#0C1230' },
   mainContent: { flex: 1 },
   devContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 16 },
   devCard: { backgroundColor: colors.surface, borderRadius: 24, padding: 24, width: '100%', maxWidth: 360, alignItems: 'center', borderWidth: 1, borderColor: colors.border },
@@ -509,25 +480,5 @@ const useStyles = makeStyles((colors: ThemeColors) =>
   devSubtitle: { color: colors.textMuted, textAlign: 'center', lineHeight: 20, marginTop: 14, fontSize: 13 },
   devBackButton: { marginTop: 20, backgroundColor: '#E8D5C4', borderRadius: 20, paddingHorizontal: 22, paddingVertical: 12 },
   devBackButtonText: { color: '#11141A', fontWeight: '800', fontSize: 14 },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(5, 8, 14, 0.82)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 16 },
-  modalCard: { width: '100%', maxWidth: 400, backgroundColor: colors.surface, borderRadius: 28, padding: 20, borderWidth: 1.5, borderColor: colors.border, shadowColor: '#000', shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.45, shadowRadius: 20, elevation: 10 },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
-  modalTitle: { color: colors.text, fontSize: 19, fontWeight: '900' },
-  modalCloseIconText: { color: colors.textMuted, fontSize: 20, fontWeight: '700', padding: 4 },
-  specCard: { backgroundColor: colors.surfaceSunken, borderRadius: 16, padding: 14, marginTop: 14, borderWidth: 1, borderColor: colors.border },
-  specCardTitle: { color: colors.text, fontSize: 14, fontWeight: '800', marginBottom: 6 },
-  specDetailText: { color: colors.textMuted, fontSize: 12.5, lineHeight: 18 },
-  specHighlightText: { color: colors.text, fontWeight: '700' },
-  specRecommendText: { color: '#E8D5C4', fontWeight: '800' },
-  modelSectionHeading: { color: colors.text, fontSize: 15, fontWeight: '800', marginTop: 16, marginBottom: 8 },
-  optionCard: { backgroundColor: colors.surfaceSunken, borderRadius: 16, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: colors.border },
-  optionCardSelected: { borderColor: '#E8D5C4', backgroundColor: 'rgba(232, 213, 196, 0.08)' },
-  optionHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  optionTitle: { color: colors.text, fontSize: 14, fontWeight: '800' },
-  recommendBadge: { backgroundColor: 'rgba(232, 213, 196, 0.2)', borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: 'rgba(232, 213, 196, 0.35)' },
-  recommendBadgeText: { color: '#E8D5C4', fontSize: 10, fontWeight: '800' },
-  optionDescription: { color: colors.textMuted, fontSize: 12, marginTop: 6, lineHeight: 17 },
-  saveSettingsButton: { marginTop: 16, backgroundColor: '#E8D5C4', borderRadius: 24, paddingVertical: 14, alignItems: 'center', shadowColor: '#E8D5C4', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.3, shadowRadius: 12, elevation: 6 },
-  saveSettingsButtonText: { color: '#11141A', fontSize: 15, fontWeight: '900' },
 })
 );

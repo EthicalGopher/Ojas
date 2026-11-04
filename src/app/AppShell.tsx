@@ -3,6 +3,8 @@ import { StyleSheet, View, Text, TouchableOpacity, ActivityIndicator } from 'rea
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as ScreenOrientation from 'expo-screen-orientation';
 
+import { CharacterCreator, creatorDoneKey, useCharacterCreator } from '../features/avatar/components/CharacterCreator';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { GetStartedScreen } from '../screens/GetStartedScreen';
 import { LoadingScreen } from '../screens/LoadingScreen';
 import { FFALoadingScreen } from '../screens/FFALoadingScreen';
@@ -10,7 +12,6 @@ import { HomeScreen } from '../components/HomeScreen';
 import { AuthModal } from '../features/auth/components/AuthModal';
 import { CameraScreen } from '../features/camera/components/CameraScreen';
 import { MatchCameraScreen, MatchMode } from '../features/match/components/MatchCameraScreen';
-import { TabBar } from '../components/TabBar';
 import { StreakSplash } from '../components/StreakSplash';
 import { AppSplash } from '../components/AppSplash';
 import { AppTutorial } from '../components/AppTutorial';
@@ -28,10 +29,11 @@ import {
   searchQueueWithBotFallback,
 } from '../utils/matchmaking';
 import { useGameStats } from '../hooks/useGameStats';
+import { juice } from '../juice/juice';
 import { getNotifications, scheduleStreakReminders } from '../utils/streakReminders';
 import type { SimulatedOpponent } from '../utils/simulatedOpponent';
 import { supabase } from '../utils/supabase';
-import { useUserStore } from '../store/userStore';
+import { SessionOrigin, useUserStore } from '../store/userStore';
 import { makeStyles, ThemeColors, useColors } from '../theme';
 import {
   initBattleChannel,
@@ -57,6 +59,8 @@ export default function AppShell() {
   const [matchMode, setMatchMode] = useState<MatchMode>('faceoff');
   const [matchExerciseId, setMatchExerciseId] = useState<string>('1');
   const [simulatedOpponent, setSimulatedOpponent] = useState<SimulatedOpponent | null>(null);
+  // Sessions started from the lobby return to the lobby instead of Exercise Detail.
+  const [sessionOrigin, setSessionOrigin] = useState<SessionOrigin>('other');
   const [selectedModel, setSelectedModel] = useState<ModelComplexity>('medium');
   const [showAuthModal, setShowAuthModal] = useState<boolean>(false);
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
@@ -146,28 +150,12 @@ export default function AppShell() {
     };
   }, [setUser]);
 
-  // Auto handle orientation
-  useEffect(() => {
-    async function updateOrientation() {
-      try {
-        if (ScreenOrientation && ScreenOrientation.OrientationLock) {
-          if (isFullscreen) {
-            if (ScreenOrientation.lockAsync) {
-              await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.DEFAULT);
-            }
-          } else {
-            if (ScreenOrientation.lockAsync) {
-              await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
-            }
-          }
-        }
-      } catch (e) {
-        // ignore orientation errors on unsupported devices
-      }
-    }
 
-    updateOrientation();
-  }, [isFullscreen]);
+  // The whole app is landscape (game layout). Re-assert the lock whenever the screen changes, because
+  // camera screens used to change it.
+  useEffect(() => {
+    ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE).catch(() => {});
+  }, [isFullscreen, isMatchCamera]);
 
   const handleAcceptIncomingInvite = async () => {
     if (!incomingInvite) return;
@@ -185,6 +173,7 @@ export default function AppShell() {
 
     // Connect to the room and open match camera
     connectMatchSocket(currentUsername, matchRoomId);
+    setSessionOrigin('other');
     setSimulatedOpponent(null);
     setOpponentUsername(opponent);
     setMatchMode(mode);
@@ -202,8 +191,20 @@ export default function AppShell() {
   // New users see the tutorial once: profiles.is_tutorial is false until they finish or skip it.
   // Only an explicit false counts, so a missing column or an unloaded profile never shows it.
   const needsTutorial = isGuest ? guestTutorialDone === false : profile?.is_tutorial === false;
+  const creatorOpen = useCharacterCreator((s) => s.open);
   const showTutorial =
-    splashDone && !!currentUser && !isFullscreen && !isMatchCamera && (needsTutorial || tutorialReplay);
+    splashDone && !!currentUser && !isFullscreen && !isMatchCamera && !creatorOpen && (needsTutorial || tutorialReplay);
+
+  // New accounts create their character first (once), then get the tutorial.
+  useEffect(() => {
+    const id = currentUser?.id;
+    if (!splashDone || !id || isGuest || profile?.is_tutorial !== false) return;
+    AsyncStorage.getItem(creatorDoneKey(id))
+      .then((done) => {
+        if (!done) useCharacterCreator.getState().show();
+      })
+      .catch(() => {});
+  }, [splashDone, currentUser?.id, isGuest, profile?.is_tutorial]);
 
   if (isAuthLoading) {
     return (
@@ -215,7 +216,8 @@ export default function AppShell() {
 
   return (
     <SafeAreaProvider>
-      <View style={styles.container}>
+      {/* The first touch anywhere allows music to start (design 3.4: no music before the first tap). */}
+      <View style={styles.container} onTouchStart={juice.unlock}>
         {!currentUser ? (
           <GetStartedScreen
             onGetStarted={() => {
@@ -255,8 +257,10 @@ export default function AppShell() {
                 setSimulatedOpponent(null);
                 setIsMatchCamera(false);
                 setIsFullscreen(false);
-                setActiveTab('home');
-                if (matchExerciseId) {
+                setActiveTab(sessionOrigin === 'train' ? 'workouts' : 'home');
+                if (sessionOrigin === 'lobby') {
+                  useUserStore.getState().setHomeSubTab('lobby');
+                } else if (sessionOrigin !== 'train' && matchExerciseId) {
                   useUserStore.getState().setSelectedExerciseId(matchExerciseId);
                 }
               }, 0);
@@ -266,8 +270,10 @@ export default function AppShell() {
                 setSimulatedOpponent(null);
                 setIsMatchCamera(false);
                 setIsFullscreen(false);
-                setActiveTab('home');
-                if (exId) {
+                setActiveTab(sessionOrigin === 'train' ? 'workouts' : 'home');
+                if (sessionOrigin === 'lobby') {
+                  useUserStore.getState().setHomeSubTab('lobby');
+                } else if (sessionOrigin !== 'train' && exId) {
                   useUserStore.getState().setSelectedExerciseId(exId);
                 }
                 const userId =
@@ -362,8 +368,10 @@ export default function AppShell() {
             onClose={() => {
               setIsFullscreen(false);
               setIsAiTutorMode(false);
-              setActiveTab('home');
-              if (soloExerciseId) {
+              setActiveTab(sessionOrigin === 'train' ? 'workouts' : 'home');
+              if (sessionOrigin === 'lobby') {
+                useUserStore.getState().setHomeSubTab('lobby');
+              } else if (sessionOrigin !== 'train' && soloExerciseId) {
                 useUserStore.getState().setSelectedExerciseId(soloExerciseId);
               }
             }}
@@ -373,13 +381,15 @@ export default function AppShell() {
             <HomeScreen
               activeTab={activeTab as MainTab}
               onTabChange={setActiveTab}
-              onOpenCamera={(exerciseId?: string, exerciseName?: string, isTutor?: boolean) => {
+              onOpenCamera={(exerciseId?: string, exerciseName?: string, isTutor?: boolean, origin?: SessionOrigin) => {
+                setSessionOrigin(origin ?? 'other');
                 if (exerciseId) setSoloExerciseId(exerciseId);
                 if (exerciseName) setSoloExerciseName(exerciseName);
                 setIsAiTutorMode(!!isTutor);
                 setIsFullscreen(true);
               }}
-              onOpenMatchCamera={(opponent: string, mode: MatchMode, exerciseId?: string, simulated?: SimulatedOpponent) => {
+              onOpenMatchCamera={(opponent: string, mode: MatchMode, exerciseId?: string, simulated?: SimulatedOpponent, origin?: SessionOrigin) => {
+                setSessionOrigin(origin ?? 'other');
                 setSimulatedOpponent(simulated ?? null);
                 setMatchWaiting(false);
                 setIsFFALobby(false);
@@ -429,18 +439,6 @@ export default function AppShell() {
               }}
             />
 
-            <TabBar
-              activeTab={activeTab}
-              onTabPress={(tab) => setActiveTab(tab)}
-              onProfilePress={() => {
-                setActiveTab('profile');
-              }}
-              isGuest={!!currentUser?.isGuest}
-              onRequireAuth={() => {
-                setAuthMode('signin');
-                setShowAuthModal(true);
-              }}
-            />
           </View>
         )}
 
@@ -547,7 +545,7 @@ export default function AppShell() {
           onStart={() => {
             const u = useUserStore.getState();
             u.setActiveTab('home');
-            u.setHomeSubTab('feed');
+            u.setHomeSubTab('lobby');
             useTourStore.getState().start();
           }}
           onSkip={() => completeTutorial()}
@@ -560,6 +558,8 @@ export default function AppShell() {
             }}
           />
         )}
+
+        <CharacterCreator />
 
         {/* Brand splash: stays over the app until auth is done, then fades out */}
         {!splashDone && <AppSplash ready onDone={() => setSplashDone(true)} />}

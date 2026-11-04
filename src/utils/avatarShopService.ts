@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
 import type { UserProfile } from './profileService';
-import { FACE_ITEMS, OUTFIT_ITEMS } from './avatarFaces.generated';
+import { OUTFIT_ITEMS } from './avatarFaces.generated';
 
 export type AvatarRarity = 'common' | 'rare' | 'epic' | 'legendary';
 export type AvatarModelFormat = 'vrm' | 'glb';
@@ -29,6 +29,42 @@ export interface ShopItemConfig {
   scale?: number;
   /** Colours shown on the shop card when there is no thumbnail. */
   swatch?: string[];
+  /** Faces only: add a short-hair layer with volume in this colour (set in viewerConfig). */
+  hairShell?: string;
+  /** Material name part -> colour: repaints a textured material in that colour, keeping its detail
+   * (the base body's near-black hair, where a tint would stay black; untextured cloth just takes the colour). */
+  dye?: Record<string, string>;
+  /** Characters only: the hero's story, signature moves and effect (the Shop's hero page). */
+  hero?: HeroProfile;
+  /** Characters only: tall portrait art for the Shop's hero cards, and the card's two background colours. */
+  card?: string;
+  cardColors?: [string, string];
+  /** Characters only: the body's own look (skin tint, dyes), applied before any worn items. */
+  look?: { tint?: Record<string, [number, number, number]>; dye?: Record<string, string> };
+}
+
+/** What makes a hero their own. Their model carries their own clips (scripts/blender/author_hero_clips.py):
+ * hero_idle, the loop they play whenever they are on screen, and hero_move1 / hero_move2, their
+ * signature moves; moves may also use a shared clip (squat). The effect colours the stage ring and the
+ * sparks around each move. */
+export interface HeroProfile {
+  title: string;
+  /** What they are, and what they are best at (the hero page header). */
+  role: string;
+  specialty: string;
+  story: string;
+  /** Their world on the hero page and in the story movie (avatarViewerHtml.ts WORLDS). */
+  world: 'track' | 'trail' | 'cliff';
+  /** The lobby's world when it differs (a climber walks the trail there), and the moves the lobby
+   * plays between loops (motion-captured ones only). */
+  lobbyWorld?: 'track' | 'trail' | 'cliff';
+  lobbyMoves?: string[];
+  stats: { label: string; value: number }[];
+  /** The story movie: camera shots in order, each with a caption (StoryShot in AvatarViewer3D). */
+  movie: { cam: string; dur: number; clip?: string; reps?: number; slow?: number; burst?: boolean; caption: string }[];
+  /** icon: a lucide icon name the hero page knows (zap, flag, mountain, footprints, dumbbell). */
+  moves: { clip: string; name: string; text: string; icon: string }[];
+  effect: { name: string; color: string; text: string };
 }
 
 /** Any shop item: a character (body model) or a face / outfit / top / pants / shoes / hair / accessory for one. */
@@ -50,11 +86,39 @@ export interface AvatarModel {
   sort_order: number;
   /** Shown from the bundled catalog because the server has not been upgraded yet; cannot be bought. */
   notOnServer?: boolean;
+  /** Characters only: free once the player reaches this level (instead of a coin price). */
+  unlock_level?: number | null;
 }
 
-export const DEFAULT_AVATAR_ID = 'starter_ojas';
+export const DEFAULT_AVATAR_ID = 'starter_ojas_f';
+/** The detailed CC body (scripts/blender/build_fc1.py). Every character but Arjun is a variant of it. */
+export const BASE_BODY_URL = 'local://avatars/ojas_fc1.glb';
+type BodyLook = NonNullable<ShopItemConfig['look']>;
+// Skin tints are linear multipliers on the base body's (light) skin; dyes are sRGB colours.
+const MEERA_LOOK: BodyLook = { tint: { skin_: [0.74, 0.58, 0.46] } };
+const COACH_LOOK: BodyLook = { tint: { skin_: [0.66, 0.5, 0.39] }, dye: { sport_top: '#1D5FA8' } };
+/** Simulated rivals: the base body in one of these looks (not characters anyone can pick). */
+const RIVAL_LOOKS: BodyLook[] = [
+  { tint: { skin_: [0.58, 0.43, 0.33] }, dye: { sport_top: '#0F7A64' } },
+  { tint: { skin_: [0.95, 0.86, 0.78] }, dye: { hair_: '#9A6A3A', sport_top: '#5B2C83' } },
+  { tint: { skin_: [0.48, 0.35, 0.27] }, dye: { sport_top: '#C2621F' } },
+  { tint: { skin_: [0.82, 0.66, 0.54] }, dye: { sport_top: '#B76E79' } },
+  { tint: { skin_: [0.86, 0.74, 0.64] }, dye: { hair_: '#8E3B1F', sport_top: '#1B2A4A' } },
+  { tint: { skin_: [0.7, 0.55, 0.44] }, dye: { sport_top: '#A3122A' } },
+  { dye: { hair_: '#C9A26B', sport_top: '#2E6B2E' } },
+  { tint: { skin_: [0.62, 0.47, 0.36] }, dye: { hair_: '#6B2D8C', sport_top: '#E8E8EC' } },
+  { tint: { skin_: [0.74, 0.58, 0.46] }, dye: { hair_: '#B0B4BC', sport_top: '#C9A227' } },
+];
+const ROCKETBOX_BODIES = ['local://avatars/ojas_default.glb', 'local://avatars/ojas_female.glb'];
+const isRocketbox = (character: AvatarModel) => ROCKETBOX_BODIES.includes(character.model_url);
 /** Removed from the shop, even while an older server still lists them. */
-const RETIRED_IDS = ['starter_aiko'];
+// face_m_18: its head model has no back of the skull (a face mask only), so it looked bald and
+// hollow from behind. Hidden until the face is rebuilt. The char_* roster was retired: the shop
+// keeps only Meera and Arjun.
+const RETIRED_IDS = [
+  'starter_aiko', 'face_m_18',
+  'char_kavya', 'char_zoya', 'char_ishani', 'char_aarohi', 'char_naina', 'char_tara', 'char_elena', 'char_sana', 'char_rani',
+];
 
 const item = (
   id: string,
@@ -73,42 +137,109 @@ const item = (
 
 /** Mirrors the seeded rows so the shop works offline and for guests. */
 export const BUNDLED_AVATARS: AvatarModel[] = [
-  // The two starters wear a plain outfit on purpose: tops, pants and shoes from the shop tint these
-  // materials, and every face in the Faces tab is free (avatarFaces.generated.ts).
   {
+    // The base character: the detailed CC-rigged body (scripts/blender/build_fc1.py) in Meera's look.
+    // Faces and kits are built for Arjun's Rocketbox body, so only shoe colours fit her.
     id: DEFAULT_AVATAR_ID,
-    name: 'Arjun',
-    description: 'Every athlete starts here. Pick a face and earn coins for new gear.',
+    name: 'Meera',
+    description: 'Every athlete starts here. Earn coins for new gear.',
     rarity: 'common',
     price_coins: 0,
     category: 'character',
     character_id: null,
-    model_url: 'local://avatars/ojas_default.glb',
+    model_url: BASE_BODY_URL,
     model_format: 'glb',
-    config: { materials: { top: ['ojas_top'], pants: ['ojas_pants'], shoes: ['ojas_shoes'] } },
-    thumbnail_url: 'local://avatars/ojas_default.png',
+    config: {
+      materials: { shoes: ['shoes_upper'] },
+      look: MEERA_LOOK,
+      card: 'local://avatars/meera_card.png',
+      hero: {
+        title: 'The Comeback Sprinter',
+        role: 'Sprinter',
+        specialty: 'Speed / Comeback',
+        world: 'track',
+        lobbyMoves: ['hero_move1'],
+        stats: [
+          { label: 'Speed', value: 0.92 },
+          { label: 'Stamina', value: 0.72 },
+          { label: 'Power', value: 0.58 },
+          { label: 'Agility', value: 0.84 },
+        ],
+        movie: [
+          { cam: 'wide', dur: 4, caption: 'Under the stadium lights, one runner is always first on the track.' },
+          { cam: 'face', dur: 3.6, caption: 'Meera ran the 400 m for her college.' },
+          { cam: 'feet', dur: 3.4, clip: 'hero_move1', caption: 'Every race, she was first off the line.' },
+          { cam: 'back', dur: 4, clip: 'rest', slow: 0.6, caption: 'Then a knee injury took her off the track.' },
+          { cam: 'low', dur: 4.4, clip: 'squat', caption: 'She rebuilt it one squat at a time, every morning before sunrise.' },
+          { cam: 'orbit', dur: 4.6, clip: 'hero_move1', burst: true, caption: 'Now a setback is only the start of her comeback.' },
+          { cam: 'hero', dur: 5.4, clip: 'hero_move2', burst: true, caption: '' },
+        ],
+        story:
+          'Meera ran the 400 m for her college until a knee injury took her off the track. She rebuilt it one squat at a time, every morning before sunrise, and now she trains to show that a setback is only the start of a comeback.',
+        moves: [
+          { clip: 'hero_move1', name: 'Full Sprint', text: 'Flat out down the straight: long strides, big arm drive.', icon: 'zap' },
+          { clip: 'hero_move2', name: 'Finish Line', text: 'Home down the straight, then one fist to the sky.', icon: 'flag' },
+          { clip: 'squat', name: 'Sunrise Squat', text: 'Deep, steady reps: the drill that rebuilt her knee.', icon: 'dumbbell' },
+        ],
+        effect: { name: 'Pink Blaze', color: '#FF4FA3', text: 'Her ring glows pink, and sparks rise with every move.' },
+      },
+      cardColors: ['#E8458B', '#3B1E6E'],
+    },
+    thumbnail_url: 'local://avatars/fc1_meera.png',
     is_default: true,
+    sort_order: -1,
+  },
+  // Arjun: the Survival Character (scripts/blender/build_arjun.py), on a CC-named copy of its own
+  // Unreal skeleton with the starters' clips retargeted onto it.
+  {
+    id: 'starter_ojas',
+    name: 'Arjun',
+    description: 'Every athlete starts here. Earn coins for new gear.',
+    rarity: 'common',
+    price_coins: 0,
+    category: 'character',
+    character_id: null,
+    model_url: 'local://avatars/arjun.glb',
+    model_format: 'glb',
+    config: {
+      materials: { top: ['gear_upper'], pants: ['gear_lower'], shoes: ['gear_feet'] },
+      card: 'local://avatars/arjun_card.png',
+      hero: {
+        title: 'The Mountain Trekker',
+        role: 'Trekker',
+        specialty: 'Endurance / Power',
+        world: 'cliff',
+        lobbyWorld: 'trail',
+        lobbyMoves: [],
+        stats: [
+          { label: 'Speed', value: 0.48 },
+          { label: 'Stamina', value: 0.93 },
+          { label: 'Power', value: 0.82 },
+          { label: 'Agility', value: 0.6 },
+        ],
+        movie: [
+          { cam: 'wide', dur: 4.4, caption: 'High in the Himalaya, the last stretch to the summit is straight up.' },
+          { cam: 'low', dur: 3.8, caption: 'Arjun climbs it the way he leads every trek: one hold at a time.' },
+          { cam: 'face', dur: 3.6, caption: 'Below him, the valley drops away. He never looks down.' },
+          { cam: 'feet', dur: 3.4, caption: 'Strong legs drive him up the rock.' },
+          { cam: 'orbit', dur: 4.6, burst: true, caption: 'So between treks, he trains like the mountain is watching.' },
+          { cam: 'hero', dur: 5, clip: 'cheer', burst: true, caption: '' },
+        ],
+        story:
+          'Arjun guides treks through the Himalayan passes, and the last stretch to every summit is a climb. Strong legs keep his group safe on the rock, so between treks he trains like the mountain is watching.',
+        moves: [
+          { clip: 'hero_move1', name: 'Rock Scramble', text: 'Up a steep face: reach high, drive the knee, pull through.', icon: 'mountain' },
+          { clip: 'hero_move2', name: 'Peak Reached', text: 'The last hard steps to the top, a look across the valley, fists up.', icon: 'flag' },
+          { clip: 'squat', name: 'Summit Squat', text: 'Heavy, controlled reps for the climb ahead.', icon: 'dumbbell' },
+        ],
+        effect: { name: 'Ember Trail', color: '#FF9A2E', text: 'A campfire glow on his ring, embers rising with every move.' },
+      },
+      cardColors: ['#E0962A', '#3A2414'],
+    },
+    thumbnail_url: 'local://avatars/arjun.png',
+    is_default: false,
     sort_order: 0,
   },
-  {
-    id: 'starter_ojas_f',
-    name: 'Meera',
-    description: 'Every athlete starts here. Pick a face and earn coins for new gear.',
-    rarity: 'common',
-    price_coins: 0,
-    category: 'character',
-    character_id: null,
-    model_url: 'local://avatars/ojas_female.glb',
-    model_format: 'glb',
-    config: { materials: { top: ['ojas_top'], pants: ['ojas_pants'], shoes: ['ojas_shoes'] } },
-    thumbnail_url: 'local://avatars/ojas_female.png',
-    is_default: false,
-    sort_order: 1,
-  },
-  ...FACE_ITEMS.map(([id, name, characterId, config, thumbnail, sort]) => ({
-    ...item(id, name, 'A new look. Free to wear.', 'common', 0, 'face', characterId, config, sort),
-    thumbnail_url: thumbnail,
-  })),
   ...OUTFIT_ITEMS.map(([id, name, description, rarity, price, characterId, config, thumbnail, sort]) => ({
     ...item(id, name, description, rarity, price, 'kit', characterId, config, sort),
     thumbnail_url: thumbnail,
@@ -164,17 +295,34 @@ export async function fetchAvatarCatalog(): Promise<AvatarModel[]> {
       .order('sort_order', { ascending: true })
       .order('price_coins', { ascending: true });
     if (error || !data || data.length === 0) return BUNDLED_AVATARS;
-    const rows = data.filter((row: any) => !RETIRED_IDS.includes(row.id)).map((row: any) => ({
+    // A row that points at an on-device file (local://) only works if this app version ships that
+    // file. The server still lists faces this version dropped (m_15, m_17, m_19, m_21): those had no
+    // thumbnail or model, so the shop showed blank cards. Keep local rows only when bundled here.
+    const bundledIds = new Set(BUNDLED_AVATARS.map((b) => b.id));
+    const usesLocalFile = (row: any) =>
+      [row.model_url, row.thumbnail_url, row.config?.model_url].some((u) => typeof u === 'string' && u.startsWith('local://'));
+    const rows = data
+      .filter((row: any) => !RETIRED_IDS.includes(row.id))
+      // Faces were retired: each character keeps its own face only.
+      .filter((row: any) => row.category !== 'face')
+      .filter((row: any) => !usesLocalFile(row) || bundledIds.has(row.id))
+      .map((row: any) => ({
       ...row,
       category: row.category ?? 'character',
       character_id: row.character_id ?? null,
       model_url: row.model_url ?? '',
       config: row.config ?? {},
+      // A starter's body ships with this app version: its model, look and card follow the app.
+      ...(() => {
+        const own = BUNDLED_AVATARS.find((b) => b.id === row.id && b.category === 'character');
+        return own ? { model_url: own.model_url, model_format: own.model_format, config: own.config, thumbnail_url: own.thumbnail_url } : {};
+      })(),
     })) as AvatarModel[];
     // Items bundled with this app version that the server doesn't list yet (its migration hasn't
     // run): still shown for try-on, flagged so the shop does not offer to sell them.
     const extras = BUNDLED_AVATARS.filter((b) => !rows.some((r) => r.id === b.id));
-    return [...rows, ...extras.map((b) => ({ ...b, notOnServer: true }))];
+    // Stable sort, so a bundled item lands where its sort_order puts it (the base character first).
+    return [...rows, ...extras.map((b) => ({ ...b, notOnServer: true }))].sort((a, b) => a.sort_order - b.sort_order);
   } catch {
     return BUNDLED_AVATARS;
   }
@@ -190,7 +338,18 @@ export function getEquippedAvatarId(profile: UserProfile | null): string {
 }
 
 export function isAvatarOwned(profile: UserProfile | null, model: AvatarModel): boolean {
-  return model.is_default || model.price_coins === 0 || getOwnedAvatarIds(profile).includes(model.id);
+  if (model.is_default || getOwnedAvatarIds(profile).includes(model.id)) return true;
+  return model.price_coins === 0 && !model.unlock_level;
+}
+
+/** A level character the player has reached the level for (claimed on first use). */
+export function isUnlockedByLevel(model: AvatarModel, level: number): boolean {
+  return !!model.unlock_level && level >= model.unlock_level;
+}
+
+/** Starters: free from the start, no level or coins needed. */
+export function isStarter(model: AvatarModel): boolean {
+  return model.category === 'character' && model.price_coins === 0 && !model.unlock_level;
 }
 
 /** The character with this id, falling back to the default character. */
@@ -207,6 +366,9 @@ function isColorItem(item: AvatarModel): boolean {
 export function fitsCharacter(item: AvatarModel, character: AvatarModel): boolean {
   if (item.category === 'character') return false;
   if (item.character_id !== null && item.character_id !== character.id) return false;
+  // Faces and kits are GLBs fitted to the Rocketbox skeleton: only Rocketbox bodies can wear them
+  // (Meera's base body and Arjun have skeletons of their own).
+  if ((item.category === 'face' || item.category === 'kit') && item.config.model_url && !isRocketbox(character)) return false;
   if (isColorItem(item)) return !!character.config.materials?.[item.category as ColorSlot]?.length;
   return true;
 }
@@ -227,8 +389,17 @@ export function getLoadout(profile: UserProfile | null, characterId: string): Lo
 
 /** Resolves a loadout to catalog items, dropping anything unknown or for another character. */
 export function loadoutItems(catalog: AvatarModel[], loadout: Loadout, character: AvatarModel): AvatarModel[] {
-  return LOADOUT_SLOTS.map((slot) => catalog.find((m) => m.id === loadout[slot]))
+  const worn = LOADOUT_SLOTS.map((slot) => catalog.find((m) => m.id === loadout[slot]))
     .filter((m): m is AvatarModel => !!m && fitsCharacter(m, character));
+  return [...baseLookItems(character), ...worn];
+}
+
+const lookItem = (id: string, look: BodyLook): AvatarModel =>
+  item(`look_${id}`, 'Look', '', 'common', 0, 'kit', null, { tint: look.tint, dye: look.dye }, -100);
+
+/** The character's own look (skin tone, dyes) as a loadout item, applied before anything worn. */
+export function baseLookItems(character: AvatarModel): AvatarModel[] {
+  return character.config.look ? [lookItem(character.id, character.config.look)] : [];
 }
 
 interface ShopResult {
@@ -262,7 +433,7 @@ export async function equipAvatar(avatarId: string): Promise<ShopResult> {
   return { ok: data?.ok === true, error: data?.error };
 }
 
-/** The AI rival's body on the VS screen: the coach model with its warm-up idle. */
+/** The AI rival: the base body in the coach's look (VS arena and the Human vs AI screen). */
 export const AI_RIVAL_MODEL: AvatarModel = {
   id: 'ai_instructor',
   name: 'AI Coach',
@@ -271,9 +442,9 @@ export const AI_RIVAL_MODEL: AvatarModel = {
   price_coins: 0,
   category: 'character',
   character_id: null,
-  model_url: 'local://avatars/instructor_ai.glb',
+  model_url: BASE_BODY_URL,
   model_format: 'glb',
-  config: {},
+  config: { look: COACH_LOOK },
   thumbnail_url: null,
   is_default: false,
   sort_order: 0,
@@ -285,15 +456,10 @@ export function lookOf(catalog: AvatarModel[], profile: Pick<UserProfile, 'equip
   return { model, items: loadoutItems(catalog, getLoadout(profile as UserProfile | null, model.id), model) };
 }
 
-/** A stable random look for a name (simulated rivals): character, face and an outfit. */
-export function lookForName(catalog: AvatarModel[], name: string) {
+/** A stable random look for a name (simulated rivals): the base body in one of the rival looks. */
+export function lookForName(_catalog: AvatarModel[], name: string) {
   let h = 2166136261;
   for (let i = 0; i < name.length; i++) h = Math.imul(h ^ name.charCodeAt(i), 16777619) >>> 0;
-  const pick = <T,>(list: T[], salt: number): T | undefined =>
-    list.length ? list[((h ^ Math.imul(salt, 2654435761)) >>> 0) % list.length] : undefined;
-  const starters = catalog.filter((m) => m.category === 'character');
-  const model = pick(starters, 1) ?? BUNDLED_AVATARS[0];
-  const fits = (cat: string) => catalog.filter((m) => m.category === cat && m.character_id === model.id);
-  const items = [pick(fits('face'), 2), pick(fits('kit'), 3)].filter((m): m is AvatarModel => !!m);
-  return { model, items };
+  const model: AvatarModel = { ...AI_RIVAL_MODEL, id: 'rival', name: 'Rival', config: { look: RIVAL_LOOKS[h % RIVAL_LOOKS.length] } };
+  return { model, items: baseLookItems(model) };
 }
