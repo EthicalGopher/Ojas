@@ -1,11 +1,13 @@
-// Matchmaking: the wait before the match intro (ArenaIntro.tsx). Plain "You VS ?" cards:
-// your avatar and name on the left, a pulsing VS, and the rival's slot on the right, searching.
+// Matchmaking: the wait before the match intro (ArenaIntro.tsx). Full-height characters: yours on the
+// left half, a VS in the middle, and the rival's half on the right as a "?" silhouette while searching.
 // The status line, a timer, a training tip and Cancel sit below.
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, Pressable, StatusBar, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Animated, Easing, Pressable, StatusBar, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Swords, X } from 'lucide-react-native';
-import { Avatar } from '../components/Avatar';
+import { useEquippedLook } from '../hooks/useEquippedLook';
+import { BUNDLED_AVATARS, characterStandArt, characterVsScene } from '../utils/avatarShopService';
+import { FighterPanel } from '../features/match/components/FighterPanel';
 import { GText } from '../components/game';
 import { Slant } from '../components/game/Slant';
 import { juice } from '../juice/juice';
@@ -43,9 +45,12 @@ export const LoadingScreen: React.FC<LoadingScreenProps> = ({
 }) => {
   const c = useColors();
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
   const profile = useUserStore((s) => s.profile);
   const name = profile?.username || 'You';
+  const look = useEquippedLook();
+  const scene = characterVsScene(look.model);
+  // the unknown rival: the other hero's body, as a silhouette
+  const rivalSilhouette = characterStandArt(BUNDLED_AVATARS.find((b) => b.category === 'character' && b.model_url !== look.model.model_url) ?? look.model);
 
   const [seconds, setSeconds] = useState(0);
   const [tip] = useState(() => TIPS[Math.floor(Math.random() * TIPS.length)]);
@@ -54,10 +59,9 @@ export const LoadingScreen: React.FC<LoadingScreenProps> = ({
     return () => clearInterval(t);
   }, []);
 
-  // entrance: cards slide in from the sides, VS drops in; then the VS and the rival slot pulse
+  // entrance: the VS drops in; then the status dot pulses
   const enter = useRef(new Animated.Value(0)).current;
   const pulse = useRef(new Animated.Value(0)).current;
-  const sweep = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     Animated.spring(enter, { toValue: 1, friction: 8, tension: 50, useNativeDriver: true }).start();
     const p = Animated.loop(
@@ -66,27 +70,37 @@ export const LoadingScreen: React.FC<LoadingScreenProps> = ({
         Animated.timing(pulse, { toValue: 0, duration: 900, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
       ]),
     );
-    const s = Animated.loop(Animated.timing(sweep, { toValue: 1, duration: 1600, easing: Easing.inOut(Easing.cubic), useNativeDriver: true }));
     p.start();
-    s.start();
-    return () => {
-      p.stop();
-      s.stop();
-    };
-  }, [enter, pulse, sweep]);
+    return () => p.stop();
+  }, [enter, pulse]);
 
-  const cardW = Math.min(240, width * 0.3);
-  const slideL = enter.interpolate({ inputRange: [0, 1], outputRange: [-width * 0.5, 0] });
-  const slideR = enter.interpolate({ inputRange: [0, 1], outputRange: [width * 0.5, 0] });
   const vsScale = enter.interpolate({ inputRange: [0, 0.6, 1], outputRange: [3, 0.9, 1] });
   const vsGlow = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.35, 0.9] });
-  const slotGlow = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.25, 0.7] });
-  const shine = sweep.interpolate({ inputRange: [0, 1], outputRange: [-cardW, cardW] });
   const mmss = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
 
   return (
     <View style={[StyleSheet.absoluteFill, styles.root, !fullScreen && styles.overlay]}>
       <StatusBar hidden />
+
+      {/* you (left) · VS · rival (right): full-height characters */}
+      <FighterPanel side="left" scene={scene} label="YOU" name={name} />
+      {versus && (
+        <FighterPanel
+          side="right"
+          scene={null}
+          silhouette={rivalSilhouette}
+          label="OPPONENT"
+          name="Searching…"
+          placeholder={<GText variant="hero" size={110} style={styles.question}>?</GText>}
+        />
+      )}
+      {versus && (
+        <View style={styles.vsWrap} pointerEvents="none">
+          <Animated.View style={{ transform: [{ scale: vsScale }] }}>
+            <GText variant="hero" size={72} style={styles.vs}>VS</GText>
+          </Animated.View>
+        </View>
+      )}
 
       {/* title */}
       <View style={[styles.header, { top: insets.top + 18 }]}>
@@ -100,39 +114,6 @@ export const LoadingScreen: React.FC<LoadingScreenProps> = ({
             <GText variant="label" size={11} style={{ color: c.accentTo, letterSpacing: 1 }}>{badgeText}</GText>
           </View>
         ) : null}
-      </View>
-
-      {/* you · VS · rival */}
-      <View style={styles.stage} pointerEvents="none">
-        <Animated.View style={[styles.card, { width: cardW, transform: [{ translateX: slideL }] }]}>
-          <Slant fill={c.accentFrom} to={c.accentTo} />
-          <View style={styles.avatarRing}>
-            <Avatar username={name} config={profile?.avatar_config} avatarUrl={profile?.avatar_url} size={AVATAR} />
-          </View>
-          <GText variant="label" size={12} tone="onGradient">YOU</GText>
-          <GText variant="hero" size={26} tone="onGradient" numberOfLines={1}>{name}</GText>
-        </Animated.View>
-
-        {versus && (
-        <View style={styles.vsWrap}>
-          <Animated.View style={{ transform: [{ scale: vsScale }] }}>
-            <GText variant="hero" size={64} style={styles.vs}>VS</GText>
-          </Animated.View>
-        </View>
-        )}
-
-        {versus && (
-        <Animated.View style={[styles.slot, { width: cardW, transform: [{ translateX: slideR }] }]}>
-          <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: '#3B8DFF', opacity: slotGlow }]} />
-          <View style={[StyleSheet.absoluteFill, styles.slotInner]} />
-          <View style={[styles.avatarRing, styles.unknownAvatar]}>
-            <GText variant="hero" size={AVATAR * 0.5} style={styles.question}>?</GText>
-          </View>
-          <GText variant="label" size={12} style={styles.question}>OPPONENT</GText>
-          <GText variant="hero" size={26} style={styles.question} numberOfLines={1}>Searching…</GText>
-          <Animated.View style={[styles.shine, { width: cardW * 0.25, transform: [{ translateX: shine }, { rotate: '18deg' }] }]} />
-        </Animated.View>
-        )}
       </View>
 
       {/* status, timer, tip, cancel */}
@@ -163,7 +144,6 @@ export const LoadingScreen: React.FC<LoadingScreenProps> = ({
   );
 };
 
-const AVATAR = 64;
 
 const styles = StyleSheet.create({
   root: { backgroundColor: '#05060C' },
@@ -171,16 +151,9 @@ const styles = StyleSheet.create({
   header: { position: 'absolute', left: 0, right: 0, alignItems: 'center', gap: 8 },
   titlePlate: { height: 40, minWidth: 300, paddingHorizontal: 32, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
   badge: { borderWidth: 1, borderRadius: 14, paddingHorizontal: 12, paddingVertical: 3, backgroundColor: 'rgba(0,0,0,0.4)' },
-  stage: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 46, marginTop: -40 },
-  card: { paddingHorizontal: 26, paddingVertical: 14, alignItems: 'center', gap: 2 },
-  vsWrap: { width: 130, height: 130, alignItems: 'center', justifyContent: 'center' },
-  avatarRing: { width: AVATAR + 6, height: AVATAR + 6, borderRadius: (AVATAR + 6) / 2, borderWidth: 3, borderColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', marginBottom: 6 },
-  unknownAvatar: { borderColor: 'rgba(120,170,255,0.7)', backgroundColor: 'rgba(8,14,40,0.9)' },
+  vsWrap: { position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, alignItems: 'center', justifyContent: 'center' },
   vs: { color: '#FFD27A', textShadowColor: '#B53214', textShadowOffset: { width: 3, height: 3 }, textShadowRadius: 0 },
-  slot: { paddingHorizontal: 26, paddingVertical: 12, gap: 2, borderRadius: 10, overflow: 'hidden', borderWidth: 2, borderColor: 'rgba(120,170,255,0.7)', alignItems: 'center', justifyContent: 'center' },
-  slotInner: { backgroundColor: 'rgba(8,14,40,0.82)' },
-  question: { color: 'rgba(170,200,255,0.85)' },
-  shine: { position: 'absolute', top: -20, bottom: -20, backgroundColor: 'rgba(255,255,255,0.12)' },
+  question: { color: 'rgba(170,200,255,0.85)', marginTop: -80 },
   footer: { position: 'absolute', left: 0, right: 0, alignItems: 'center', gap: 6 },
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 18, paddingVertical: 8, borderRadius: 18, backgroundColor: 'rgba(0,0,0,0.5)' },
   dot: { width: 8, height: 8, borderRadius: 4 },

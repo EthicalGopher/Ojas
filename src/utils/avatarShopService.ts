@@ -456,6 +456,19 @@ export function lookOf(catalog: AvatarModel[], profile: Pick<UserProfile, 'equip
   return { model, items: loadoutItems(catalog, getLoadout(profile as UserProfile | null, model.id), model) };
 }
 
+/** A character's full-body standing art for the VS screen (avatars/<hero>_stand.png, rendered by
+ * scripts/blender/render_hero_card.py from the `stand` clip). Arjun's body gets Arjun; every other look
+ * (Meera, the AI rival, simulated rivals) is worn on the base body, which is Meera's. */
+export function characterStandArt(model: AvatarModel): string {
+  return resolveModelUrl(/arjun/.test(model.model_url) ? 'local://avatars/arjun_stand.png' : 'local://avatars/meera_stand.png');
+}
+
+/** A character's scene for the VS screen: a frame of their hero story video (Arjun climbing, Meera
+ * sprinting), avatars/<hero>_vs.jpg. Same body rule as characterStandArt. */
+export function characterVsScene(model: AvatarModel): string {
+  return resolveModelUrl(/arjun/.test(model.model_url) ? 'local://avatars/arjun_vs.jpg' : 'local://avatars/meera_vs.jpg');
+}
+
 /** A stable random look for a name (simulated rivals): the base body in one of the rival looks. */
 export function lookForName(_catalog: AvatarModel[], name: string) {
   let h = 2166136261;

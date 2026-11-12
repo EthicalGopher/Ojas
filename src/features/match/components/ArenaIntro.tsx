@@ -1,9 +1,9 @@
 // Match intro: a plain "You VS Opponent" card while both sides sync, then FIGHT! and fade out.
-// No rendered stage, poses or camera tour: just the two avatars, names, levels and the live sync status.
-import React, { useEffect, useRef, useState } from 'react';
+// Full-height characters standing on their halves (you left, the opponent right), names and levels on plates,
+// the live sync status below. No stage, flexing poses or camera tour.
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Pressable, StatusBar, StyleSheet, View } from 'react-native';
 import { Bot, Swords, Users } from 'lucide-react-native';
-import { Avatar } from '../../../components/Avatar';
 import { GText } from '../../../components/game';
 import { Slant } from '../../../components/game/Slant';
 import { RankEmblem, rankTierFromTitle, tierNameFromTitle } from '../../../components/RankEmblem';
@@ -16,6 +16,8 @@ import { computeTotalXp, levelFromXp } from '../../../utils/gamification';
 import { getBotByName } from '../../../utils/aiBotService';
 import type { SimulatedOpponent } from '../../../utils/simulatedOpponent';
 import type { MatchMode } from './MatchCameraScreen';
+import { FighterPanel } from './FighterPanel';
+import { AI_RIVAL_MODEL, BUNDLED_AVATARS, characterVsScene, lookForName, lookOf } from '../../../utils/avatarShopService';
 
 const FIGHT_MS = 1600;
 
@@ -41,8 +43,7 @@ const EXERCISE_NAMES: Record<string, string> = {
 
 interface OpponentInfo {
   name: string;
-  avatarConfig?: any;
-  avatarUrl?: string | null;
+  look?: { equipped_avatar_id?: string | null; equipped_items?: any } | null;
   level?: number;
   title?: string;
   kind: 'player' | 'bot' | 'crowd';
@@ -115,8 +116,7 @@ export const ArenaIntro: React.FC<ArenaIntroProps> = ({
         const lv = levelFromXp(computeTotalXp(data as any));
         setOpponent((prev) => ({
           ...prev,
-          avatarConfig: (data as any).avatar_config,
-          avatarUrl: (data as any).avatar_url,
+          look: { equipped_avatar_id: (data as any).equipped_avatar_id, equipped_items: (data as any).equipped_items },
           level: lv.level,
           title: lv.title,
         }));
@@ -125,6 +125,18 @@ export const ArenaIntro: React.FC<ArenaIntroProps> = ({
       active = false;
     };
   }, [mode, opponentUsername, simulatedOpponent, solo]);
+
+  const selfArt = useMemo(() => characterVsScene(lookOf(BUNDLED_AVATARS, profile as any).model), [profile]);
+  const oppArt = useMemo(() => {
+    if (solo) return null;
+    const model =
+      opponent.kind === 'bot'
+        ? AI_RIVAL_MODEL
+        : opponent.look
+          ? lookOf(BUNDLED_AVATARS, opponent.look as any).model
+          : lookForName(BUNDLED_AVATARS, opponent.name || 'rival').model;
+    return characterVsScene(model);
+  }, [solo, opponent.kind, opponent.look, opponent.name]);
 
   const exerciseName = EXERCISE_NAMES[String(exerciseId).replace(/_.*/, '')] || 'Workout';
 
@@ -154,49 +166,44 @@ export const ArenaIntro: React.FC<ArenaIntroProps> = ({
     <Animated.View style={[StyleSheet.absoluteFill, styles.root, { opacity: fade }]}>
       <StatusBar hidden />
 
+      <FighterPanel
+        side="left"
+        scene={selfArt}
+        label="YOU"
+        name={selfName}
+        meta={
+          <>
+            <RankEmblem tier={rankTierFromTitle(level.title)} size={16} />
+            <GText variant="label" size={12} style={{ color: '#FFFFFF' }}>LV {level.level} · {tierNameFromTitle(level.title)}</GText>
+          </>
+        }
+      />
+      <FighterPanel
+        side="right"
+        scene={oppArt}
+        label={solo ? 'LOBBY' : 'OPPONENT'}
+        name={opponent.name}
+        placeholder={solo ? <Users size={120} color="rgba(170,200,255,0.85)" /> : undefined}
+        meta={
+          <>
+            {opponent.kind === 'bot' && <Bot size={14} color="#FFFFFF" />}
+            {solo && <Users size={14} color="#FFFFFF" />}
+            <GText variant="label" size={12} style={{ color: '#FFFFFF' }}>
+              {solo ? `${Math.max(2, lobbyPlayerCount)} ATHLETES` : oppMeta}
+            </GText>
+          </>
+        }
+      />
+      <View style={styles.vsWrap} pointerEvents="none">
+        {!showFight && <GText variant="hero" size={72} style={styles.vs}>VS</GText>}
+      </View>
+
       <View style={styles.banner} pointerEvents="none">
         <Slant fill="#14141C" stroke="#3A3A48" />
         <Swords size={14} color={c.accentTo} />
         <GText variant="label" size={13} style={{ color: '#FFFFFF' }}>
           {MODE_LABELS[mode]} · {exerciseName.toUpperCase()}
         </GText>
-      </View>
-
-      <View style={styles.row} pointerEvents="none">
-        <View style={styles.card}>
-          <Slant fill={c.accentFrom} to={c.accentTo} />
-          <View style={styles.avatarRing}>
-            <Avatar username={selfName} config={profile?.avatar_config} avatarUrl={profile?.avatar_url} size={AVATAR} />
-          </View>
-          <GText variant="label" size={12} tone="onGradient">YOU</GText>
-          <GText variant="hero" size={30} tone="onGradient" numberOfLines={1}>{selfName}</GText>
-          <View style={styles.meta}>
-            <RankEmblem tier={rankTierFromTitle(level.title)} size={16} />
-            <GText variant="label" size={12} tone="onGradient">LV {level.level} · {tierNameFromTitle(level.title)}</GText>
-          </View>
-        </View>
-
-        <GText variant="hero" size={48} style={styles.vs}>VS</GText>
-
-        <View style={styles.card}>
-          <Slant fill="#1F4FB8" to="#3B8DFF" />
-          <View style={[styles.avatarRing, solo && styles.crowdAvatar]}>
-            {solo ? (
-              <Users size={AVATAR * 0.45} color="#FFFFFF" />
-            ) : (
-              <Avatar username={opponent.name} config={opponent.avatarConfig} avatarUrl={opponent.avatarUrl} size={AVATAR} />
-            )}
-          </View>
-          <GText variant="label" size={12} style={{ color: '#FFFFFF' }}>{solo ? 'LOBBY' : 'OPPONENT'}</GText>
-          <GText variant="hero" size={30} style={{ color: '#FFFFFF' }} numberOfLines={1}>{opponent.name}</GText>
-          <View style={styles.meta}>
-            {opponent.kind === 'bot' && <Bot size={14} color="#FFFFFF" />}
-            {solo && <Users size={14} color="#FFFFFF" />}
-            <GText variant="label" size={12} style={{ color: '#FFFFFF' }}>
-              {solo ? `${Math.max(2, lobbyPlayerCount)} ATHLETES` : oppMeta}
-            </GText>
-          </View>
-        </View>
       </View>
 
       <View style={styles.footer} pointerEvents="box-none">
@@ -222,16 +229,10 @@ export const ArenaIntro: React.FC<ArenaIntroProps> = ({
   );
 };
 
-const AVATAR = 72;
-
 const styles = StyleSheet.create({
   root: { backgroundColor: '#07070B', zIndex: 500, elevation: 50, alignItems: 'center', justifyContent: 'center' },
   banner: { position: 'absolute', top: 12, left: 16, height: 30, paddingHorizontal: 26, flexDirection: 'row', alignItems: 'center', gap: 8 },
-  row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 28, paddingHorizontal: 16 },
-  card: { width: 260, maxWidth: '38%', paddingHorizontal: 30, paddingVertical: 14, alignItems: 'center', gap: 2 },
-  avatarRing: { width: AVATAR + 6, height: AVATAR + 6, borderRadius: (AVATAR + 6) / 2, borderWidth: 3, borderColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', marginBottom: 6 },
-  crowdAvatar: { backgroundColor: 'rgba(8,14,40,0.9)' },
-  meta: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
+  vsWrap: { position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, alignItems: 'center', justifyContent: 'center' },
   vs: { color: '#FFD27A', textShadowColor: '#B53214', textShadowOffset: { width: 3, height: 3 }, textShadowRadius: 0 },
   footer: { position: 'absolute', bottom: 22, left: 0, right: 0, alignItems: 'center' },
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
