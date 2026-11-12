@@ -1,10 +1,11 @@
-// Matchmaking: the wait before the match intro (ArenaIntro.tsx). Plain "You VS ?" name cards:
-// your name on the left, a pulsing VS, and the rival's slot on the right, searching.
+// Matchmaking: the wait before the match intro (ArenaIntro.tsx). Plain "You VS ?" cards:
+// your avatar and name on the left, a pulsing VS, and the rival's slot on the right, searching.
 // The status line, a timer, a training tip and Cancel sit below.
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Pressable, StatusBar, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Swords, X } from 'lucide-react-native';
+import { Avatar } from '../components/Avatar';
 import { GText } from '../components/game';
 import { Slant } from '../components/game/Slant';
 import { juice } from '../juice/juice';
@@ -79,7 +80,6 @@ export const LoadingScreen: React.FC<LoadingScreenProps> = ({
   const slideR = enter.interpolate({ inputRange: [0, 1], outputRange: [width * 0.5, 0] });
   const vsScale = enter.interpolate({ inputRange: [0, 0.6, 1], outputRange: [3, 0.9, 1] });
   const vsGlow = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.35, 0.9] });
-  const ringScale = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.85, 1.25] });
   const slotGlow = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.25, 0.7] });
   const shine = sweep.interpolate({ inputRange: [0, 1], outputRange: [-cardW, cardW] });
   const mmss = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
@@ -106,13 +106,15 @@ export const LoadingScreen: React.FC<LoadingScreenProps> = ({
       <View style={styles.stage} pointerEvents="none">
         <Animated.View style={[styles.card, { width: cardW, transform: [{ translateX: slideL }] }]}>
           <Slant fill={c.accentFrom} to={c.accentTo} />
+          <View style={styles.avatarRing}>
+            <Avatar username={name} config={profile?.avatar_config} avatarUrl={profile?.avatar_url} size={AVATAR} />
+          </View>
           <GText variant="label" size={12} tone="onGradient">YOU</GText>
           <GText variant="hero" size={26} tone="onGradient" numberOfLines={1}>{name}</GText>
         </Animated.View>
 
         {versus && (
         <View style={styles.vsWrap}>
-          <Animated.View style={[styles.ring, { borderColor: c.accentTo, opacity: vsGlow, transform: [{ scale: ringScale }] }]} />
           <Animated.View style={{ transform: [{ scale: vsScale }] }}>
             <GText variant="hero" size={64} style={styles.vs}>VS</GText>
           </Animated.View>
@@ -123,6 +125,9 @@ export const LoadingScreen: React.FC<LoadingScreenProps> = ({
         <Animated.View style={[styles.slot, { width: cardW, transform: [{ translateX: slideR }] }]}>
           <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: '#3B8DFF', opacity: slotGlow }]} />
           <View style={[StyleSheet.absoluteFill, styles.slotInner]} />
+          <View style={[styles.avatarRing, styles.unknownAvatar]}>
+            <GText variant="hero" size={AVATAR * 0.5} style={styles.question}>?</GText>
+          </View>
           <GText variant="label" size={12} style={styles.question}>OPPONENT</GText>
           <GText variant="hero" size={26} style={styles.question} numberOfLines={1}>Searching…</GText>
           <Animated.View style={[styles.shine, { width: cardW * 0.25, transform: [{ translateX: shine }, { rotate: '18deg' }] }]} />
@@ -158,6 +163,8 @@ export const LoadingScreen: React.FC<LoadingScreenProps> = ({
   );
 };
 
+const AVATAR = 64;
+
 const styles = StyleSheet.create({
   root: { backgroundColor: '#05060C' },
   overlay: { zIndex: 9999, elevation: 25 },
@@ -167,7 +174,8 @@ const styles = StyleSheet.create({
   stage: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 46, marginTop: -40 },
   card: { paddingHorizontal: 26, paddingVertical: 14, alignItems: 'center', gap: 2 },
   vsWrap: { width: 130, height: 130, alignItems: 'center', justifyContent: 'center' },
-  ring: { position: 'absolute', width: 120, height: 120, borderRadius: 60, borderWidth: 3 },
+  avatarRing: { width: AVATAR + 6, height: AVATAR + 6, borderRadius: (AVATAR + 6) / 2, borderWidth: 3, borderColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', marginBottom: 6 },
+  unknownAvatar: { borderColor: 'rgba(120,170,255,0.7)', backgroundColor: 'rgba(8,14,40,0.9)' },
   vs: { color: '#FFD27A', textShadowColor: '#B53214', textShadowOffset: { width: 3, height: 3 }, textShadowRadius: 0 },
   slot: { paddingHorizontal: 26, paddingVertical: 12, gap: 2, borderRadius: 10, overflow: 'hidden', borderWidth: 2, borderColor: 'rgba(120,170,255,0.7)', alignItems: 'center', justifyContent: 'center' },
   slotInner: { backgroundColor: 'rgba(8,14,40,0.82)' },
