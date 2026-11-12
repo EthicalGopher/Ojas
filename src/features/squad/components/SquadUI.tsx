@@ -200,7 +200,7 @@ export const SquadPodium: React.FC<PodiumProps> = ({ squads, powers, myCommunity
             <TouchableOpacity key={squad.id} style={styles.podiumSlot} activeOpacity={0.85} onPress={() => onPress(squad)}>
               <SquadCrest logoUrl={squad.logo_url} power={powers[squad.id] ?? 0} size={isFirst ? 74 : 58} frameColor={color} />
               <Text style={styles.podiumName} numberOfLines={1}>{squad.name}</Text>
-              {mine && <Text style={styles.podiumYou}>YOUR SQUAD</Text>}
+              {mine && <Text style={styles.podiumYou}>YOUR CLAN</Text>}
               <PowerPill power={powers[squad.id] ?? 0} dark compact />
               <View style={[styles.pedestal, { height: heights[i], borderColor: color }]}>
                 <GradientFill colors={[`${color}55`, `${color}10`]} vertical />

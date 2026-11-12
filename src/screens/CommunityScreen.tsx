@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   StyleSheet,
   Text,
@@ -80,6 +80,7 @@ import {
   SquadPodium,
 } from '../features/squad/components/SquadUI';
 import { SquadLeagueEmblem, squadLeagueFromPower, TIER_PALETTES, tierColor } from '../components/RankEmblem';
+import { ClanBase } from '../features/clan/components/ClanBase';
 import {
   Tournament,
   TournamentEntry,
@@ -289,6 +290,15 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
     loadData();
   }, [loadData]);
 
+  // Like a game guild hall: entering Clan opens your own clan first (once; Rankings goes back to the list).
+  const autoOpenedClan = useRef(false);
+  useEffect(() => {
+    if (autoOpenedClan.current || !userStatus.community) return;
+    autoOpenedClan.current = true;
+    handleOpenCommunity(userStatus.community);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userStatus.community?.id]);
+
   const onRefresh = () => {
     setRefreshing(true);
     loadData();
@@ -320,7 +330,7 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
     }
 
     if (!isAdmin) {
-      Alert.alert('Access Denied', 'Only designated platform admins can create and host community tournaments.');
+      Alert.alert('Access Denied', 'Only designated platform admins can create and host clan tournaments.');
       return;
     }
 
@@ -340,7 +350,7 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
       });
 
       if (res.success) {
-        Alert.alert('Tournament Created', `"${tournTitle}" is now live for community leaders to register!`);
+        Alert.alert('Tournament Created', `"${tournTitle}" is now live for clan leaders to register!`);
         setShowCreateTournamentModal(false);
         setTournTitle('');
         setTournDesc('');
@@ -359,15 +369,15 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
   const handleLeaderRegisterCommunity = async () => {
     if (!selectedTournament) return;
     if (!userStatus.hasCommunity || !userStatus.community) {
-      Alert.alert('No Community', 'You must lead a community to register for tournaments.');
+      Alert.alert('No Clan', 'You must lead a clan to register for tournaments.');
       return;
     }
     if (userStatus.membership?.role !== 'leader') {
-      Alert.alert('Leader Action Only', 'Only the community leader can register and select athletes.');
+      Alert.alert('Leader Action Only', 'Only the clan leader can register and select athletes.');
       return;
     }
     if (selectedAthleteIds.length === 0) {
-      Alert.alert('Select Athletes', 'Please select at least one athlete from your community to represent you.');
+      Alert.alert('Select Athletes', 'Please select at least one athlete from your clan to represent you.');
       return;
     }
 
@@ -393,7 +403,7 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
       });
 
       if (res.success) {
-        Alert.alert('Community Registered', `${userStatus.community.name} is now locked in the tournament bracket!`);
+        Alert.alert('Clan Registered', `${userStatus.community.name} is now locked in the tournament bracket!`);
         setShowNominateModal(false);
         setSelectedAthleteIds([]);
         loadData();
@@ -416,7 +426,7 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
     }
 
     Alert.alert(
-      'Start Community Tournament',
+      'Start Clan Tournament',
       `Are you ready to lock registrations and generate the elimination bracket for "${selectedTournament.title}"?`,
       [
         { text: 'Cancel', style: 'cancel' },
@@ -456,16 +466,16 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
     }
 
     Alert.alert(
-      `Community Match: ${match.round_name}`,
-      `${match.community1_name || 'Community 1'} VS ${match.community2_name || 'Community 2'}\nExercise: ${selectedTournament?.exercise_name || 'Fitness'}`,
+      `Clan Match: ${match.round_name}`,
+      `${match.community1_name || 'Clan 1'} VS ${match.community2_name || 'Clan 2'}\nExercise: ${selectedTournament?.exercise_name || 'Fitness'}`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Launch Live Battle',
           onPress: () => {
             const oppName = match.community1_id === userStatus.community?.id
-              ? (match.community2_athlete_name || match.community2_name || 'Rival Community')
-              : (match.community1_athlete_name || match.community1_name || 'Rival Community');
+              ? (match.community2_athlete_name || match.community2_name || 'Rival Clan')
+              : (match.community1_athlete_name || match.community1_name || 'Rival Clan');
             if (onOpenMatchCamera) {
               onOpenMatchCamera(oppName, 'quickjoin', match.exercise_id);
             } else {
@@ -536,7 +546,7 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
     try {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permission.granted) {
-        Alert.alert('Permission Denied', 'Gallery access is needed to upload a community logo.');
+        Alert.alert('Permission Denied', 'Gallery access is needed to upload a clan logo.');
         return;
       }
 
@@ -565,12 +575,12 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
   // Handle Create Community
   const handleCreateCommunity = async () => {
     if (!newCommName.trim()) {
-      Alert.alert('Validation Error', 'Please enter a community name.');
+      Alert.alert('Validation Error', 'Please enter a clan name.');
       return;
     }
 
     if (userStatus.hasCommunity) {
-      Alert.alert('Limit Reached', 'You are already a member of a community. You must leave it before creating a new one.');
+      Alert.alert('Limit Reached', 'You are already a member of a clan. You must leave it before creating a new one.');
       return;
     }
 
@@ -616,7 +626,7 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
   const handleSaveCommunityDetails = async () => {
     if (!viewingCommunity) return;
     if (!editCommName.trim()) {
-      Alert.alert('Validation Error', 'Community name cannot be empty.');
+      Alert.alert('Validation Error', 'Clan name cannot be empty.');
       return;
     }
 
@@ -647,13 +657,13 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
         .single();
 
       if (error) {
-        Alert.alert('Error', error.message || 'Failed to update community details.');
+        Alert.alert('Error', error.message || 'Failed to update clan details.');
         return;
       }
 
       setViewingCommunity(data as Community);
       setShowEditModal(false);
-      Alert.alert('Success', 'Community details updated successfully.');
+      Alert.alert('Success', 'Clan details updated successfully.');
       await loadData();
     } catch (err: any) {
       Alert.alert('Error', err?.message || 'Failed to save changes.');
@@ -665,22 +675,24 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
   // Handle Request to Join
   const handleJoinRequest = async (community: Community) => {
     if (userStatus.hasCommunity) {
-      Alert.alert('Already in Community', 'You are already a member of a community. You can only belong to one community at a time.');
+      Alert.alert('Already in Clan', 'You are already a member of a clan. You can only belong to one clan at a time.');
       return;
     }
 
     Alert.alert(
       'Join Proposal',
-      `Submit a request to join "${community.name}"? The leader will review your proposal.`,
+      community.join_policy === 'open'
+        ? `Join "${community.name}"?`
+        : `Submit a request to join "${community.name}"? The leader will review your request.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Send Request',
+          text: community.join_policy === 'open' ? 'Join' : 'Send Request',
           style: 'default',
           onPress: async () => {
             const res = await requestToJoinCommunity(community.id, resolvedUserId);
             if (res.success) {
-              Alert.alert('Request Sent', res.message || 'Your join proposal has been sent to the leader.');
+              Alert.alert(res.joined ? 'Joined' : 'Request Sent', res.message || 'Your join request has been sent to the leader.');
               loadData();
             } else {
               Alert.alert('Request Failed', res.error || 'Could not send join request.');
@@ -773,9 +785,9 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
 
     const isUserLeader = userStatus.membership?.role === 'leader';
     Alert.alert(
-      'Leave Community',
+      'Leave Clan',
       isUserLeader
-        ? 'As the Leader, leaving will automatically transfer leadership to the next oldest member (or close the community if you are the last member). Are you sure?'
+        ? 'As the Leader, leaving will automatically transfer leadership to the next oldest member (or close the clan if you are the last member). Are you sure?'
         : `Are you sure you want to leave "${userStatus.community.name}"?`,
       [
         { text: 'Cancel', style: 'cancel' },
@@ -785,7 +797,7 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
           onPress: async () => {
             const res = await removeMember(userStatus.community!.id, resolvedUserId, resolvedUserId);
             if (res.success) {
-              Alert.alert('Left Community', 'You have left the community.');
+              Alert.alert('Left Clan', 'You have left the clan.');
               setViewingCommunity(null);
               setActiveTab('explore');
               loadData();
@@ -805,7 +817,7 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
     const name = member.profile?.full_name || member.profile?.username || 'this member';
     Alert.alert(
       'Kick Member',
-      `Are you sure you want to kick ${name} from the community?`,
+      `Are you sure you want to kick ${name} from the clan?`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -875,14 +887,14 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
       <ThemedStatusBar />
 
       <GameTopBar
-        title="Squads"
+        title="Clan"
         onBack={onBack}
         right={
           <TouchableOpacity
             style={styles.createHeaderBtn}
             onPress={() => {
               if (userStatus.hasCommunity) {
-                Alert.alert('Already in Community', 'You are already in a community. Leave your current community first before creating a new one.');
+                Alert.alert('Already in Clan', 'You are already in a clan. Leave your current clan first before creating a new one.');
               } else {
                 setShowCreateModal(true);
               }
@@ -898,8 +910,29 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
       {isLoading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#E25822" />
-          <Text style={styles.loadingText}>Loading communities...</Text>
+          <Text style={styles.loadingText}>Loading clans...</Text>
         </View>
+      ) : viewingCommunity ? (
+        <ClanBase
+          clan={viewingCommunity}
+          members={viewingCommunityMembers}
+          loadingMembers={isLoadingViewingMembers}
+          power={squadPowers[viewingCommunity.id]?.power ?? activeMembers.length * 50}
+          memberPoints={squadPowers[viewingCommunity.id]?.memberPoints ?? {}}
+          rank={rankedCommunities.findIndex((c) => c.id === viewingCommunity.id) + 1}
+          myUserId={resolvedUserId}
+          myRole={isViewingMyCommunity ? userStatus.membership?.role ?? 'member' : null}
+          inAnyClan={userStatus.hasCommunity}
+          requestedHere={userStatus.pendingRequest?.community.id === viewingCommunity.id}
+          onEdit={handleOpenEditModal}
+          onInvite={() => setShowInviteModal(true)}
+          onLeave={handleLeaveCommunity}
+          onJoin={() => handleJoinRequest(viewingCommunity)}
+          onKick={handleKickMember}
+          onReview={handleReviewProposal}
+          onRankings={() => setViewingCommunity(null)}
+          onChanged={loadData}
+        />
       ) : (
         <ScrollView
           style={styles.content}
@@ -928,223 +961,7 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
             </View>
           )}
 
-          {/* 1. DEDICATED COMMUNITY DETAIL VIEW (WHEN OPENED) */}
-          {viewingCommunity ? (
-            <View style={styles.myCommunitySection}>
-              {/* Back to Explore Communities Navigation Button */}
-              <TouchableOpacity
-                style={[styles.backToTournsBtn, { marginBottom: 16 }]}
-                onPress={() => setViewingCommunity(null)}
-                activeOpacity={0.7}
-              >
-                <ArrowLeft size={16} color="#E25822" />
-                <Text style={styles.backToTournsBtnText}>Back to Squads</Text>
-              </TouchableOpacity>
-
-              {/* Squad Base Banner */}
-              {(() => {
-                const vPower = squadPowers[viewingCommunity.id]?.power ?? activeMembers.length * 50;
-                const vLvl = squadLevelFromPower(vPower);
-                const vLeague = squadLeagueFromPower(vPower);
-                const vRank = rankedCommunities.findIndex((c) => c.id === viewingCommunity.id) + 1;
-                return (
-                  <View style={styles.detailBannerCard}>
-                    <GradientFill colors={[GAME.violet, GAME.indigo, GAME.night]} />
-                    <GlowSpot color={GAME.ember} size={280} style={{ right: -90, top: -110 }} />
-                    <View style={styles.bannerTopRow}>
-                      <View style={styles.bannerCatChip}>
-                        <Text style={styles.bannerCatText}>{viewingCommunity.category.toUpperCase()}</Text>
-                      </View>
-                      <View style={styles.leaderChip}>
-                        <Text style={styles.leaderChipText}>
-                          {isLeaderOfViewing ? 'LEADER' : isViewingMyCommunity ? 'JOINED' : '1 SQUAD PER ATHLETE'}
-                        </Text>
-                      </View>
-                    </View>
-
-                    <View style={styles.bannerEmblemWrap}>
-                      <SquadCrest logoUrl={viewingCommunity.logo_url} power={vPower} size={104} frameColor={tierColor(vLeague.tier)} />
-                    </View>
-                    <Text style={styles.bannerName} numberOfLines={2}>{viewingCommunity.name}</Text>
-                    <Text style={[styles.bannerLeague, { color: TIER_PALETTES[vLeague.tier].light }]}>
-                      {vLeague.name.toUpperCase()}
-                      {vLeague.nextPower ? `  ·  ${(vLeague.nextPower - vPower).toLocaleString()} PWR TO NEXT LEAGUE` : ''}
-                    </Text>
-                    <Text style={styles.bannerDesc} numberOfLines={2}>
-                      {viewingCommunity.description || `Official ${viewingCommunity.category} squad on OJAS Fitness.`}
-                    </Text>
-
-                    <View style={styles.bannerStatsRow}>
-                      {[
-                        { label: 'POWER', value: vPower.toLocaleString() },
-                        { label: 'RANK', value: vRank > 0 ? `#${vRank}` : '-' },
-                        { label: 'ATHLETES', value: String(activeMembers.length) },
-                      ].map(({ label, value }) => (
-                        <View key={label} style={styles.bannerStat}>
-                          <Text style={styles.bannerStatValue}>{value}</Text>
-                          <Text style={styles.bannerStatLabel}>{label}</Text>
-                        </View>
-                      ))}
-                    </View>
-
-                    <View style={styles.heroLevelRow}>
-                      <Text style={styles.heroLevelLabel}>SQUAD LV {vLvl.level}</Text>
-                      <Text style={styles.heroLevelNext}>
-                        {vLvl.powerIntoLevel.toLocaleString()} / {vLvl.powerForNextLevel.toLocaleString()} PWR
-                      </Text>
-                    </View>
-                    <GameProgress progress={vLvl.progress} />
-
-                    {/* Actions Toolbar */}
-                    <View style={styles.heroActionsRow}>
-                      {isLeaderOfViewing && (
-                        <TouchableOpacity style={styles.heroActionBtnEdit} onPress={handleOpenEditModal} activeOpacity={0.8}>
-                          <Edit3 size={15} color="#FFFFFF" />
-                          <Text style={styles.heroActionBtnEditText}>Edit</Text>
-                        </TouchableOpacity>
-                      )}
-
-                      {isAdminOrLeaderOfViewing && (
-                        <TouchableOpacity style={styles.heroActionBtnPrimary} onPress={() => setShowInviteModal(true)} activeOpacity={0.8}>
-                          <UserPlus size={15} color={GAME.night} />
-                          <Text style={styles.heroActionBtnPrimaryText}>RECRUIT</Text>
-                        </TouchableOpacity>
-                      )}
-
-                      {isViewingMyCommunity ? (
-                        <TouchableOpacity style={styles.heroActionBtnSecondary} onPress={handleLeaveCommunity} activeOpacity={0.8}>
-                          <LogOut size={15} color="#FCA5A5" />
-                          <Text style={styles.heroActionBtnSecondaryText}>Leave</Text>
-                        </TouchableOpacity>
-                      ) : (
-                        !userStatus.hasCommunity && (
-                          <TouchableOpacity
-                            style={styles.heroActionBtnPrimary}
-                            onPress={() => handleJoinRequest(viewingCommunity)}
-                            activeOpacity={0.8}
-                          >
-                            <Text style={styles.heroActionBtnPrimaryText}>REQUEST TO JOIN</Text>
-                          </TouchableOpacity>
-                        )
-                      )}
-                    </View>
-                  </View>
-                );
-              })()}
-
-              {/* Roster */}
-              <View style={styles.sectionTitleBar}>
-                <View style={styles.rankingsHeader}>
-                  <View style={styles.sectionAccent} />
-                  <Text style={styles.rankingsTitle}>ROSTER</Text>
-                </View>
-                <Text style={styles.sectionCount}>{activeMembers.length} {activeMembers.length === 1 ? 'athlete' : 'athletes'}</Text>
-              </View>
-
-              {isLoadingViewingMembers ? (
-                <View style={styles.innerLoading}>
-                  <ActivityIndicator size="small" color={colors.accent} />
-                </View>
-              ) : (
-                <View style={styles.membersListCard}>
-                  {[...activeMembers]
-                    .map((member) => ({ member, pts: squadPowers[viewingCommunity.id]?.memberPoints[member.user_id] ?? 0 }))
-                    .sort((a, b) => b.pts - a.pts)
-                    .map(({ member, pts }, idx, arr) => {
-                      const mUser = member.profile;
-                      const isCurrent = member.user_id === resolvedUserId;
-                      const isMemLeader = member.role === 'leader';
-                      const isMemAdmin = member.role === 'admin';
-                      const medal = PODIUM_COLORS[idx];
-
-                      return (
-                        <View
-                          key={member.id}
-                          style={[styles.memberRow, isCurrent && styles.memberRowMe, idx === arr.length - 1 && { borderBottomWidth: 0 }]}
-                        >
-                          <Text style={[styles.memberRank, medal && { color: medal }]}>{idx + 1}</Text>
-                          <View style={[styles.memberAvatarRing, { borderColor: medal || colors.borderStrong }]}>
-                            <Avatar config={mUser?.avatar_config} avatarUrl={mUser?.avatar_url} size={40} />
-                          </View>
-                          <View style={styles.memberInfo}>
-                            <View style={styles.memberNameRow}>
-                              <Text style={styles.memberName} numberOfLines={1}>
-                                {mUser?.full_name || mUser?.username || 'Athlete'}
-                              </Text>
-                              {isCurrent && <Text style={styles.youPill}>YOU</Text>}
-                            </View>
-                            <Text style={styles.memberUsername} numberOfLines={1}>
-                              @{mUser?.username || 'user'} · {isMemLeader ? 'Leader' : isMemAdmin ? 'Officer' : 'Member'}
-                            </Text>
-                          </View>
-
-                          <View style={styles.memberActionBox}>
-                            <Text style={styles.memberPts}>{pts.toLocaleString()}</Text>
-                            <Text style={styles.memberPtsLabel}>PTS</Text>
-                          </View>
-
-                          {isLeaderOfViewing && !isCurrent && (
-                            <TouchableOpacity style={styles.kickBtn} onPress={() => handleKickMember(member)} activeOpacity={0.7}>
-                              <UserX size={15} color="#EF4444" />
-                            </TouchableOpacity>
-                          )}
-                        </View>
-                      );
-                    })}
-                </View>
-              )}
-
-              {/* Join Requests (Shown when Leader opens their own community) */}
-              {isLeaderOfViewing && pendingProposals.length > 0 && (
-                <View style={[styles.proposalsSection, { marginTop: 24 }]}>
-                  <Text style={styles.sectionHeaderTitle}>PENDING JOIN PROPOSALS ({pendingProposals.length})</Text>
-                  <Text style={styles.sectionHeaderSub}>
-                    Review athletes requesting to join your community. Each athlete can only belong to one community.
-                  </Text>
-
-                  <View style={styles.membersListCard}>
-                    {pendingProposals.map((req, idx) => {
-                      const reqUser = req.profile;
-                      const displayName = reqUser?.full_name || reqUser?.username || 'Athlete';
-                      return (
-                        <View
-                          key={req.id}
-                          style={[styles.proposalRow, idx === pendingProposals.length - 1 && { borderBottomWidth: 0 }]}
-                        >
-                          <Avatar
-                            config={reqUser?.avatar_config}
-                            avatarUrl={reqUser?.avatar_url}
-                            size={44}
-                          />
-                          <View style={styles.memberInfo}>
-                            <Text style={styles.memberName}>{displayName}</Text>
-                            <Text style={styles.memberUsername}>@{reqUser?.username || 'user'}</Text>
-                            {reqUser?.bio ? <Text style={styles.memberBio} numberOfLines={1}>{reqUser.bio}</Text> : null}
-                          </View>
-                          <View style={styles.proposalActions}>
-                            <TouchableOpacity
-                              style={styles.acceptActionBtn}
-                              onPress={() => handleReviewProposal(req.user_id, displayName, 'accept')}
-                              activeOpacity={0.7}
-                            >
-                              <Check size={18} color="#FFFFFF" />
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                              style={styles.rejectActionBtn}
-                              onPress={() => handleReviewProposal(req.user_id, displayName, 'reject')}
-                              activeOpacity={0.7}
-                            >
-                              <X size={18} color="#EF4444" />
-                            </TouchableOpacity>
-                          </View>
-                        </View>
-                      );
-                    })}
-                  </View>
-                </View>
-              )}
-            </View>
-          ) : (
+          {!viewingCommunity && (
             /* 2. DEFAULT VIEW: EXPLORE COMMUNITIES FIRST, THEN TOURNAMENTS BELOW */
             <View style={styles.landRow}>
               <View style={styles.landLeft}>
@@ -1162,7 +979,7 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
                       <GradientFill colors={[GAME.violet, GAME.indigo, GAME.night]} />
                       <GlowSpot color={GAME.ember} size={280} style={{ right: -90, top: -110 }} />
                       <View style={styles.squadHeroTop}>
-                        <Text style={styles.squadHeroEyebrow}>YOUR SQUAD</Text>
+                        <Text style={styles.squadHeroEyebrow}>YOUR CLAN</Text>
                         <View style={styles.heroChipsRow}>
                           {rank > 0 && (
                             <View style={styles.rankChip}>
@@ -1196,7 +1013,7 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
                       </View>
 
                       <View style={styles.heroLevelRow}>
-                        <Text style={styles.heroLevelLabel}>SQUAD LV {lvl.level}</Text>
+                        <Text style={styles.heroLevelLabel}>CLAN LV {lvl.level}</Text>
                         <Text style={styles.heroLevelNext}>
                           {lvl.powerIntoLevel.toLocaleString()} / {lvl.powerForNextLevel.toLocaleString()} PWR
                         </Text>
@@ -1204,7 +1021,7 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
                       <GameProgress progress={lvl.progress} />
 
                       <View style={styles.heroCta}>
-                        <Text style={styles.heroCtaText}>ENTER SQUAD BASE</Text>
+                        <Text style={styles.heroCtaText}>ENTER CLAN BASE</Text>
                         <ChevronRight size={16} color={GAME.night} strokeWidth={3} />
                       </View>
                     </TouchableOpacity>
@@ -1214,13 +1031,13 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
                 <View style={styles.joinCallout}>
                   <GradientFill colors={[GAME.violet, GAME.indigo, GAME.night]} />
                   <SquadLeagueEmblem tier={1} size={64} />
-                  <Text style={styles.joinCalloutTitle}>NO SQUAD YET</Text>
+                  <Text style={styles.joinCalloutTitle}>NO CLAN YET</Text>
                   <Text style={styles.joinCalloutText}>
                     Team up with your school, college or gym. Every match you win powers up your squad.
                   </Text>
                   <TouchableOpacity style={styles.joinCalloutBtn} activeOpacity={0.85} onPress={() => setShowCreateModal(true)}>
                     <Plus size={15} color={GAME.night} strokeWidth={3} />
-                    <Text style={styles.joinCalloutBtnText}>CREATE A SQUAD</Text>
+                    <Text style={styles.joinCalloutBtnText}>CREATE A CLAN</Text>
                   </TouchableOpacity>
                 </View>
               ) : null}
@@ -1232,16 +1049,16 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
                 <View style={styles.sectionTitleBar}>
                   <View style={styles.rankingsHeader}>
                     <View style={styles.sectionAccent} />
-                    <Text style={styles.rankingsTitle}>SQUAD LEADERBOARD</Text>
+                    <Text style={styles.rankingsTitle}>CLAN LEADERBOARD</Text>
                   </View>
-                  <Text style={styles.sectionCount}>{rankedCommunities.length} {rankedCommunities.length === 1 ? 'squad' : 'squads'}</Text>
+                  <Text style={styles.sectionCount}>{rankedCommunities.length} {rankedCommunities.length === 1 ? 'clan' : 'clans'}</Text>
                 </View>
 
                 <View style={styles.searchBarWrapper}>
                   <Search size={18} color={colors.textMuted} style={styles.searchIcon} />
                   <TextInput
                     style={styles.searchInput}
-                    placeholder="Find a squad..."
+                    placeholder="Find a clan..."
                     placeholderTextColor={colors.textMuted}
                     value={searchQuery}
                     onChangeText={setSearchQuery}
@@ -1279,14 +1096,14 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
                 {rankedCommunities.length === 0 ? (
                   <View style={styles.emptyCard}>
                     <Building2 size={40} color={colors.textMuted} />
-                    <Text style={styles.emptyTitle}>No Squads Found</Text>
+                    <Text style={styles.emptyTitle}>No Clans Found</Text>
                     <Text style={styles.emptySubtitle}>Be the first to create one for your school or gym.</Text>
                     <TouchableOpacity
                       style={styles.emptyCreateBtn}
                       onPress={() => setShowCreateModal(true)}
                     >
                       <Plus size={16} color="#FFFFFF" />
-                      <Text style={styles.emptyCreateBtnText}>Create Squad</Text>
+                      <Text style={styles.emptyCreateBtnText}>Create Clan</Text>
                     </TouchableOpacity>
                   </View>
                 ) : (
@@ -1474,7 +1291,7 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
                                     ]}
                                     onPress={() => {
                                       if (selectedTournament.has_registered) {
-                                        Alert.alert('Registered', 'Your community is already registered for this tournament!');
+                                        Alert.alert('Registered', 'Your clan is already registered for this tournament!');
                                       } else {
                                         setSelectedAthleteIds(
                                           activeMembers.slice(0, selectedTournament.athletes_per_match || 1).map((m) => m.user_id)
@@ -1487,8 +1304,8 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
                                     <Shield size={16} color="#FFFFFF" />
                                     <Text style={styles.leaderNominateBtnText}>
                                       {selectedTournament.has_registered
-                                        ? 'Community Registered'
-                                        : 'Enter Community & Select Athletes'}
+                                        ? 'Clan Registered'
+                                        : 'Enter Clan & Select Athletes'}
                                     </Text>
                                   </TouchableOpacity>
                                 )}
@@ -1516,7 +1333,7 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
 
                           {tournamentEntries.length === 0 ? (
                             <View style={styles.emptyEntriesBox}>
-                              <Text style={styles.emptyEntriesText}>No communities have registered yet.</Text>
+                              <Text style={styles.emptyEntriesText}>No clans have registered yet.</Text>
                               <Text style={styles.emptyEntriesSub}>
                                 Community leaders can enter their squads using the button above.
                               </Text>
@@ -1695,7 +1512,7 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
                               <Text style={styles.exerciseScreenEmptyTitle}>ARENA OPENS SOON</Text>
                               <Text style={styles.exerciseScreenEmptySubtitle}>
                                 {isAdmin
-                                  ? 'Host an inter-community tournament using the host button above.'
+                                  ? 'Host an inter-clan tournament using the host button above.'
                                   : 'Active tournaments will appear here when scheduled by platform admins.'}
                               </Text>
                               {isAdmin && (
@@ -1778,7 +1595,7 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Create Community</Text>
+              <Text style={styles.modalTitle}>Create Clan</Text>
               <TouchableOpacity onPress={() => setShowCreateModal(false)}>
                 <X size={22} color="#8E95A0" />
               </TouchableOpacity>
@@ -1800,7 +1617,7 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
               </View>
 
               {/* Name */}
-              <Text style={styles.inputLabel}>Community / School Name *</Text>
+              <Text style={styles.inputLabel}>Clan / School Name *</Text>
               <TextInput
                 style={styles.textInput}
                 placeholder="e.g. St. Xavier's High School, Titan Fitness"
@@ -1829,7 +1646,7 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
               <Text style={styles.inputLabel}>Description (Optional)</Text>
               <TextInput
                 style={[styles.textInput, styles.textArea]}
-                placeholder="Describe your community, goals, training schedule..."
+                placeholder="Describe your clan, goals, training schedule..."
                 placeholderTextColor="#6B7280"
                 multiline
                 numberOfLines={3}
@@ -1854,7 +1671,7 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
               {isSubmittingCreate ? (
                 <ActivityIndicator size="small" color="#FFFFFF" />
               ) : (
-                <Text style={styles.submitCreateBtnText}>Create Community</Text>
+                <Text style={styles.submitCreateBtnText}>Create Clan</Text>
               )}
             </TouchableOpacity>
           </View>
@@ -1871,7 +1688,7 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Edit Community Details</Text>
+              <Text style={styles.modalTitle}>Edit Clan Details</Text>
               <TouchableOpacity onPress={() => setShowEditModal(false)}>
                 <X size={22} color="#8E95A0" />
               </TouchableOpacity>
@@ -1893,10 +1710,10 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
               </View>
 
               {/* Name */}
-              <Text style={styles.inputLabel}>Community Name *</Text>
+              <Text style={styles.inputLabel}>Clan Name *</Text>
               <TextInput
                 style={styles.textInput}
-                placeholder="Community name"
+                placeholder="Clan name"
                 placeholderTextColor="#6B7280"
                 value={editCommName}
                 onChangeText={setEditCommName}
@@ -1922,7 +1739,7 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
               <Text style={styles.inputLabel}>Description</Text>
               <TextInput
                 style={[styles.textInput, styles.textArea]}
-                placeholder="Describe your community, goals, training schedule..."
+                placeholder="Describe your clan, goals, training schedule..."
                 placeholderTextColor="#6B7280"
                 multiline
                 numberOfLines={3}
@@ -2090,7 +1907,7 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
               </View>
 
               {/* Max Communities */}
-              <Text style={styles.inputLabel}>Maximum Communities</Text>
+              <Text style={styles.inputLabel}>Maximum Clans</Text>
               <View style={styles.categoryPickerRow}>
                 {[4, 8, 16, 32].map((num) => (
                   <TouchableOpacity

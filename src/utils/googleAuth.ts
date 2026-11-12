@@ -1,11 +1,28 @@
 import * as WebBrowser from 'expo-web-browser';
 import * as AuthSession from 'expo-auth-session';
-import { supabase } from './supabase';
+import { supabase, SUPABASE_ANON_KEY, SUPABASE_URL } from './supabase';
 import { getOrCreateUserProfile } from './profileService';
 import { useUserStore } from '../store/userStore';
 
 // Complete any active web browser auth sessions
 WebBrowser.maybeCompleteAuthSession();
+
+const OFFLINE_MESSAGE = "Can't reach the server. Check your internet connection and try again.";
+
+/** True when the auth server answers within a few seconds. Without this, a phone with no connection
+ * opens a browser error page, the person closes it, and sign-in fails with no message. */
+async function authServerReachable(): Promise<boolean> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 6000);
+  try {
+    const res = await fetch(`${SUPABASE_URL}/auth/v1/health`, { headers: { apikey: SUPABASE_ANON_KEY }, signal: ctrl.signal });
+    return res.status < 500;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 export async function signInWithGoogleOAuth(): Promise<{ success: boolean; user?: any; error?: string }> {
   try {
@@ -17,6 +34,10 @@ export async function signInWithGoogleOAuth(): Promise<{ success: boolean; user?
     });
 
     console.log('[GoogleAuth] Generated redirectUrl:', redirectUrl);
+
+    if (!(await authServerReachable())) {
+      return { success: false, error: OFFLINE_MESSAGE };
+    }
 
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
@@ -41,11 +62,10 @@ export async function signInWithGoogleOAuth(): Promise<{ success: boolean; user?
     const authResult = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl, {
       showInRecents: true,
     });
-    console.log('[GoogleAuth] WebBrowser authResult:', JSON.stringify(authResult));
+    console.log('[GoogleAuth] WebBrowser result type:', authResult.type);
 
     if (authResult.type === 'success' && authResult.url) {
       const url = authResult.url;
-      console.log('[GoogleAuth] Returned callback URL:', url);
       let accessToken: string | null = null;
       let refreshToken: string | null = null;
       let authCode: string | null = null;

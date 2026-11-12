@@ -408,7 +408,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             setActiveSubTab(to);
             return;
           }
-          // Same rule as the tab bar: guests sign in for Train, Squad and Profile.
+          // Same rule as the tab bar: guests sign in for Train, Clan and Profile.
           if (isGuest && to !== 'shop') {
             onShowAuthModal();
             return;

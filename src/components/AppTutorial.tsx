@@ -14,7 +14,7 @@ const MUTED = '#9AA0AB';
 const COVERS: { Icon: LucideIcon; label: string; color: string }[] = [
   { Icon: Swords, label: 'Battles and Human vs AI', color: '#E25822' },
   { Icon: Flame, label: 'Streaks, XP and ranks', color: '#FF7A45' },
-  { Icon: Users, label: 'Squads and friends', color: '#60A5FA' },
+  { Icon: Users, label: 'Clans and friends', color: '#60A5FA' },
   { Icon: Dumbbell, label: 'Training with the AI coach', color: '#10B981' },
   { Icon: ShoppingBag, label: 'The avatar shop', color: '#F472B6' },
 ];

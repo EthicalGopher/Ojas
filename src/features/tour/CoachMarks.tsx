@@ -38,7 +38,7 @@ export const TOUR_STEPS: TourStep[] = [
   {
     target: 'home-level',
     title: 'Level and rank',
-    body: 'Your rank and XP to the next level. Every 10 XP is a coin for the shop, and ranked wins climb you from Bronze to Immortal.',
+    body: 'Your rank and XP to the next level. Tap here for your profile, ranks, achievements and settings. Every 10 XP is a coin for the shop.',
   },
   {
     target: 'home-news',
@@ -47,8 +47,8 @@ export const TOUR_STEPS: TourStep[] = [
   },
   {
     target: 'tab-explore',
-    title: 'Squad',
-    body: 'Add friends, join a squad and fight squad tournaments.',
+    title: 'Clan',
+    body: 'Add friends, join a clan and fight clan tournaments.',
     auth: true,
     round: true,
   },
@@ -60,16 +60,9 @@ export const TOUR_STEPS: TourStep[] = [
     round: true,
   },
   {
-    target: 'tab-shop',
-    title: 'Shop',
-    body: 'Spend your coins on 3D avatars, clothes and accessories.',
-    round: true,
-  },
-  {
-    target: 'tab-profile',
-    title: 'Profile',
-    body: 'Your profile, ranks per exercise, achievements and settings. Replay this tour any time from Settings.',
-    auth: true,
+    target: 'tab-posture',
+    title: 'Posture',
+    body: 'Stand in front of the camera for a body posture check: knees, legs, shoulders and back.',
     round: true,
   },
   {

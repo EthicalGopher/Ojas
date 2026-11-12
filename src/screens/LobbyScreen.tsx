@@ -5,7 +5,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Modal, Pressable, ScrollView, StatusBar, StyleSheet, useWindowDimensions, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Bell, Bot, Check, ChevronDown, Clock, Coins, Dumbbell, Flame, Lock, Settings, Shirt, ShoppingBag, Swords, Trophy, User, Users, X } from 'lucide-react-native';
+import { Bell, Bot, Check, ChevronDown, Clock, Coins, Dumbbell, Flame, Lock, PersonStanding, Settings, Shirt, ShoppingBag, Swords, Trophy, Users, X } from 'lucide-react-native';
 import Svg, { Circle, Defs, Ellipse, LinearGradient, Polygon, RadialGradient, Stop } from 'react-native-svg';
 import { GText, MeterBar, Panel, StatChip } from '../components/game';
 import { Slant } from '../components/game/Slant';
@@ -15,6 +15,7 @@ import { AvatarViewer3D } from '../features/avatar/components/AvatarViewer3D';
 import { LoopVideo, STORY_VIDEOS } from '../features/avatar/components/HeroScreen';
 import { useCharacterCreator } from '../features/avatar/components/CharacterCreator';
 import { TourTarget } from '../features/tour/TourTarget';
+import { DeformityScannerModal } from '../features/camera/components/DeformityScannerModal';
 import { useGameStats } from '../hooks/useGameStats';
 import { useDailyChallenges } from '../hooks/useDailyChallenges';
 import { useEquippedLook } from '../hooks/useEquippedLook';
@@ -74,6 +75,7 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({ isGuest, onPlay, onOpe
   const [play, setPlay] = useState<LastPlay>(DEFAULT_LAST_PLAY);
   const [hint, setHint] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [postureOpen, setPostureOpen] = useState(false);
   const [resetIn, setResetIn] = useState(timeToMidnight());
   useEffect(() => {
     const t = setInterval(() => setResetIn(timeToMidnight()), 60000);
@@ -238,9 +240,8 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({ isGuest, onPlay, onOpe
         {(
           [
             { to: 'workouts', label: 'Train', icon: Dumbbell },
-            { to: 'explore', label: 'Squad', icon: Users },
-            { to: 'shop', label: 'Shop', icon: ShoppingBag },
-            { to: 'profile', label: 'Profile', icon: User },
+            { to: 'explore', label: 'Clan', icon: Users },
+            { to: 'posture', label: 'Posture', icon: PersonStanding },
           ] as const
         ).map(({ to, label, icon: Icon }, i) => (
           <React.Fragment key={to}>
@@ -250,7 +251,9 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({ isGuest, onPlay, onOpe
               style={styles.barItemInner}
               onPress={() => {
                 juice.play('toggle');
-                onNavigate(to);
+                // Posture opens the camera body-posture scan over the lobby; the others are screens.
+                if (to === 'posture') setPostureOpen(true);
+                else onNavigate(to);
               }}
               accessibilityRole="button"
               accessibilityLabel={label}
@@ -297,6 +300,7 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({ isGuest, onPlay, onOpe
           savePlay(next);
         }}
       />
+      {postureOpen && <DeformityScannerModal visible onClose={() => setPostureOpen(false)} />}
     </View>
   );
 };

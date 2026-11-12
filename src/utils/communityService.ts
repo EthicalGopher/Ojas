@@ -18,6 +18,10 @@ export interface CommunityMember {
     avatar_config?: AvatarConfig;
     avatar_url?: string | null;
     bio?: string;
+    /** For the member's level (gamification.computeTotalXp) and last activity. */
+    daily_calories?: Record<string, { reps?: number; matches?: number; calories?: number }>;
+    daily_challenges?: Record<string, unknown>;
+    updated_at?: string;
   };
 }
 
@@ -32,6 +36,9 @@ export interface Community {
   member_count: number;
   created_at: string;
   updated_at: string;
+  /** Clan join settings (migration 20261107120000); undefined until that migration is applied. */
+  join_policy?: ClanJoinPolicy;
+  min_level?: number;
   user_status?: 'leader' | 'admin' | 'member' | 'pending' | 'invited' | null;
   leader_profile?: {
     id: string;
@@ -40,6 +47,8 @@ export interface Community {
     avatar_config?: AvatarConfig;
   };
 }
+
+export type ClanJoinPolicy = 'approval' | 'open' | 'closed';
 
 export interface UserCommunityStatus {
   hasCommunity: boolean;
@@ -154,7 +163,7 @@ export async function fetchCommunityMembers(communityId: string): Promise<Commun
       .from('community_members')
       .select(`
         *,
-        profile:profiles(id, username, full_name, avatar_config, avatar_url, bio)
+        profile:profiles(id, username, full_name, avatar_config, avatar_url, bio, daily_calories, daily_challenges, updated_at)
       `)
       .eq('community_id', communityId)
       .order('joined_at', { ascending: true });
@@ -213,7 +222,7 @@ export async function createCommunity(
 export async function requestToJoinCommunity(
   communityId: string,
   userId: string
-): Promise<{ success: boolean; message?: string; error?: string }> {
+): Promise<{ success: boolean; joined?: boolean; message?: string; error?: string }> {
   if (!communityId || !userId) return { success: false, error: 'Invalid arguments.' };
 
   try {
@@ -230,7 +239,7 @@ export async function requestToJoinCommunity(
       return { success: false, error: data.error };
     }
 
-    return { success: true, message: data?.message || 'Join request submitted!' };
+    return { success: true, joined: !!data?.joined, message: data?.message || 'Join request submitted!' };
   } catch (err: any) {
     return { success: false, error: err?.message || 'Failed to request join.' };
   }
@@ -390,6 +399,29 @@ export async function uploadCommunityLogo(
     return { url: data.publicUrl };
   } catch (e: any) {
     return { error: e.message || 'Failed to upload logo' };
+  }
+}
+
+/**
+ * Leader or officer changes how join requests are handled and the minimum level
+ * (Clan > Applications). Needs migration 20261107120000_clan_join_settings.sql.
+ */
+export async function updateClanSettings(
+  communityId: string,
+  joinPolicy: ClanJoinPolicy,
+  minLevel: number,
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { data, error } = await supabase.rpc('update_clan_settings', {
+      p_community_id: communityId,
+      p_join_policy: joinPolicy,
+      p_min_level: minLevel,
+    });
+    if (error) return { success: false, error: error.message };
+    if (data && data.success === false) return { success: false, error: data.error };
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Failed to save clan settings.' };
   }
 }
 
