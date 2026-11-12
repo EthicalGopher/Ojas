@@ -1,16 +1,13 @@
-// Matchmaking: the wait before the arena intro (ArenaIntro.tsx). Same championship hall as the
-// intro, dimmed: your hero card on the left, a pulsing VS, and the rival's slot on the right,
-// searching. The status line, a timer, a training tip and Cancel sit below.
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Easing, Image, Pressable, StatusBar, StyleSheet, useWindowDimensions, View } from 'react-native';
+// Matchmaking: the wait before the match intro (ArenaIntro.tsx). Plain "You VS ?" name cards:
+// your name on the left, a pulsing VS, and the rival's slot on the right, searching.
+// The status line, a timer, a training tip and Cancel sit below.
+import React, { useEffect, useRef, useState } from 'react';
+import { Animated, Easing, Pressable, StatusBar, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Swords, X } from 'lucide-react-native';
 import { GText } from '../components/game';
 import { Slant } from '../components/game/Slant';
-import { HeroCard } from '../features/avatar/components/HeroCard';
-import { useEquippedLook } from '../hooks/useEquippedLook';
 import { juice } from '../juice/juice';
-import { resolveModelUrl } from '../utils/avatarShopService';
 import { useUserStore } from '../store/userStore';
 import { useColors } from '../theme';
 
@@ -45,8 +42,7 @@ export const LoadingScreen: React.FC<LoadingScreenProps> = ({
 }) => {
   const c = useColors();
   const insets = useSafeAreaInsets();
-  const { width, height } = useWindowDimensions();
-  const look = useEquippedLook();
+  const { width } = useWindowDimensions();
   const profile = useUserStore((s) => s.profile);
   const name = profile?.username || 'You';
 
@@ -78,25 +74,19 @@ export const LoadingScreen: React.FC<LoadingScreenProps> = ({
     };
   }, [enter, pulse, sweep]);
 
-  // the cards fit between the title and the footer on any landscape phone
-  const cardW = Math.min(height * 0.26, width * 0.12);
-  const cardH = cardW * 1.5;
+  const cardW = Math.min(240, width * 0.3);
   const slideL = enter.interpolate({ inputRange: [0, 1], outputRange: [-width * 0.5, 0] });
   const slideR = enter.interpolate({ inputRange: [0, 1], outputRange: [width * 0.5, 0] });
   const vsScale = enter.interpolate({ inputRange: [0, 0.6, 1], outputRange: [3, 0.9, 1] });
   const vsGlow = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.35, 0.9] });
   const ringScale = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.85, 1.25] });
   const slotGlow = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.25, 0.7] });
-  const shine = sweep.interpolate({ inputRange: [0, 1], outputRange: [-cardW * 1.2, cardW * 1.2] });
+  const shine = sweep.interpolate({ inputRange: [0, 1], outputRange: [-cardW, cardW] });
   const mmss = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
-
-  const hall = useMemo(() => ({ uri: resolveModelUrl('local://arena/both.jpg') }), []);
 
   return (
     <View style={[StyleSheet.absoluteFill, styles.root, !fullScreen && styles.overlay]}>
       <StatusBar hidden />
-      <Image source={hall} style={StyleSheet.absoluteFill} resizeMode="cover" blurRadius={3} />
-      <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(5,6,12,0.72)' }]} />
 
       {/* title */}
       <View style={[styles.header, { top: insets.top + 18 }]}>
@@ -114,12 +104,10 @@ export const LoadingScreen: React.FC<LoadingScreenProps> = ({
 
       {/* you · VS · rival */}
       <View style={styles.stage} pointerEvents="none">
-        <Animated.View style={{ transform: [{ translateX: slideL }], alignItems: 'center', gap: 8 }}>
-          <HeroCard hero={look.model} width={cardW} selected onPress={() => {}} />
-          <View style={styles.nameTag}>
-            <Slant fill={c.accentFrom} to={c.accentTo} />
-            <GText variant="display" size={16} tone="onGradient" numberOfLines={1}>{name}</GText>
-          </View>
+        <Animated.View style={[styles.card, { width: cardW, transform: [{ translateX: slideL }] }]}>
+          <Slant fill={c.accentFrom} to={c.accentTo} />
+          <GText variant="label" size={12} tone="onGradient">YOU</GText>
+          <GText variant="hero" size={26} tone="onGradient" numberOfLines={1}>{name}</GText>
         </Animated.View>
 
         {versus && (
@@ -132,17 +120,12 @@ export const LoadingScreen: React.FC<LoadingScreenProps> = ({
         )}
 
         {versus && (
-        <Animated.View style={{ transform: [{ translateX: slideR }], alignItems: 'center', gap: 8 }}>
-          <View style={[styles.slot, { width: cardW, height: cardH }]}>
-            <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: '#3B8DFF', opacity: slotGlow }]} />
-            <View style={[StyleSheet.absoluteFill, styles.slotInner]} />
-            <GText variant="hero" size={cardW * 0.5} style={styles.question}>?</GText>
-            <Animated.View style={[styles.shine, { width: cardW * 0.35, transform: [{ translateX: shine }, { rotate: '18deg' }] }]} />
-          </View>
-          <View style={styles.nameTag}>
-            <Slant fill="#1F4FB8" to="#3B8DFF" />
-            <GText variant="display" size={16} style={{ color: '#FFFFFF' }} numberOfLines={1}>Searching…</GText>
-          </View>
+        <Animated.View style={[styles.slot, { width: cardW, transform: [{ translateX: slideR }] }]}>
+          <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: '#3B8DFF', opacity: slotGlow }]} />
+          <View style={[StyleSheet.absoluteFill, styles.slotInner]} />
+          <GText variant="label" size={12} style={styles.question}>OPPONENT</GText>
+          <GText variant="hero" size={26} style={styles.question} numberOfLines={1}>Searching…</GText>
+          <Animated.View style={[styles.shine, { width: cardW * 0.25, transform: [{ translateX: shine }, { rotate: '18deg' }] }]} />
         </Animated.View>
         )}
       </View>
@@ -182,11 +165,11 @@ const styles = StyleSheet.create({
   titlePlate: { height: 40, minWidth: 300, paddingHorizontal: 32, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
   badge: { borderWidth: 1, borderRadius: 14, paddingHorizontal: 12, paddingVertical: 3, backgroundColor: 'rgba(0,0,0,0.4)' },
   stage: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 46, marginTop: -40 },
-  nameTag: { height: 32, minWidth: 130, paddingHorizontal: 22, alignItems: 'center', justifyContent: 'center' },
+  card: { paddingHorizontal: 26, paddingVertical: 14, alignItems: 'center', gap: 2 },
   vsWrap: { width: 130, height: 130, alignItems: 'center', justifyContent: 'center' },
   ring: { position: 'absolute', width: 120, height: 120, borderRadius: 60, borderWidth: 3 },
   vs: { color: '#FFD27A', textShadowColor: '#B53214', textShadowOffset: { width: 3, height: 3 }, textShadowRadius: 0 },
-  slot: { borderRadius: 10, overflow: 'hidden', borderWidth: 2, borderColor: 'rgba(120,170,255,0.7)', alignItems: 'center', justifyContent: 'center' },
+  slot: { paddingHorizontal: 26, paddingVertical: 12, gap: 2, borderRadius: 10, overflow: 'hidden', borderWidth: 2, borderColor: 'rgba(120,170,255,0.7)', alignItems: 'center', justifyContent: 'center' },
   slotInner: { backgroundColor: 'rgba(8,14,40,0.82)' },
   question: { color: 'rgba(170,200,255,0.85)' },
   shine: { position: 'absolute', top: -20, bottom: -20, backgroundColor: 'rgba(255,255,255,0.12)' },
