@@ -135,6 +135,7 @@ for o in meshes:
 # so they follow it through every pose. Measurements are world metres, front is -Y.
 SPORT_COLORS = {  # sRGB
     'sport_top': '#16161B', 'sport_shorts': '#1D1D23', 'sport_leggings': '#121215', 'sport_trim': '#E8458B',
+    'sport_gloves': '#16161B',
 }
 WAISTBAND_Z = 1.03      # leggings and shorts come up to the navel
 ANKLE_Z = 0.10          # leggings end just inside the shoe tops
@@ -143,6 +144,8 @@ TANK_HEM_Z = 0.99       # the top's hem tucks under the shorts' waistband
 # The top's upper edge seen from the front, as (|x|, z) points: scoop neck, straps, armholes.
 TANK_EDGE = [(0.0, 1.27), (0.05, 1.30), (0.065, 1.47), (0.105, 1.47), (0.118, 1.36), (0.135, 1.26), (0.16, 1.20), (0.3, 1.18)]
 TRIM = 0.012            # width of the pink bands
+GLOVE_CUFF = 0.03       # fingerless training gloves: from 3 cm up the wrist...
+GLOVE_KNUCKLE = 0.004   # ...to just short of the knuckles, and the thumb's first joint
 BUST_FRONT = (-0.115, 0.012)  # the top compresses the bust like a sports top: in front of this depth,
                               # depth d becomes 0.012 * tanh(d / 0.012), so the tip rounds off
 STRIPE_Y = 0.012        # half width of the stripe down the outside of each leg
@@ -181,8 +184,27 @@ def edge_z(points, ax):
     return points[-1][1]
 
 
+def iso_cut(bm, mw, field):
+    """Cut the mesh along field(world pos) = 0, like bisect_plane does along a plane: edges that cross
+    get a vertex exactly on the curve, and faces are split between those vertices. Deleting faces by
+    which side they are on then leaves a clean edge instead of a sawtooth one face deep."""
+    val = {v: field(mw @ v.co) for v in bm.verts}
+    on = set()
+    for e in list(bm.edges):
+        a, b = e.verts
+        fa, fb = val[a], val[b]
+        if fa * fb < 0 and abs(fa - fb) > 1e-9:
+            _, nv = bmesh.utils.edge_split(e, a, fa / (fa - fb))
+            val[nv] = 0.0
+            on.add(nv)
+    for f in list(bm.faces):
+        vs = [v for v in f.verts if v in on]
+        if len(vs) == 2 and not any(e for e in vs[0].link_edges if e.other_vert(vs[0]) is vs[1]):
+            bmesh.ops.connect_verts(bm, verts=vs)
+
+
 def body_shell(body, name, materials, cuts, keep, smooth, inward, offset, mats, trim, wrap=None, binding=None,
-               press=None):
+               press=None, fields=()):
     """A garment from the body's faces in `materials`: cut along the world planes `cuts` (point, normal),
     kept where keep(material, world centroid) holds, smoothed `smooth` times along the normals (never
     more than `inward` metres into the body), pushed out by offset(world pos) metres. Faces where
@@ -208,6 +230,8 @@ def body_shell(body, name, materials, cuts, keep, smooth, inward, offset, mats, 
     for co, no in cuts:
         geom = bm.verts[:] + bm.edges[:] + bm.faces[:]
         bmesh.ops.bisect_plane(bm, geom=geom, dist=1e-4, plane_co=inv @ co, plane_no=(rot @ no).normalized())
+    for field in fields:
+        iso_cut(bm, mw, field)
     bmesh.ops.delete(bm, geom=[f for f in bm.faces if not keep(names[f.material_index], mw @ f.calc_center_median())],
                      context='FACES')
     bmesh.ops.delete(bm, geom=[v for v in bm.verts if not v.link_faces], context='VERTS')
@@ -257,7 +281,7 @@ def body_shell(body, name, materials, cuts, keep, smooth, inward, offset, mats, 
         f.material_index = len(mats) - 1 if f in banded else 0
         f.smooth = True
     if binding:
-        bind_edges(bm, mw, [e for e in bm.edges if e.is_boundary and binding(mw @ ((e.verts[0].co + e.verts[1].co) / 2))],
+        band_edges(bm, mw, [e for e in bm.edges if e.is_boundary and binding(mw @ ((e.verts[0].co + e.verts[1].co) / 2))],
                    len(mats) - 1)
     me.materials.clear()
     for m in mats:
@@ -269,6 +293,30 @@ def body_shell(body, name, materials, cuts, keep, smooth, inward, offset, mats, 
         me.attributes.remove(me.attributes[attr])
     print('SPORT', name, len(me.polygons), 'trim', sum(1 for p in me.polygons if p.material_index == len(mats) - 1))
     return o
+
+
+def band_edges(bm, mw, edges, material):
+    """A binding along the open edges, painted on the cloth itself: the cloth is cut TRIM from those
+    edges and the band takes the trim material. (A separate strip laid along the edge folded out past
+    it or sank under the cloth wherever the cloth bent, so the armholes looked torn.)"""
+    from mathutils.kdtree import KDTree
+    pts = []
+    for e in edges:
+        a, b = (mw @ v.co for v in e.verts)
+        n = max(1, int((b - a).length / 0.001))
+        pts += [a.lerp(b, i / n) for i in range(n + 1)]
+    kd = KDTree(len(pts))
+    for i, p in enumerate(pts):
+        kd.insert(p, i)
+    kd.balance()
+
+    def field(p):
+        return kd.find(p)[2] - TRIM
+
+    iso_cut(bm, mw, field)
+    for f in bm.faces:
+        if field(mw @ f.calc_center_median()) < 0:
+            f.material_index = material
 
 
 def bind_edges(bm, mw, edges, material):
@@ -370,16 +418,23 @@ def make_sportswear(body):
     arms = [(rig.matrix_world @ bones[f'{s}_Upperarm'].head_local, rig.matrix_world @ bones[f'{s}_Forearm'].head_local)
             for s in 'LR']
 
-    def on_arm(c):
+    def arm_field(c):
+        """negative within 5.5 cm of an upper arm (the armholes follow this; past the shoulder joint it
+        is a ball round the joint)"""
+        d = 1e9
         for a, b in arms:
             q, t = intersect_point_line(c, a, b)
-            if t > 0 and (c - q).length < 0.055:
-                return True
-        return False
+            d = min(d, ((c - q) if t > 0 else (c - a)).length)
+        return d - 0.055
+
+    def on_arm(c):
+        return arm_field(c) < 0
 
     def top_part(mat, c):
         # the straps run on over the shoulders, which belong to the arm and head skin
-        return TANK_HEM_Z < c.z < edge_z(TANK_EDGE, abs(c.x)) and not on_arm(c)
+        # (|x| < 0.32: in the bind pose the hands hang at the tank's height, and once picked up scraps of
+        # the top on them as broken "gloves")
+        return TANK_HEM_Z < c.z < edge_z(TANK_EDGE, abs(c.x)) and not on_arm(c) and abs(c.x) < 0.32
 
     def compress_bust(p):
         y0, depth = BUST_FRONT
@@ -395,8 +450,55 @@ def make_sportswear(body):
                      top_part, 150, 0.003, lambda p: 0.005,
                      [sport_material('sport_top'), trim], lambda c: False,
                      smoothed_body(body), lambda c: c.z > TANK_HEM_Z + 0.03,
-                     compress_bust)
-    return [leggings, shorts, top]
+                     compress_bust, fields=[arm_field])
+    return [leggings, shorts, top, make_gloves(body, trim)]
+
+
+def make_gloves(body, trim):
+    """Fingerless training gloves: a shell of the hand's skin from a cuff on the wrist to just short of
+    the knuckles, with the thumb free from its first joint; a pink band round the cuff."""
+    from mathutils.geometry import intersect_point_line
+    rig = body.parent
+    bones = {short(b.name): b for b in rig.data.bones}
+
+    def head(n):
+        return rig.matrix_world @ bones[n].head_local
+
+    hands, cuts = [], []
+    for s in 'LR':
+        wrist, knuckle = head(f'{s}_Hand'), head(f'{s}_Mid1')
+        axis = (knuckle - wrist).normalized()
+        knuckle_plane = (min((head(f'{s}_{f}1') - wrist).dot(axis) for f in ('Index', 'Mid', 'Ring', 'Pinky'))
+                         - GLOVE_KNUCKLE)
+        t1, t2, t3 = head(f'{s}_Thumb1'), head(f'{s}_Thumb2'), head(f'{s}_Thumb3')
+        thumb = (t3 - t2).normalized()
+        hands.append((wrist, axis, knuckle_plane, t2, t3, thumb))
+        cuts += [(wrist - axis * GLOVE_CUFF, -axis), (wrist - axis * (GLOVE_CUFF - TRIM), -axis),
+                 (wrist + axis * knuckle_plane, axis), (t2, thumb)]
+
+    def thumb_field(c):
+        """negative on the thumb past its first joint (which stays bare)"""
+        d = 1e9
+        for wrist, axis, knuckle_plane, t2, t3, thumb in hands:
+            tq, _ = intersect_point_line(c, t2, t3)
+            d = min(d, max((c - tq).length - 0.03, -(c - t2).dot(thumb)))
+        return d
+
+    def where(c):
+        """(in the glove, on the cuff band)"""
+        for wrist, axis, knuckle_plane, t2, t3, thumb in hands:
+            t = (c - wrist).dot(axis)
+            q, _ = intersect_point_line(c, wrist, wrist + axis)
+            if not (-GLOVE_CUFF < t < knuckle_plane and (c - q).length < 0.07):
+                continue
+            if thumb_field(c) < 0:
+                return False, False
+            return True, t < -GLOVE_CUFF + TRIM
+        return False, False
+
+    return body_shell(body, 'FC1_sport_gloves', {'skin_arm'}, cuts,
+                      lambda m, c: where(c)[0], 2, 0.0015, lambda p: 0.003,
+                      [sport_material('sport_gloves'), trim], lambda c: where(c)[1], fields=[thumb_field])
 
 
 # Skin under the clothes: CC bodies keep their whole skin under clothes, and it pokes through the cloth
