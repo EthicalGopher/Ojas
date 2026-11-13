@@ -41,6 +41,8 @@ interface AvatarViewer3DProps {
   story?: { shots: StoryShot[]; key: number } | null;
   /** Story progress: a shot started, or the movie ended. */
   onStory?: (event: { event: 'shot'; index: number } | { event: 'end' }) => void;
+  /** The first model is drawn in its view (after its textures are up and the camera is placed). */
+  onReady?: () => void;
 }
 
 export interface HeroPlacement {
@@ -85,6 +87,7 @@ export const AvatarViewer3D: React.FC<AvatarViewer3DProps> = ({
   story,
   onStory,
   moves,
+  onReady,
 }) => {
   const ready = useRef(false);
   const colors = useColors();
@@ -210,6 +213,7 @@ export const AvatarViewer3D: React.FC<AvatarViewer3DProps> = ({
           sendStory();
         }
       }
+      else if (msg.type === 'DRAWN') onReady?.();
       else if (msg.type === 'ACTION') onAction?.(msg.name, !!msg.tapped);
       else if (msg.type === 'STORY') onStory?.(msg.event === 'end' ? { event: 'end' } : { event: 'shot', index: msg.index });
       else if (msg.type === 'ERROR') {

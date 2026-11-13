@@ -51,7 +51,8 @@ const IS_EMULATOR = Platform.OS === 'android' && /sdk_gphone|emulator|android sd
 // still: the hero's picture from the film (the Avatar screen's backdrop). plate: the same picture with the
 // painted hero removed (scripts/hero_plates.py); after the film the 3D hero stands on that spot (spot, as
 // fractions of the 16:9 picture: feet centre, feet line, head-to-feet; yaw turns them like the film), and
-// the player turns them with a finger. moves: the parts of the film each signature move plays, in seconds.
+// the player turns them with a finger. The 3D view only exists after the film: a WebView drawing under the
+// playing video made it drop black frames. The still covers it until the model is on screen. moves: the parts of the film each signature move plays, in seconds.
 export const STORY_VIDEOS: Record<string, {
   source: number;
   captions: { from: number; to: number; text: string }[];
@@ -267,6 +268,7 @@ export const HeroScreen: React.FC<HeroScreenProps> = ({ hero, status, catalog, c
   const [filmMove, setFilmMove] = useState<{ from: number; to: number; key: number } | null>(null);
   const [isBusy, setIsBusy] = useState(false);
   const [box, setBox] = useState<{ w: number; h: number } | null>(null);
+  const still = useRef(new Animated.Value(1)).current;
   const placement = useMemo<HeroPlacement | null>(
     () => (film && box ? { ...coverSpot(film.spot, box.w, box.h), yaw: film.spot.yaw, base: 'stand' } : null),
     [film, box],
@@ -295,6 +297,7 @@ export const HeroScreen: React.FC<HeroScreenProps> = ({ hero, status, catalog, c
     setShot(-1);
     setPhase('story');
     setStoryKey((k) => k + 1);
+    still.setValue(1); // the 3D view goes with the film; the still covers its return
   };
 
   const finishing = useRef(false);
@@ -434,10 +437,11 @@ export const HeroScreen: React.FC<HeroScreenProps> = ({ hero, status, catalog, c
     <View style={StyleSheet.absoluteFill} onLayout={(e) => setBox({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}>
       <View style={[StyleSheet.absoluteFill, { backgroundColor: '#05060C' }]} />
       {/* A hero with a film has no 3D world: after the film they stand in its last shot, turnable by
-          finger. The viewer loads under the film, so the hero is there the moment it ends. */}
+          finger. The film's still covers the viewer until the model is drawn, then fades away. */}
       {film && phase === 'show' && <Image source={film.plate} style={[StyleSheet.absoluteFill, { width: '100%', height: '100%' }]} resizeMode="cover" />}
-      {film && placement && (
+      {film && placement && phase === 'show' && (
         <AvatarViewer3D
+          onReady={() => fade(still, 0, 150).start()}
           model={hero}
           items={stageItems}
           autoRotate={false}
@@ -463,6 +467,11 @@ export const HeroScreen: React.FC<HeroScreenProps> = ({ hero, status, catalog, c
         />
       )}
 
+      {film && phase === 'show' && (
+        <Animated.View style={[StyleSheet.absoluteFill, { opacity: still }]} pointerEvents="none">
+          <Image source={film.still} style={[StyleSheet.absoluteFill, { width: '100%', height: '100%' }]} resizeMode="cover" />
+        </Animated.View>
+      )}
       {film && phase === 'show' && filmMove && (
         <MoveClip key={filmMove.key} source={film.source} from={filmMove.from} to={filmMove.to} onEnd={() => setFilmMove(null)} />
       )}

@@ -1508,8 +1508,12 @@ export function getAvatarViewerHtml(opts: {
     if (world && world.showcase) placeCamera([world.showcase.pos[0] + d, world.showcase.pos[1], world.showcase.pos[2]], world.showcase.look);
     else placeCamera([3.7 + d, 1.2, 2.7], [-0.5, 0.95, 1.2]);
   }
+  // DRAWN: posted a few rendered frames after the view is set with a model in it (textures uploaded,
+  // camera in place), so RN can lift what covers the viewer without showing an empty scene
+  var drawnIn = 0;
   window.setView = function (name) {
     view = name;
+    drawnIn = 6;
     showAura(name === 'lobby');
     if (name !== 'placed') unplaceCamera();
     if (name === 'stage') frameCamera(TARGET_HEIGHT);
@@ -1656,7 +1660,7 @@ export function getAvatarViewerHtml(opts: {
     });
     window.addEventListener('pointermove', function (e) {
       if (!dragging) return;
-      yaw += (e.clientX - lastX) * 0.012;
+      yaw += (e.clientX - lastX) * 0.005; // radians per pixel: a full-width swipe is about three quarters of a turn
       lastX = e.clientX;
       lastInteraction = performance.now();
     });
@@ -1691,6 +1695,7 @@ export function getAvatarViewerHtml(opts: {
     if (aura) updateAura(dt, t);
     if (sparks.length) updateSparks(dt);
     renderer.render(scene, camera);
+    if (drawnIn > 0 && actor.current() && --drawnIn === 0) post({ type: 'DRAWN' });
   }
 
   frameCamera(TARGET_HEIGHT);
