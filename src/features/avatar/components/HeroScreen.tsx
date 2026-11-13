@@ -76,15 +76,16 @@ export const STORY_VIDEOS: Record<string, {
     still: require('../../../../assets/video/arjun_still.jpg'),
     plate: require('../../../../assets/video/arjun_plate.jpg'),
     spot: { x: 0.475, foot: 0.9037, height: 0.7556, yaw: -0.5 },
-    // The film's light on the model: low golden sun from the left, snow bounce from below. The model's
-    // own textures now carry the film's colours (stage 5), so nothing is tinted.
+    // The film's light on the model: low golden sun from the left and a little behind him (his face is
+    // half in its light, not washed out by it), snow bounce from below. The model's own textures carry
+    // the film's colours (stage 5), so nothing is tinted.
     look: {
-      sun: { color: '#ffc890', intensity: 2.4, from: [-2.5, 1.8, 1.2] },
+      sun: { color: '#ffc890', intensity: 2.0, from: [-2.5, 1.6, -0.6] },
       sky: '#c8d6f0',
       ground: '#e8e0d8',
-      ambient: 0.55,
+      ambient: 0.65,
       rims: 0.22,
-      exposure: 0.95,
+      exposure: 0.9,
       reflections: 0.5,
       tint: {},
       clothRelief: 1,

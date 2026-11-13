@@ -135,6 +135,7 @@ export function materialRuntimeJs(): string {
       // No normal map on the cards: tilted across the flat, two-sided cards it turned the sun's
       // highlight into a silver-grey patch over the temple. The strands are drawn in the colour map.
       m.normalMap = null;
+      m.userData.hairCut = true; // upgradeMaterials adds the soft edge pass
       m.depthWrite = true;
       m.userData.upgraded = true;
       m.needsUpdate = true;
@@ -162,6 +163,29 @@ export function materialRuntimeJs(): string {
       o.receiveShadow = true;
       if (Array.isArray(o.material)) o.material = o.material.map(upgradeMaterial);
       else o.material = upgradeMaterial(o.material);
+    });
+    // Cut-out hair (Arjun's) gets a second, blended pass for its fine edge strands: the cut-out alone
+    // left a hard, blocky hairline. The copy shares the mesh's geometry and skeleton, draws after the
+    // opaque pass without writing depth, and only where the strands are thin (the core is already drawn).
+    var cards = [];
+    root.traverse(function (o) {
+      if (o.isSkinnedMesh && !Array.isArray(o.material) && o.material.userData.hairCut && !o.userData.softPass) cards.push(o);
+    });
+    cards.forEach(function (o) {
+      var soft = o.material.clone();
+      soft.transparent = true;
+      soft.alphaTest = 0.02;
+      soft.depthWrite = false;
+      soft.userData = Object.assign({}, o.material.userData, { hairSoft: true });
+      var copy = new THREE.SkinnedMesh(o.geometry, soft);
+      copy.name = o.name + '_soft';
+      copy.position.copy(o.position); copy.quaternion.copy(o.quaternion); copy.scale.copy(o.scale);
+      copy.bind(o.skeleton, o.bindMatrix);
+      copy.frustumCulled = o.frustumCulled;
+      copy.renderOrder = 1;
+      copy.userData.softPass = true;
+      o.userData.softPass = true;
+      o.parent.add(copy);
     });
   }
 
