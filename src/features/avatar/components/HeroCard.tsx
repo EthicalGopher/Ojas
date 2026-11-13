@@ -6,7 +6,8 @@ import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Check, Lock } from 'lucide-react-native';
 import { GText } from '../../../components/game';
 import { GradientFill } from '../../../components/game/Gradient';
-import { AvatarModel, resolveModelUrl } from '../../../utils/avatarShopService';
+import { AvatarModel, heroName, resolveModelUrl } from '../../../utils/avatarShopService';
+import { useUserStore } from '../../../store/userStore';
 import { useColors } from '../../../theme';
 import { CoinDot, RARITY_COLORS } from './AvatarShopScreen';
 import type { HeroStatus } from './HeroScreen';
@@ -25,6 +26,7 @@ export const HeroCard: React.FC<{
   onPress: () => void;
 }> = ({ hero, width, status, selected, onPress }) => {
   const colors = useColors();
+  const name = heroName(hero, useUserStore((st) => st.profile?.username));
   const art = hero.config.card ?? hero.thumbnail_url;
   const locked = status === 'level';
   const playing = status === 'playing';
@@ -35,7 +37,7 @@ export const HeroCard: React.FC<{
       onPress={onPress}
       accessibilityRole="button"
       accessibilityState={{ selected: !!selected }}
-      accessibilityLabel={`${hero.name}${status ? `, ${status === 'buy' ? `${hero.price_coins} coins` : status === 'level' ? `unlocks at level ${hero.unlock_level}` : status}` : ''}`}
+      accessibilityLabel={`${name}${status ? `, ${status === 'buy' ? `${hero.price_coins} coins` : status === 'level' ? `unlocks at level ${hero.unlock_level}` : status}` : ''}`}
       style={({ pressed }) => [
         styles.card,
         { width, height, borderColor: lit ? colors.accentFrom : CARD.edge, borderWidth: lit ? 3 : 2 },
@@ -50,7 +52,7 @@ export const HeroCard: React.FC<{
       {art ? (
         <Image source={{ uri: resolveModelUrl(art) }} style={[StyleSheet.absoluteFill, locked && { opacity: 0.4 }]} resizeMode="cover" />
       ) : (
-        <Text style={styles.initial}>{hero.name.charAt(0)}</Text>
+        <Text style={styles.initial}>{name.charAt(0)}</Text>
       )}
       {locked && (
         <View style={styles.center} pointerEvents="none">
@@ -73,7 +75,7 @@ export const HeroCard: React.FC<{
         </View>
       )}
       <View style={styles.banner}>
-        <GText variant="display" size={width > 150 ? 18 : 15} numberOfLines={1} style={{ color: '#FFFFFF' }}>{hero.name}</GText>
+        <GText variant="display" size={width > 150 ? 18 : 15} numberOfLines={1} style={{ color: '#FFFFFF' }}>{name}</GText>
         {status === 'buy' ? (
           <View style={styles.price}>
             <CoinDot size={11} />

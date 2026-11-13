@@ -41,6 +41,8 @@ export interface ShopItemConfig {
   cardColors?: [string, string];
   /** Characters only: the body's own look (skin tint, dyes), applied before any worn items. */
   look?: { tint?: Record<string, [number, number, number]>; dye?: Record<string, string> };
+  /** Characters only: shown under the player's own username instead of `name` (the default hero). */
+  nameFromUsername?: boolean;
 }
 
 /** What makes a hero their own. Their model carries their own clips (scripts/blender/author_hero_clips.py):
@@ -90,7 +92,10 @@ export interface AvatarModel {
   unlock_level?: number | null;
 }
 
-export const DEFAULT_AVATAR_ID = 'starter_ojas_f';
+/** The free default hero every player starts as: the yellow athlete (scripts/blender/build_hero.py),
+ * shown under the player's own username. Arjun and Meera are bought with coins. */
+export const DEFAULT_AVATAR_ID = 'starter_hero';
+export const HERO_BODY_URL = 'local://avatars/hero.glb';
 /** The detailed CC body (scripts/blender/build_fc1.py). Every character but Arjun is a variant of it. */
 export const BASE_BODY_URL = 'local://avatars/ojas_fc1.glb';
 type BodyLook = NonNullable<ShopItemConfig['look']>;
@@ -125,13 +130,56 @@ const item = (
 /** Mirrors the seeded rows so the shop works offline and for guests. */
 export const BUNDLED_AVATARS: AvatarModel[] = [
   {
-    // The base character: the detailed CC-rigged body (scripts/blender/build_fc1.py) in Meera's look.
-    // Faces and kits are built for Arjun's Rocketbox body, so only shoe colours fit her.
+    // The default hero: free for everyone, named after the player.
     id: DEFAULT_AVATAR_ID,
-    name: 'Meera',
-    description: 'Every athlete starts here. Earn coins for new gear.',
+    name: 'Ojas',
+    description: 'Every athlete starts here. Earn coins to recruit Arjun and Meera.',
     rarity: 'common',
     price_coins: 0,
+    category: 'character',
+    character_id: null,
+    model_url: HERO_BODY_URL,
+    model_format: 'glb',
+    config: {
+      nameFromUsername: true,
+      card: 'local://avatars/hero_card.png',
+      hero: {
+        title: 'The Everyday Athlete',
+        role: 'All-rounder',
+        specialty: 'Strength / Grit',
+        world: 'track',
+        lobbyMoves: [],
+        stats: [
+          { label: 'Speed', value: 0.7 },
+          { label: 'Stamina', value: 0.7 },
+          { label: 'Power', value: 0.7 },
+          { label: 'Agility', value: 0.7 },
+        ],
+        movie: [
+          { cam: 'wide', dur: 4, caption: 'Every athlete starts somewhere.' },
+          { cam: 'low', dur: 4, clip: 'squat', caption: 'One rep, then the next.' },
+          { cam: 'hero', dur: 5, clip: 'cheer', burst: true, caption: '' },
+        ],
+        story: 'You. Every rep you train makes this athlete stronger, and every coin you earn can recruit a new hero.',
+        moves: [
+          { clip: 'squat', name: 'Power Squat', text: 'Deep, steady reps: the base of every athlete.', icon: 'dumbbell' },
+          { clip: 'cheer', name: 'Thumbs Up', text: 'Another session done.', icon: 'flag' },
+        ],
+        effect: { name: 'Golden Glow', color: '#F5C842', text: 'A golden ring that brightens with every move.' },
+      },
+      cardColors: ['#F5C842', '#5B3FA0'],
+    },
+    thumbnail_url: 'local://avatars/hero.png',
+    is_default: true,
+    sort_order: -2,
+  },
+  {
+    // Meera: the detailed CC-rigged body (scripts/blender/build_fc1.py) in her own look. Bought with coins.
+    id: 'starter_ojas_f',
+    name: 'Meera',
+    description: 'The comeback sprinter. Recruit her with coins.',
+    rarity: 'epic',
+    price_coins: 800,
     category: 'character',
     character_id: null,
     model_url: BASE_BODY_URL,
@@ -173,7 +221,7 @@ export const BUNDLED_AVATARS: AvatarModel[] = [
       cardColors: ['#E8458B', '#3B1E6E'],
     },
     thumbnail_url: 'local://avatars/fc1_meera.png',
-    is_default: true,
+    is_default: false,
     sort_order: -1,
   },
   // Arjun: the Survival Character (scripts/blender/build_arjun.py), on a CC-named copy of its own
@@ -181,9 +229,9 @@ export const BUNDLED_AVATARS: AvatarModel[] = [
   {
     id: 'starter_ojas',
     name: 'Arjun',
-    description: 'Every athlete starts here. Earn coins for new gear.',
-    rarity: 'common',
-    price_coins: 0,
+    description: 'The mountain trekker. Recruit him with coins.',
+    rarity: 'rare',
+    price_coins: 500,
     category: 'character',
     character_id: null,
     model_url: 'local://avatars/arjun.glb',
@@ -339,6 +387,11 @@ export function isStarter(model: AvatarModel): boolean {
   return model.category === 'character' && model.price_coins === 0 && !model.unlock_level;
 }
 
+/** The name a hero is shown under: the player's own username for the default hero. */
+export function heroName(model: AvatarModel, username?: string | null): string {
+  return model.config.nameFromUsername && username ? username : model.name;
+}
+
 /** The character with this id, falling back to the default character. */
 export function findAvatar(catalog: AvatarModel[], id: string): AvatarModel {
   const characters = catalog.filter((m) => m.category === 'character');
@@ -449,12 +502,14 @@ export function lookOf(catalog: AvatarModel[], profile: Pick<UserProfile, 'equip
  * scripts/blender/render_hero_card.py from the `stand` clip). Arjun's body gets Arjun; every other look
  * (Meera, the AI rival, simulated rivals) is worn on the base body, which is Meera's. */
 export function characterStandArt(model: AvatarModel): string {
+  if (model.model_url === HERO_BODY_URL) return resolveModelUrl('local://avatars/hero_stand.png');
   return resolveModelUrl(/arjun/.test(model.model_url) ? 'local://avatars/arjun_stand.png' : 'local://avatars/meera_stand.png');
 }
 
 /** A character's scene for the VS screen: a frame of their hero story video (Arjun climbing, Meera
  * sprinting), avatars/<hero>_vs.jpg. Same body rule as characterStandArt. */
 export function characterVsScene(model: AvatarModel): string {
+  if (model.model_url === HERO_BODY_URL) return resolveModelUrl('local://avatars/hero_vs.jpg');
   return resolveModelUrl(/arjun/.test(model.model_url) ? 'local://avatars/arjun_vs.jpg' : 'local://avatars/meera_vs.jpg');
 }
 
@@ -466,7 +521,7 @@ const RIVAL_WOMEN = ['ananya', 'priya', 'diya', 'isha', 'kavya', 'meera', 'riya'
 export function lookForName(_catalog: AvatarModel[], name: string) {
   let h = 2166136261;
   for (let i = 0; i < name.length; i++) h = Math.imul(h ^ name.charCodeAt(i), 16777619) >>> 0;
-  const heroes = BUNDLED_AVATARS.filter((b) => b.category === 'character' && b.thumbnail_url);
+  const heroes = BUNDLED_AVATARS.filter((b) => b.category === 'character' && b.thumbnail_url && b.id !== DEFAULT_AVATAR_ID);
   const meera = heroes.find((b) => !/arjun/.test(b.model_url));
   const arjun = heroes.find((b) => /arjun/.test(b.model_url));
   // Simulated rivals are named from simulatedOpponent.ts FIRST_NAMES: match the hero to the name

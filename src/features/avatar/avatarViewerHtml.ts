@@ -83,6 +83,21 @@ export function materialRuntimeJs(): string {
     '}',
   ].join('\\n');
   var EYE_ENV = 0.25, EYE_SPEC = 0.35, EYE_ROUGH = 0.28;
+  // Toon heroes (the default hero, scripts/blender/hero_shape.py): materials named toon_* get flat banded
+  // shading (three tones) and, in upgradeMaterials, a black outline.
+  var toonRamp = null;
+  function toonGradient() {
+    if (toonRamp) return toonRamp;
+    var tones = [110, 190, 255];
+    var data = new Uint8Array(tones.length * 4);
+    tones.forEach(function (t, i) { data[i * 4] = data[i * 4 + 1] = data[i * 4 + 2] = t; data[i * 4 + 3] = 255; });
+    toonRamp = new THREE.DataTexture(data, tones.length, 1, THREE.RGBAFormat);
+    toonRamp.minFilter = toonRamp.magFilter = THREE.NearestFilter;
+    toonRamp.generateMipmaps = false;
+    toonRamp.needsUpdate = true;
+    return toonRamp;
+  }
+  var OUTLINE = 0.006; // metres, in the model's own units
   function isCloth(m) { return /top|pants|shoes|kit|outfit|sport|shirt|jacket|cloth|short|hood/i.test(m.name || ''); }
   // Skin on a physical material: soft sheen, a faint clearcoat and the wrap lighting (skinLighting)
   function skinUp(p) {
@@ -110,6 +125,12 @@ export function materialRuntimeJs(): string {
   // physical (Meera: KHR_materials_specular) are treated in place and keep their own specular.
   function upgradeMaterial(m) {
     if (!m || !m.isMeshStandardMaterial || (m.userData && m.userData.upgraded)) return m;
+    if (/^toon_/.test(m.name || '')) {
+      var t = new THREE.MeshToonMaterial({ color: m.color.clone(), gradientMap: toonGradient() });
+      t.name = m.name;
+      t.userData = Object.assign({}, m.userData, { toon: true, upgraded: true, outline: !/^toon_(eye|ink)/.test(m.name) });
+      return t;
+    }
     if (isEye(m)) {
       m.onBeforeCompile = function (sh) {
         sh.fragmentShader = sh.fragmentShader.replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\\n' + EYE_GLSL);
@@ -170,6 +191,27 @@ export function materialRuntimeJs(): string {
     var cards = [];
     root.traverse(function (o) {
       if (o.isSkinnedMesh && !Array.isArray(o.material) && o.material.userData.hairCut && !o.userData.softPass) cards.push(o);
+    });
+    // toon outline: a back-faces-only copy pushed out along the normals, drawn black behind the figure
+    var inked = [];
+    root.traverse(function (o) {
+      if (o.isSkinnedMesh && !Array.isArray(o.material) && o.material.userData.outline && !o.userData.outlined) inked.push(o);
+    });
+    inked.forEach(function (o) {
+      var ink = new THREE.MeshBasicMaterial({ color: 0x141418, side: THREE.BackSide });
+      ink.onBeforeCompile = function (sh) {
+        sh.vertexShader = sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\\n transformed += normal * ' + OUTLINE.toFixed(4) + ';');
+      };
+      ink.customProgramCacheKey = function () { return 'ojas-outline'; };
+      ink.userData = { upgraded: true, outlineInk: true };
+      var line = new THREE.SkinnedMesh(o.geometry, ink);
+      line.name = o.name + '_outline';
+      line.position.copy(o.position); line.quaternion.copy(o.quaternion); line.scale.copy(o.scale);
+      line.bind(o.skeleton, o.bindMatrix);
+      line.frustumCulled = o.frustumCulled;
+      line.userData.outlined = true;
+      o.userData.outlined = true;
+      o.parent.add(line);
     });
     cards.forEach(function (o) {
       var soft = o.material.clone();

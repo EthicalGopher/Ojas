@@ -33,6 +33,8 @@ argv = sys.argv[sys.argv.index('--') + 1:]
 FC1_PATH, CLIPS_PATH, OUT_PATH = argv[:3]
 EXTRA = parse_extra(argv[3:])  # Mixamo clips: name=clip.fbx[,inplace][,xN] (retarget_clips.py)
 PREFIX = 'ludovisions_FC1_'
+# FC1_HERO=1 builds the default hero (hero_shape.py) on this body and rig instead of Meera.
+HERO = os.environ.get('FC1_HERO') == '1'
 
 # Hair layers by material: fly-aways and near-invisible wisps are dropped, big card layers decimated.
 HAIR_DROP = {'mat_01', 'mat_20', 'mat_04', 'mat_16'}
@@ -115,6 +117,10 @@ def decimate(o, ratio):
         bpy.ops.object.modifier_move_up(modifier='decimate')
     bpy.ops.object.modifier_apply(modifier='decimate')
 
+
+if HERO:
+    import hero_shape
+    meshes = hero_shape.strip(meshes, short)
 
 for o in meshes:
     names = {m.name for m in o.data.materials if m}
@@ -547,7 +553,18 @@ def cull_covered_skin(body, cloths):
 
 
 fc1_body = next(o for o in meshes if o.name == 'FC1_body')
-cull_covered_skin(fc1_body, make_sportswear(fc1_body))
+if HERO:
+    rig = fc1_body.parent
+    hero_shape.reshape(fc1_body, rig, short)
+    kit = hero_shape.make_kit(fc1_body, rig, short, body_shell)
+    CULL.add('skin_leg')
+    cull_covered_skin(fc1_body, kit)
+    skin = hero_shape.toon_material('toon_skin', hero_shape.YELLOW)
+    hero_shape.make_head(fc1_body, rig, short, skin, hero_shape.toon_material('toon_eye', '#FFFFFF'),
+                         hero_shape.toon_material('toon_ink', '#111114'))
+    hero_shape.finish_materials([o for o in bpy.data.objects if o.type == 'MESH'], short)
+else:
+    cull_covered_skin(fc1_body, make_sportswear(fc1_body))
 
 # Short bone names (vertex groups follow the rename).
 for b in tgt.data.bones:

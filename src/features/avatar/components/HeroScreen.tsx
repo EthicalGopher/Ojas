@@ -17,7 +17,7 @@ import { Slant } from '../../../components/game/Slant';
 import { juice } from '../../../juice/juice';
 import { AvatarViewer3D, FilmLook, HeroPlacement, StoryShot } from './AvatarViewer3D';
 import { CoinDot, RARITY_COLORS } from './AvatarShopScreen';
-import { AvatarModel, LOCAL_ASSET_ORIGIN, equipAvatar, getLoadout, loadoutItems, purchaseAvatar, resolveModelUrl } from '../../../utils/avatarShopService';
+import { AvatarModel, LOCAL_ASSET_ORIGIN, equipAvatar, heroName, getLoadout, loadoutItems, purchaseAvatar, resolveModelUrl } from '../../../utils/avatarShopService';
 import { XP_PER_COIN } from '../../../utils/gamification';
 import { useUserStore } from '../../../store/userStore';
 import { useColors } from '../../../theme';
@@ -272,6 +272,7 @@ export const HeroScreen: React.FC<HeroScreenProps> = ({ hero, status, catalog, c
   const isGuest = useUserStore((s) => s.isGuest);
   const refreshProfile = useUserStore((s) => s.refreshProfile);
   const info = hero.config.hero;
+  const shownName = heroName(hero, profile?.username);
   const [from, to] = hero.config.cardColors ?? ['#4F6BD8', '#1A2250'];
   const tint = info?.effect.color ?? from;
   const film = STORY_VIDEOS[hero.id];
@@ -503,7 +504,7 @@ export const HeroScreen: React.FC<HeroScreenProps> = ({ hero, status, catalog, c
               title={
                 <>
                   <GText variant="label" size={14} style={{ color: tint, letterSpacing: 4 }}>{info?.role.toUpperCase()}</GText>
-                  <GText variant="hero" size={76} style={styles.titleName}>{hero.name}</GText>
+                  <GText variant="hero" size={76} style={styles.titleName}>{shownName}</GText>
                   <View style={[styles.titleRule, { backgroundColor: tint }]} />
                   <GText variant="display" size={20} style={{ color: '#FFFFFF' }}>{info?.title}</GText>
                 </>
@@ -523,7 +524,7 @@ export const HeroScreen: React.FC<HeroScreenProps> = ({ hero, status, catalog, c
           {titleCard && (
             <Animated.View style={[styles.titleCard, { opacity: caption, transform: [{ scale: caption.interpolate({ inputRange: [0, 1], outputRange: [1.12, 1] }) }] }]} pointerEvents="none">
               <GText variant="label" size={14} style={{ color: tint, letterSpacing: 4 }}>{info?.role.toUpperCase()}</GText>
-              <GText variant="hero" size={76} style={styles.titleName}>{hero.name}</GText>
+              <GText variant="hero" size={76} style={styles.titleName}>{shownName}</GText>
               <View style={[styles.titleRule, { backgroundColor: tint }]} />
               <GText variant="display" size={20} style={{ color: '#FFFFFF' }}>{info?.title}</GText>
             </Animated.View>
@@ -566,7 +567,7 @@ export const HeroScreen: React.FC<HeroScreenProps> = ({ hero, status, catalog, c
 
           <View style={[styles.left, { left: Math.max(insets.left, 16) + 12, top: insets.top + (short ? 50 : 64) }]}>
             <View style={styles.nameRow}>
-              <GText variant="hero" size={short ? 30 : 40} numberOfLines={1} style={{ color: '#FFFFFF' }}>{hero.name}</GText>
+              <GText variant="hero" size={short ? 30 : 40} numberOfLines={1} style={{ color: '#FFFFFF' }}>{shownName}</GText>
               <View style={[styles.rarity, { borderColor: RARITY_COLORS[hero.rarity] }]}>
                 <GText variant="label" size={10} style={{ color: RARITY_COLORS[hero.rarity], letterSpacing: 1 }}>{hero.rarity.toUpperCase()}</GText>
               </View>
