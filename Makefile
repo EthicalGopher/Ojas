@@ -107,8 +107,11 @@ MIXAMO_SHARED = cheer=$(MIXAMO)/Cheering.fbx stand=$(MIXAMO)/StandingIdle.fbx id
 MEERA_MIXAMO = $(MIXAMO_SHARED) hero_idle=$(MIXAMO)/FastRun.fbx,inplace hero_move1=$(MIXAMO)/FastRun.fbx,inplace,x6
 ARJUN_MIXAMO = $(MIXAMO_SHARED) hero_idle=$(MIXAMO)/Walking.fbx,inplace hero_world=$(MIXAMO)/Climbing.fbx,still,from=60,to=112 hero_move1=$(MIXAMO)/Climbing.fbx,still,from=60,to=112,x3
 
+HERO_SCULPT ?= scripts/blender/.cache/hero_base/male_body.ply
+
 hero: ## Build the default hero (yellow toon athlete, scripts/blender/hero_shape.py) on the FC1 body and rig into the app assets; needs an APK rebuild
-	FC1_HERO=1 $(BLENDER) -b -P scripts/blender/build_fc1.py -- $(FC1_SRC) $(CLIPS_DIR)/clips_meera.glb android/app/src/main/assets/web/avatars/hero.glb $(MIXAMO_SHARED)
+	@test -f $(HERO_SCULPT) || { echo "$(HERO_SCULPT) missing: run scripts/blender/hero_sculpt_prep.py on male_body.fbx first"; exit 1; }
+	FC1_HERO=1 HERO_SCULPT=$(HERO_SCULPT) $(BLENDER) -b -P scripts/blender/build_fc1.py -- $(FC1_SRC) $(CLIPS_DIR)/clips_meera.glb android/app/src/main/assets/web/avatars/hero.glb $(MIXAMO_SHARED)
 
 fc1: ## Build the base character (Meera) with her own clips from the FC1 download into the app assets; needs an APK rebuild
 	$(BLENDER) -b -P scripts/blender/author_hero_clips.py -- $(CLIPS_SRC) meera $(CLIPS_DIR)/clips_meera.glb

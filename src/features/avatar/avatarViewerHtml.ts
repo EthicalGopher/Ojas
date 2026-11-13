@@ -126,7 +126,9 @@ export function materialRuntimeJs(): string {
   function upgradeMaterial(m) {
     if (!m || !m.isMeshStandardMaterial || (m.userData && m.userData.upgraded)) return m;
     if (/^toon_/.test(m.name || '')) {
-      var t = new THREE.MeshToonMaterial({ color: m.color.clone(), gradientMap: toonGradient() });
+      var t = new THREE.MeshToonMaterial({ color: m.color.clone(), gradientMap: toonGradient(), map: m.map || null,
+        normalMap: m.normalMap || null });
+      if (m.normalMap) t.normalScale.copy(m.normalScale);
       t.name = m.name;
       t.userData = Object.assign({}, m.userData, { toon: true, upgraded: true, outline: !/^toon_(eye|ink)/.test(m.name) });
       return t;
