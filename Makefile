@@ -143,6 +143,10 @@ arjun-stage5: ## Arjun stage 5: rebuilt to match his film (clothes' textures, ha
 	$(BLENDER) -b $(ARJUN_VERSIONS)/arjun_v3_perf.blend -P scripts/blender/arjun_improve/stage5_film.py -- scripts/blender/.cache/arjun_film_tex $(ARJUN_VERSIONS)/arjun_v5_film.blend
 	$(BLENDER) -b $(ARJUN_VERSIONS)/arjun_v5_film.blend -P scripts/blender/arjun_improve/stage4_textures.py -- $(KTX_SOFTWARE) $(ARJUN_VERSIONS)/arjun_v5_film.glb
 
+arjun-stage6: ## Arjun stage 6: his face reshaped toward his film (after arjun-stage5), KTX2, into $(ARJUN_VERSIONS)/arjun_v6_face.glb
+	$(BLENDER) -b $(ARJUN_VERSIONS)/arjun_v5_film.blend -P scripts/blender/arjun_improve/stage6_face.py -- $(ARJUN_VERSIONS)/arjun_v6_face.blend
+	$(BLENDER) -b $(ARJUN_VERSIONS)/arjun_v6_face.blend -P scripts/blender/arjun_improve/stage4_textures.py -- $(KTX_SOFTWARE) $(ARJUN_VERSIONS)/arjun_v6_face.glb
+
 helper-bones-test: ## Check the match page's helper-bone solver against the Blender bake (needs make arjun-stage1; Node >= 22.18)
 	node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON src/features/match/helperBones.test.mjs
 
