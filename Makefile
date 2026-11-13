@@ -127,6 +127,10 @@ arjun-stage2: ## Arjun stages 1+2 (deformation, then facial shape keys) into $(A
 	@mkdir -p $(ARJUN_VERSIONS)
 	$(BLENDER) -b -P scripts/blender/build_arjun.py -P scripts/blender/arjun_improve/stage1_deform.py -P scripts/blender/arjun_improve/stage2_face.py -- $(ARJUN_SRC)/Survival_Character.fbx $(ARJUN_SRC)/textures $(CLIPS_DIR)/clips_arjun.glb $(ARJUN_VERSIONS)/arjun_v0_build.glb $(ARJUN_MIXAMO)
 
+arjun-stage3: ## Arjun stages 1-3 (+ hair / mouth / bone reduction, LODs) into $(ARJUN_VERSIONS)/arjun_v3_*.glb; app assets untouched
+	@mkdir -p $(ARJUN_VERSIONS)
+	$(BLENDER) -b -P scripts/blender/build_arjun.py -P scripts/blender/arjun_improve/stage1_deform.py -P scripts/blender/arjun_improve/stage2_face.py -P scripts/blender/arjun_improve/stage3_perf.py -- $(ARJUN_SRC)/Survival_Character.fbx $(ARJUN_SRC)/textures $(CLIPS_DIR)/clips_arjun.glb $(ARJUN_VERSIONS)/arjun_v0_build.glb $(ARJUN_MIXAMO)
+
 helper-bones-test: ## Check the match page's helper-bone solver against the Blender bake (needs make arjun-stage1; Node >= 22.18)
 	node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON src/features/match/helperBones.test.mjs
 
