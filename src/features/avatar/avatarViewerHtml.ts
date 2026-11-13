@@ -1602,7 +1602,49 @@ export function getAvatarViewerHtml(opts: {
     camera.setViewOffset(w, h, (0.5 - placement.x) * w, (0.5 - (placement.foot - placement.height / 2)) * h, w, h);
     camera.updateProjectionMatrix();
   }
+  // ---------- Film look: the light and colours of the hero's film on the placed model ----------
+  // Applied once per loaded model while the view is 'placed'; everything it changes is remembered and
+  // put back when the view changes (other views keep the studio rig).
+  var lookDone = null, lookSaved = null;
+  function applyLook() {
+    var look = placement && placement.look, cur = actor.current();
+    if (!look || !cur || lookDone === cur) return;
+    if (lookDone) undoLook();
+    lookSaved = { lights: [hemi.color.clone(), hemi.groundColor.clone(), hemi.intensity, key.color.clone(), key.intensity,
+      key.position.clone(), rim.intensity, rim2.intensity, renderer.toneMappingExposure], mats: [] };
+    hemi.color.set(look.sky); hemi.groundColor.set(look.ground); hemi.intensity = look.ambient;
+    key.color.set(look.sun.color); key.intensity = look.sun.intensity;
+    key.position.set(look.sun.from[0], look.sun.from[1], look.sun.from[2]);
+    rim.intensity = look.rims; rim2.intensity = look.rims;
+    renderer.toneMappingExposure = look.exposure;
+    cur.root.traverse(function (o) {
+      if (!o.material) return;
+      (Array.isArray(o.material) ? o.material : [o.material]).forEach(function (m) {
+        var name = m.name || '', t = null;
+        Object.keys(look.tint).forEach(function (k) { if (name.indexOf(k) === 0) t = look.tint[k]; });
+        lookSaved.mats.push([m, m.color ? m.color.clone() : null, m.normalScale ? m.normalScale.clone() : null, m.envMapIntensity]);
+        if (t && m.color) m.color.multiply(new THREE.Color(t[0], t[1], t[2]));
+        if (m.normalScale && name.indexOf('gear_') === 0) m.normalScale.multiplyScalar(look.clothRelief);
+        if ('envMapIntensity' in m && !m.userData.eye) m.envMapIntensity = look.reflections;
+      });
+    });
+    lookDone = cur;
+  }
+  function undoLook() {
+    if (!lookSaved) return;
+    var l = lookSaved.lights;
+    hemi.color.copy(l[0]); hemi.groundColor.copy(l[1]); hemi.intensity = l[2];
+    key.color.copy(l[3]); key.intensity = l[4]; key.position.copy(l[5]);
+    rim.intensity = l[6]; rim2.intensity = l[7]; renderer.toneMappingExposure = l[8];
+    lookSaved.mats.forEach(function (e) {
+      if (e[1]) e[0].color.copy(e[1]);
+      if (e[2]) e[0].normalScale.copy(e[2]);
+      if (e[3] !== undefined) e[0].envMapIntensity = e[3];
+    });
+    lookSaved = null; lookDone = null;
+  }
   function unplaceCamera() {
+    undoLook();
     if (camera.view && camera.view.enabled) camera.clearViewOffset();
     camera.fov = BASE_FOV;
     camera.updateProjectionMatrix();
@@ -1761,7 +1803,7 @@ export function getAvatarViewerHtml(opts: {
     if (world) scrollWorld(dt);
     if (story) storyCamera(dt);
     else if (view === 'showcase') showcaseCamera(t);
-    else if (view === 'placed') placedCamera();
+    else if (view === 'placed') { placedCamera(); applyLook(); }
     else if (view === 'lobby') lobbyCamera(t);
     if (aura) updateAura(dt, t);
     if (sparks.length) updateSparks(dt);

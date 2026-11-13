@@ -53,6 +53,24 @@ export interface HeroPlacement {
   yaw?: number;
   /** Clip to stand in, e.g. 'stand'. */
   base?: string;
+  /** Lighting and colour grade that make the model match the film it stands in. */
+  look?: FilmLook;
+}
+
+/** The film's light on the model: a sun, sky and ground (snow / track) bounce, and per-material colour
+ * multipliers (linear) for what the film shows differently from the model's own textures. */
+export interface FilmLook {
+  sun: { color: string; intensity: number; from: [number, number, number] };
+  sky: string;
+  ground: string;
+  ambient: number;
+  rims: number;
+  exposure: number;
+  reflections: number;
+  /** material name prefix -> [r, g, b] */
+  tint: Record<string, [number, number, number]>;
+  /** strength of the clothes' (gear_*) normal maps */
+  clothRelief: number;
 }
 
 export interface StoryShot {

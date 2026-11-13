@@ -15,7 +15,7 @@ import { GText } from '../../../components/game';
 import { GradientFill } from '../../../components/game/Gradient';
 import { Slant } from '../../../components/game/Slant';
 import { juice } from '../../../juice/juice';
-import { AvatarViewer3D, HeroPlacement, StoryShot } from './AvatarViewer3D';
+import { AvatarViewer3D, FilmLook, HeroPlacement, StoryShot } from './AvatarViewer3D';
 import { CoinDot, RARITY_COLORS } from './AvatarShopScreen';
 import { AvatarModel, LOCAL_ASSET_ORIGIN, equipAvatar, getLoadout, loadoutItems, purchaseAvatar, resolveModelUrl } from '../../../utils/avatarShopService';
 import { XP_PER_COIN } from '../../../utils/gamification';
@@ -60,6 +60,8 @@ export const STORY_VIDEOS: Record<string, {
   still: number;
   plate: number;
   spot: { x: number; foot: number; height: number; yaw: number };
+  /** the film's light and colours on the 3D hero */
+  look?: FilmLook;
   /** The film in the web assets, for playing it in a WebView on emulators. */
   webPath: string;
   moves: Record<string, { from: number; to: number }>;
@@ -73,7 +75,26 @@ export const STORY_VIDEOS: Record<string, {
     titleAt: 5.8,
     still: require('../../../../assets/video/arjun_still.jpg'),
     plate: require('../../../../assets/video/arjun_plate.jpg'),
-    spot: { x: 0.4872, foot: 0.9037, height: 0.7556, yaw: -0.5 },
+    spot: { x: 0.475, foot: 0.9037, height: 0.7556, yaw: -0.5 },
+    // Matched to the film's last frame on the emulator, part by part: low golden sun from the left,
+    // snow bounce from below; olive-brown jacket, grey trousers, tan skin, near-black hair.
+    look: {
+      sun: { color: '#ffc890', intensity: 2.4, from: [-2.5, 1.8, 1.2] },
+      sky: '#c8d6f0',
+      ground: '#e8e0d8',
+      ambient: 0.55,
+      rims: 0.22,
+      exposure: 0.95,
+      reflections: 0.5,
+      tint: {
+        skin_: [0.22, 0.25, 0.29],
+        hair_main: [0.18, 0.15, 0.13],
+        hair_brows: [0.4, 0.35, 0.3],
+        gear_upper: [1.0, 0.92, 0.75],
+        gear_lower: [0.9, 0.9, 0.88],
+      },
+      clothRelief: 0.35,
+    },
     webPath: 'video/arjun_story.mp4',
     moves: { hero_move1: { from: 0, to: 3.45 }, hero_move2: { from: 4.6, to: 7.9 } },
   },
@@ -270,7 +291,7 @@ export const HeroScreen: React.FC<HeroScreenProps> = ({ hero, status, catalog, c
   const [box, setBox] = useState<{ w: number; h: number } | null>(null);
   const still = useRef(new Animated.Value(1)).current;
   const placement = useMemo<HeroPlacement | null>(
-    () => (film && box ? { ...coverSpot(film.spot, box.w, box.h), yaw: film.spot.yaw, base: 'stand' } : null),
+    () => (film && box ? { ...coverSpot(film.spot, box.w, box.h), yaw: film.spot.yaw, base: 'stand', look: film.look } : null),
     [film, box],
   );
 
