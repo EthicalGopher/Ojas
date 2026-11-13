@@ -98,10 +98,19 @@ export function materialRuntimeJs(): string {
       p.customProgramCacheKey = function () { return 'ojas-skin'; };
     }
   }
+  // Cloth on a physical material: a fabric sheen
+  function clothUp(p) {
+    // dark untextured sportswear stays black: a near-white sheen would grey it
+    var plain = !p.map && /^sport_/.test(p.name);
+    p.sheen = plain ? 0.3 : 0.55;
+    p.sheenRoughness = 0.75;
+    if (p.sheenColor) p.sheenColor.copy(p.color).lerp(new THREE.Color(1, 1, 1), plain ? 0.15 : 0.35);
+  }
+  // Standard materials become physical ones (for sheen / clearcoat); materials that already load as
+  // physical (Meera: KHR_materials_specular) are treated in place and keep their own specular.
   function upgradeMaterial(m) {
-    // eyes first: a model with KHR_materials_specular (Meera) loads as MeshPhysicalMaterial, which the
-    // upgrades below skip
-    if (m && m.isMeshStandardMaterial && !(m.userData && m.userData.upgraded) && isEye(m)) {
+    if (!m || !m.isMeshStandardMaterial || (m.userData && m.userData.upgraded)) return m;
+    if (isEye(m)) {
       m.onBeforeCompile = function (sh) {
         sh.fragmentShader = sh.fragmentShader.replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\\n' + EYE_GLSL);
       };
@@ -114,16 +123,10 @@ export function materialRuntimeJs(): string {
       m.needsUpdate = true;
       return m;
     }
-    // skin that already loads as physical (Meera: KHR_materials_specular) gets the skin treatment in place,
-    // keeping its own specular; the rest of the physical materials are left as they are
-    if (m && m.isMeshPhysicalMaterial && !(m.userData && m.userData.upgraded) && isSkin(m)) {
-      skinUp(m);
-      m.userData.upgraded = true;
-      m.needsUpdate = true;
-      return m;
-    }
-    if (!m || !m.isMeshStandardMaterial || m.isMeshPhysicalMaterial || (m.userData && m.userData.upgraded)) return m;
-    if (isHairCard(m)) {
+    // Hair cards: alpha-to-coverage instead of blending, for cards with a solid core (Arjun's). Meera's
+    // physical cards are many faint layers (opacity ~0.1) made for blending: any cut-off erased her hair
+    // (tried 0.3, and 0.05 with the opacity boosted 4-6x), so physical hair keeps its blending.
+    if (isHairCard(m) && !m.isMeshPhysicalMaterial) {
       m.transparent = false;
       m.alphaTest = 0.3;
       m.alphaToCoverage = true;
@@ -134,19 +137,17 @@ export function materialRuntimeJs(): string {
     }
     var skin = isSkin(m), cloth = !skin && isCloth(m);
     if (!skin && !cloth) return m;
-    var p = new THREE.MeshPhysicalMaterial();
-    THREE.MeshStandardMaterial.prototype.copy.call(p, m);
-    p.name = m.name;
-    p.userData = Object.assign({}, m.userData, { upgraded: true });
-    if (skin) {
-      skinUp(p);
-    } else {
-      // dark untextured sportswear stays black: a near-white sheen would grey it
-      var plain = !p.map && /^sport_/.test(p.name);
-      p.sheen = plain ? 0.3 : 0.55;
-      p.sheenRoughness = 0.75;
-      if (p.sheenColor) p.sheenColor.copy(p.color).lerp(new THREE.Color(1, 1, 1), plain ? 0.15 : 0.35);
+    var p = m;
+    if (!m.isMeshPhysicalMaterial) {
+      p = new THREE.MeshPhysicalMaterial();
+      THREE.MeshStandardMaterial.prototype.copy.call(p, m);
+      p.name = m.name;
+      p.userData = Object.assign({}, m.userData);
     }
+    if (skin) skinUp(p);
+    else clothUp(p);
+    p.userData.upgraded = true;
+    p.needsUpdate = true;
     return p;
   }
   function upgradeMaterials(root) {
