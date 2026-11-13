@@ -30,13 +30,27 @@ interface AvatarViewer3DProps {
   world?: string;
   /** Camera: the default stage, the hero showcase (side-on, hero right of centre), or the lobby
    * (the hero big, knees up, with a halo and light rays in the effect colour). */
-  view?: 'stage' | 'showcase' | 'lobby';
+  view?: 'stage' | 'showcase' | 'lobby' | 'placed';
+  /** view 'placed': where the hero stands on a backdrop behind the viewer, as fractions of the viewer
+   * (x = feet centre, foot = feet line from the top, height = head to feet), the starting turn and the
+   * loop to stand in. */
+  placement?: HeroPlacement | null;
   /** Lively mode: the moves to pick from (default: the hero's own moves). */
   moves?: string[];
   /** A story movie: camera shots played in order; null stops it. */
   story?: { shots: StoryShot[]; key: number } | null;
   /** Story progress: a shot started, or the movie ended. */
   onStory?: (event: { event: 'shot'; index: number } | { event: 'end' }) => void;
+}
+
+export interface HeroPlacement {
+  x: number;
+  foot: number;
+  height: number;
+  /** Radians; + turns the hero to their left. */
+  yaw?: number;
+  /** Clip to stand in, e.g. 'stand'. */
+  base?: string;
 }
 
 export interface StoryShot {
@@ -67,6 +81,7 @@ export const AvatarViewer3D: React.FC<AvatarViewer3DProps> = ({
   move,
   world,
   view = 'stage',
+  placement = null,
   story,
   onStory,
   moves,
@@ -147,8 +162,15 @@ export const AvatarViewer3D: React.FC<AvatarViewer3DProps> = ({
   const sendWorld = () => inject(`window.setWorld && window.setWorld(${JSON.stringify(world ?? null)})`);
   const sendView = () => inject(`window.setView && window.setView(${JSON.stringify(view)})`);
   const movesJson = JSON.stringify(moves ?? null);
+  const placementJson = JSON.stringify(placement);
+  const sendPlacement = () => inject(`window.setPlacement && window.setPlacement(${placementJson})`);
+  useEffect(() => {
+    if (ready.current) sendPlacement();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [placementJson]);
   const sendScene = () => {
     sendWorld();
+    sendPlacement();
     sendView();
     inject(`window.setMoves && window.setMoves(${movesJson})`);
   };

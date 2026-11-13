@@ -1511,8 +1511,40 @@ export function getAvatarViewerHtml(opts: {
   window.setView = function (name) {
     view = name;
     showAura(name === 'lobby');
+    if (name !== 'placed') unplaceCamera();
     if (name === 'stage') frameCamera(TARGET_HEIGHT);
   };
+
+  // ---------- Placed: the hero standing on a spot of a backdrop picture behind the page ----------
+  // (HeroScreen after a story film: the film still with the painted hero removed, scripts/hero_plates.py.)
+  // p: x = feet centre, foot = feet line from the top, height = head to feet, all fractions of this view;
+  // yaw = starting turn (drag turns it); base = the loop to stand in (e.g. 'stand').
+  var placement = null, BASE_FOV = camera.fov, PLACED_FOV = 26;
+  window.setPlacement = function (p) {
+    placement = p || null;
+    if (!placement) return;
+    yaw = placement.yaw || 0;
+    actor.setBase(placement.base || null);
+  };
+  window.__viewerState = function () { return { view: view, placement: placement, yaw: yaw }; }; // for checks over DevTools
+  function placedCamera() {
+    if (!placement) return;
+    var H = TARGET_HEIGHT;
+    camera.fov = PLACED_FOV;
+    // the model's height covers placement.height of the view...
+    var dist = H / (placement.height * 2 * Math.tan(PLACED_FOV * Math.PI / 360));
+    camera.position.set(0, H / 2, dist);
+    camera.lookAt(0, H / 2, 0);
+    // ...and the view is shifted so its middle lands where the painted hero's middle was
+    var w = window.innerWidth, h = window.innerHeight;
+    camera.setViewOffset(w, h, (0.5 - placement.x) * w, (0.5 - (placement.foot - placement.height / 2)) * h, w, h);
+    camera.updateProjectionMatrix();
+  }
+  function unplaceCamera() {
+    if (camera.view && camera.view.enabled) camera.clearViewOffset();
+    camera.fov = BASE_FOV;
+    camera.updateProjectionMatrix();
+  }
   // ---------- Lobby glory: a halo behind the hero and light rays fanning out ----------
   var aura = null;
   function rayTexture() {
@@ -1654,6 +1686,7 @@ export function getAvatarViewerHtml(opts: {
     if (world) scrollWorld(dt);
     if (story) storyCamera(dt);
     else if (view === 'showcase') showcaseCamera(t);
+    else if (view === 'placed') placedCamera();
     else if (view === 'lobby') lobbyCamera(t);
     if (aura) updateAura(dt, t);
     if (sparks.length) updateSparks(dt);

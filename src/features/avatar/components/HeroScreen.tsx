@@ -15,7 +15,7 @@ import { GText } from '../../../components/game';
 import { GradientFill } from '../../../components/game/Gradient';
 import { Slant } from '../../../components/game/Slant';
 import { juice } from '../../../juice/juice';
-import { AvatarViewer3D, StoryShot } from './AvatarViewer3D';
+import { AvatarViewer3D, HeroPlacement, StoryShot } from './AvatarViewer3D';
 import { CoinDot, RARITY_COLORS } from './AvatarShopScreen';
 import { AvatarModel, LOCAL_ASSET_ORIGIN, equipAvatar, getLoadout, loadoutItems, purchaseAvatar, resolveModelUrl } from '../../../utils/avatarShopService';
 import { XP_PER_COIN } from '../../../utils/gamification';
@@ -48,13 +48,17 @@ const Wash: React.FC = () => {
 const IS_EMULATOR = Platform.OS === 'android' && /sdk_gphone|emulator|android sdk built/i.test(Platform.constants.Model);
 
 // Heroes with a finished film: seconds for its captions, and when the title card comes in.
-// still: the hero's picture from the film, shown behind the hero screen and the Avatar screen once the
-// film is over. moves: the parts of the film each signature move plays, in seconds.
+// still: the hero's picture from the film (the Avatar screen's backdrop). plate: the same picture with the
+// painted hero removed (scripts/hero_plates.py); after the film the 3D hero stands on that spot (spot, as
+// fractions of the 16:9 picture: feet centre, feet line, head-to-feet; yaw turns them like the film), and
+// the player turns them with a finger. moves: the parts of the film each signature move plays, in seconds.
 export const STORY_VIDEOS: Record<string, {
   source: number;
   captions: { from: number; to: number; text: string }[];
   titleAt: number;
   still: number;
+  plate: number;
+  spot: { x: number; foot: number; height: number; yaw: number };
   /** The film in the web assets, for playing it in a WebView on emulators. */
   webPath: string;
   moves: Record<string, { from: number; to: number }>;
@@ -67,6 +71,8 @@ export const STORY_VIDEOS: Record<string, {
     ],
     titleAt: 5.8,
     still: require('../../../../assets/video/arjun_still.jpg'),
+    plate: require('../../../../assets/video/arjun_plate.jpg'),
+    spot: { x: 0.4872, foot: 0.9037, height: 0.7556, yaw: -0.5 },
     webPath: 'video/arjun_story.mp4',
     moves: { hero_move1: { from: 0, to: 3.45 }, hero_move2: { from: 4.6, to: 7.9 } },
   },
@@ -78,10 +84,23 @@ export const STORY_VIDEOS: Record<string, {
     ],
     titleAt: 5.9,
     still: require('../../../../assets/video/meera_still.jpg'),
+    plate: require('../../../../assets/video/meera_plate.jpg'),
+    spot: { x: 0.505, foot: 0.9898, height: 0.8991, yaw: 0 },
     webPath: 'video/meera_story.mp4',
     moves: { hero_move1: { from: 0, to: 2.95 }, hero_move2: { from: 5.4, to: 8 } },
   },
 };
+
+/** A spot on a 16:9 picture shown with resizeMode "cover" in a w x h box, as fractions of the box. */
+export function coverSpot(spot: { x: number; foot: number; height: number }, w: number, h: number) {
+  const scale = Math.max(w / 16, h / 9);
+  const dw = 16 * scale, dh = 9 * scale;
+  return {
+    x: (spot.x * dw + (w - dw) / 2) / w,
+    foot: (spot.foot * dh + (h - dh) / 2) / h,
+    height: (spot.height * dh) / h,
+  };
+}
 
 /** The hero's film, filling the screen, with timed captions and the title card over its last shot.
  * onEnd fires when it finishes or can't play, so the hero's screen is never held up. */
@@ -247,6 +266,11 @@ export const HeroScreen: React.FC<HeroScreenProps> = ({ hero, status, catalog, c
   const [move, setMove] = useState<{ clip: string; key: number } | null>(null);
   const [filmMove, setFilmMove] = useState<{ from: number; to: number; key: number } | null>(null);
   const [isBusy, setIsBusy] = useState(false);
+  const [box, setBox] = useState<{ w: number; h: number } | null>(null);
+  const placement = useMemo<HeroPlacement | null>(
+    () => (film && box ? { ...coverSpot(film.spot, box.w, box.h), yaw: film.spot.yaw, base: 'stand' } : null),
+    [film, box],
+  );
 
   const stageItems = useMemo(() => loadoutItems(catalog, getLoadout(profile, hero.id), hero), [catalog, profile, hero]);
   const story = useMemo(
@@ -407,9 +431,22 @@ export const HeroScreen: React.FC<HeroScreenProps> = ({ hero, status, catalog, c
       supportedOrientations={['landscape', 'landscape-left', 'landscape-right']}
       onRequestClose={onBackPress}
     >
-    <View style={StyleSheet.absoluteFill}>
+    <View style={StyleSheet.absoluteFill} onLayout={(e) => setBox({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}>
       <View style={[StyleSheet.absoluteFill, { backgroundColor: '#05060C' }]} />
-      {/* A hero with a film has no 3D world */}
+      {/* A hero with a film has no 3D world: after the film they stand in its last shot, turnable by
+          finger. The viewer loads under the film, so the hero is there the moment it ends. */}
+      {film && phase === 'show' && <Image source={film.plate} style={[StyleSheet.absoluteFill, { width: '100%', height: '100%' }]} resizeMode="cover" />}
+      {film && placement && (
+        <AvatarViewer3D
+          model={hero}
+          items={stageItems}
+          autoRotate={false}
+          interactive
+          view="placed"
+          placement={placement}
+          style={StyleSheet.absoluteFill}
+        />
+      )}
       {!film && (
         <AvatarViewer3D
           model={hero}
@@ -426,7 +463,6 @@ export const HeroScreen: React.FC<HeroScreenProps> = ({ hero, status, catalog, c
         />
       )}
 
-      {film && phase === 'show' && <Image source={film.still} style={[StyleSheet.absoluteFill, { width: '100%', height: '100%' }]} resizeMode="cover" />}
       {film && phase === 'show' && filmMove && (
         <MoveClip key={filmMove.key} source={film.source} from={filmMove.from} to={filmMove.to} onEnd={() => setFilmMove(null)} />
       )}
