@@ -96,7 +96,6 @@ export const BASE_BODY_URL = 'local://avatars/ojas_fc1.glb';
 type BodyLook = NonNullable<ShopItemConfig['look']>;
 // Skin tints are linear multipliers on the base body's (light) skin; dyes are sRGB colours.
 const MEERA_LOOK: BodyLook = { tint: { skin_: [0.74, 0.58, 0.46] } };
-const COACH_LOOK: BodyLook = { tint: { skin_: [0.66, 0.5, 0.39] }, dye: { sport_top: '#1D5FA8' } };
 const ROCKETBOX_BODIES = ['local://avatars/ojas_default.glb', 'local://avatars/ojas_female.glb'];
 const isRocketbox = (character: AvatarModel) => ROCKETBOX_BODIES.includes(character.model_url);
 /** Removed from the shop, even while an older server still lists them. */
@@ -421,7 +420,9 @@ export async function equipAvatar(avatarId: string): Promise<ShopResult> {
   return { ok: data?.ok === true, error: data?.error };
 }
 
-/** The AI rival: the base body in the coach's look (VS arena and the Human vs AI screen). */
+/** The AI rival (VS arena and the Human vs AI screen): Meera exactly as she is, in her own outfit and skin
+ * tone. There is no dress system yet, so the AI wears nothing of its own (it used to get a blue top and a
+ * darker skin tint). */
 export const AI_RIVAL_MODEL: AvatarModel = {
   id: 'ai_instructor',
   name: 'AI Coach',
@@ -432,7 +433,7 @@ export const AI_RIVAL_MODEL: AvatarModel = {
   character_id: null,
   model_url: BASE_BODY_URL,
   model_format: 'glb',
-  config: { look: COACH_LOOK },
+  config: { look: MEERA_LOOK },
   thumbnail_url: null,
   is_default: false,
   sort_order: 0,

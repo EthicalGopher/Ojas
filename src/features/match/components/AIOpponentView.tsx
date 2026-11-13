@@ -3,7 +3,7 @@ import { AIBotProfile, AIBotState } from '../../../utils/aiBotService';
 import { AIInstructor3D } from './AIInstructor3D';
 import { AI_RIVAL_MODEL, baseLookItems, resolveModelUrl } from '../../../utils/avatarShopService';
 
-// The AI coach: the base body in the coach's look.
+// The AI coach: Meera in her own look (AI_RIVAL_MODEL); no outfit changes.
 const COACH_URL = resolveModelUrl(AI_RIVAL_MODEL.model_url);
 const COACH_LOADOUT = baseLookItems(AI_RIVAL_MODEL).map((it) => ({ category: it.category, config: it.config }));
 
