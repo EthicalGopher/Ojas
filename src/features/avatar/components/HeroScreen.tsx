@@ -77,7 +77,8 @@ export const STORY_VIDEOS: Record<string, {
     plate: require('../../../../assets/video/arjun_plate.jpg'),
     spot: { x: 0.475, foot: 0.9037, height: 0.7556, yaw: -0.5 },
     // Matched to the film's last frame on the emulator, part by part: low golden sun from the left,
-    // snow bounce from below; olive-brown jacket, grey trousers, tan skin, near-black hair.
+    // snow bounce from below; olive-brown jacket, grey trousers, near-black hair. His skin keeps its own
+    // colour: the film's face is in shade, and matching it darkened his skin itself, changing who he is.
     look: {
       sun: { color: '#ffc890', intensity: 2.4, from: [-2.5, 1.8, 1.2] },
       sky: '#c8d6f0',
@@ -87,7 +88,6 @@ export const STORY_VIDEOS: Record<string, {
       exposure: 0.95,
       reflections: 0.5,
       tint: {
-        skin_: [0.22, 0.25, 0.29],
         hair_main: [0.18, 0.15, 0.13],
         hair_brows: [0.4, 0.35, 0.3],
         gear_upper: [1.0, 0.92, 0.75],
