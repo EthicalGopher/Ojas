@@ -131,6 +131,13 @@ arjun-stage3: ## Arjun stages 1-3 (+ hair / mouth / bone reduction, LODs) into $
 	@mkdir -p $(ARJUN_VERSIONS)
 	$(BLENDER) -b -P scripts/blender/build_arjun.py -P scripts/blender/arjun_improve/stage1_deform.py -P scripts/blender/arjun_improve/stage2_face.py -P scripts/blender/arjun_improve/stage3_perf.py -- $(ARJUN_SRC)/Survival_Character.fbx $(ARJUN_SRC)/textures $(CLIPS_DIR)/clips_arjun.glb $(ARJUN_VERSIONS)/arjun_v0_build.glb $(ARJUN_MIXAMO)
 
+# KTX-Software (toktx), from github.com/KhronosGroup/KTX-Software/releases (Linux x86_64 tar.bz2, unpacked)
+KTX_SOFTWARE ?= scripts/blender/.cache/KTX-Software-4.4.2-Linux-x86_64
+
+arjun-stage4: ## Arjun stage 4: KTX2 (Basis) GPU-compressed textures from the stage-3 build into $(ARJUN_VERSIONS)/arjun_v4_ktx2.glb (needs toktx)
+	@test -x $(KTX_SOFTWARE)/bin/toktx || { echo "toktx not found in $(KTX_SOFTWARE)/bin (set KTX_SOFTWARE)"; exit 1; }
+	$(BLENDER) -b $(ARJUN_VERSIONS)/arjun_v3_perf.blend -P scripts/blender/arjun_improve/stage4_textures.py -- $(KTX_SOFTWARE) $(ARJUN_VERSIONS)/arjun_v4_ktx2.glb
+
 helper-bones-test: ## Check the match page's helper-bone solver against the Blender bake (needs make arjun-stage1; Node >= 22.18)
 	node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON src/features/match/helperBones.test.mjs
 

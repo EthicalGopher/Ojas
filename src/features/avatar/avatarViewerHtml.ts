@@ -26,6 +26,26 @@ export function materialRuntimeJs(): string {
   // past the terminator, more in red than blue, like light travelling under skin). Hair and lash
   // cards: alpha-to-coverage instead of blending, so strands are soft-edged and sort correctly.
   // Clothes: a fabric sheen. VRM (toon) models are left alone.
+  // GLB loader that also reads KTX2 / Basis textures (Arjun's, scripts/blender/arjun_improve/stage4_textures.py:
+  // they stay compressed on the GPU). One transcoder for the page, set up from its renderer.
+  // window properties, not vars: pages register their renderer before this code's position runs.
+  function useRendererForTextures(renderer) { window.__ojasRenderer = renderer; }
+  function gltfLoader() {
+    var l = new THREE.GLTFLoader();
+    try {
+      if (THREE.KTX2Loader && window.__ojasRenderer) {
+        if (!window.__ojasKtx2) {
+          window.__ojasKtx2 = new THREE.KTX2Loader().setTranscoderPath('/three/basis/').detectSupport(window.__ojasRenderer);
+        }
+        l.setKTX2Loader(window.__ojasKtx2);
+      }
+    } catch (e) {
+      // without KTX2 support only KTX2-textured models fail; everything else still loads
+      window.__ojasKtx2Error = String(e);
+    }
+    return l;
+  }
+
   var skinChunk = null;
   function skinLighting() {
     if (skinChunk) return skinChunk;
@@ -479,7 +499,7 @@ ${FACE_SOURCE}
   }
 
   function loadGlb(url, onDone) {
-    new THREE.GLTFLoader().load(url, onDone, undefined, function () {
+    gltfLoader().load(url, onDone, undefined, function () {
       env.post({ type: 'ITEM_ERROR', message: 'Could not download item' });
     });
   }
@@ -758,7 +778,7 @@ ${FACE_SOURCE}
   function loadModel(url, format) {
     var token = ++loadToken;
     var lastPct = -1;
-    var loader = new THREE.GLTFLoader();
+    var loader = gltfLoader();
     loader.load(
       url,
       function (gltf) {
@@ -884,6 +904,8 @@ export function getAvatarViewerHtml(opts: {
   </style>
   <script src="/three/three.min.js"></script>
   <script src="/three/GLTFLoader.js"></script>
+  <script src="/three/WorkerPool.js"></script>
+  <script src="/three/KTX2Loader.js"></script>
   <script src="/three/three-vrm.min.js"></script>
 </head>
 <body>
@@ -899,6 +921,7 @@ export function getAvatarViewerHtml(opts: {
   }
 
   var renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  useRendererForTextures(renderer);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.setClearColor(0x000000, 0);

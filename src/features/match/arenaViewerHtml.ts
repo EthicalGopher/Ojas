@@ -44,6 +44,8 @@ export function getArenaHtml(cfg: ArenaConfig): string {
   </style>
   <script src="/three/three.min.js"></script>
   <script src="/three/GLTFLoader.js"></script>
+  <script src="/three/WorkerPool.js"></script>
+  <script src="/three/KTX2Loader.js"></script>
   <script src="/three/three-vrm.min.js"></script>
 </head>
 <body>
@@ -71,6 +73,7 @@ export function getArenaHtml(cfg: ArenaConfig): string {
   var order = CONFIG.rival ? ['crowd', 'wide', 'you', 'rival', 'both'] : ['crowd', 'wide', 'you', 'both'];
 
   var renderer = new THREE.WebGLRenderer({ antialias: true });
+  useRendererForTextures(renderer);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.setClearColor(0x050506, 1);

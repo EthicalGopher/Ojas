@@ -84,6 +84,8 @@ export function getAiInstructorHtml(
   </style>
   <script src="/three/three.min.js"></script>
   <script src="/three/GLTFLoader.js"></script>
+  <script src="/three/WorkerPool.js"></script>
+  <script src="/three/KTX2Loader.js"></script>
 </head>
 <body>
 <div id="backdrop"></div>
@@ -102,6 +104,7 @@ export function getAiInstructorHtml(
   }
 
   var renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  useRendererForTextures(renderer);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.setClearColor(0x000000, 0);
@@ -235,7 +238,7 @@ ${materialRuntimeJs()}
     LOADOUT.forEach(function (it) {
       var c = it.config || {};
       if (!c.model_url) return;
-      new THREE.GLTFLoader().load(c.model_url, function (g) {
+      gltfLoader().load(c.model_url, function (g) {
         var byName = {};
         root.traverse(function (o) { if (o.isBone) byName[o.name] = o; });
         var meshes = [];
@@ -493,7 +496,7 @@ ${materialRuntimeJs()}
     liveUntil = now + 1500;
   }
 
-  new THREE.GLTFLoader().load(
+  gltfLoader().load(
     ${JSON.stringify(modelUrl)},
     function (gltf) {
       var root = gltf.scene;
