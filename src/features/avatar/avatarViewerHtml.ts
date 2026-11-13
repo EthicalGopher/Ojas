@@ -84,6 +84,20 @@ export function materialRuntimeJs(): string {
   ].join('\\n');
   var EYE_ENV = 0.25, EYE_SPEC = 0.35, EYE_ROUGH = 0.28;
   function isCloth(m) { return /top|pants|shoes|kit|outfit|sport|shirt|jacket|cloth|short|hood/i.test(m.name || ''); }
+  // Skin on a physical material: soft sheen, a faint clearcoat and the wrap lighting (skinLighting)
+  function skinUp(p) {
+    p.sheen = 0.22;
+    p.sheenRoughness = 0.55;
+    if (p.sheenColor) p.sheenColor.setRGB(1.0, 0.8, 0.72);
+    p.clearcoat = 0.05;
+    p.clearcoatRoughness = 0.5;
+    if (skinLighting()) {
+      p.onBeforeCompile = function (sh) {
+        sh.fragmentShader = sh.fragmentShader.replace('#include <lights_physical_pars_fragment>', skinLighting());
+      };
+      p.customProgramCacheKey = function () { return 'ojas-skin'; };
+    }
+  }
   function upgradeMaterial(m) {
     // eyes first: a model with KHR_materials_specular (Meera) loads as MeshPhysicalMaterial, which the
     // upgrades below skip
@@ -96,6 +110,14 @@ export function materialRuntimeJs(): string {
       if ('specularIntensity' in m) m.specularIntensity = EYE_SPEC;
       m.roughness = Math.min(m.roughness, EYE_ROUGH);
       m.userData.eye = true; // the scene-wide envMapIntensity passes leave eyes alone
+      m.userData.upgraded = true;
+      m.needsUpdate = true;
+      return m;
+    }
+    // skin that already loads as physical (Meera: KHR_materials_specular) gets the skin treatment in place,
+    // keeping its own specular; the rest of the physical materials are left as they are
+    if (m && m.isMeshPhysicalMaterial && !(m.userData && m.userData.upgraded) && isSkin(m)) {
+      skinUp(m);
       m.userData.upgraded = true;
       m.needsUpdate = true;
       return m;
@@ -117,17 +139,7 @@ export function materialRuntimeJs(): string {
     p.name = m.name;
     p.userData = Object.assign({}, m.userData, { upgraded: true });
     if (skin) {
-      p.sheen = 0.22;
-      p.sheenRoughness = 0.55;
-      if (p.sheenColor) p.sheenColor.setRGB(1.0, 0.8, 0.72);
-      p.clearcoat = 0.05;
-      p.clearcoatRoughness = 0.5;
-      if (skinLighting()) {
-        p.onBeforeCompile = function (sh) {
-          sh.fragmentShader = sh.fragmentShader.replace('#include <lights_physical_pars_fragment>', skinLighting());
-        };
-        p.customProgramCacheKey = function () { return 'ojas-skin'; };
-      }
+      skinUp(p);
     } else {
       // dark untextured sportswear stays black: a near-white sheen would grey it
       var plain = !p.map && /^sport_/.test(p.name);
