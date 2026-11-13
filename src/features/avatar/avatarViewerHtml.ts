@@ -123,13 +123,15 @@ export function materialRuntimeJs(): string {
       m.needsUpdate = true;
       return m;
     }
-    // Hair cards: alpha-to-coverage instead of blending, for cards with a solid core (Arjun's). Meera's
-    // physical cards are many faint layers (opacity ~0.1) made for blending: any cut-off erased her hair
-    // (tried 0.3, and 0.05 with the opacity boosted 4-6x), so physical hair keeps its blending.
+    // Hair cards: an alpha cut-out instead of blending, for cards with a solid core (Arjun's: 86% of the
+    // covered texels are >= 0.5 opaque). No alpha-to-coverage: it showed on the emulator but erased the
+    // hair, brows and lashes on a real phone (its result depends on the GPU's multisampling).
+    // Meera's physical cards are many faint layers (opacity ~0.1) made for blending: any cut-off erased
+    // her hair (tried 0.3, and 0.05 with the opacity boosted 4-6x), so physical hair keeps its blending.
     if (isHairCard(m) && !m.isMeshPhysicalMaterial) {
       m.transparent = false;
-      m.alphaTest = 0.3;
-      m.alphaToCoverage = true;
+      m.alphaTest = 0.5;
+      m.alphaToCoverage = false;
       m.depthWrite = true;
       m.userData.upgraded = true;
       m.needsUpdate = true;
