@@ -58,8 +58,48 @@ export function materialRuntimeJs(): string {
   }
   function isHairCard(m) { return /opacity|hair|lash|brow/i.test(m.name || '') && !!m.map; }
   function isSkin(m) { return /skin|head|neck|body/i.test(m.name || '') && !/opacity/i.test(m.name || ''); }
+  // Eyeballs (Arjun's eye, Meera's eye_l / eye_r; not the cornea, lashes or brows)
+  function isEye(m) { return /(^|_)eyes?(_[lr])?$/i.test(m.name || '') && !/cornea|lash|brow|occlu/i.test(m.name || ''); }
+  // In game the eyes read as white: lit exactly like the skin, with nothing shading them, and a rough, fully
+  // specular eyeball (Meera: specular 1, roughness 0.55) reflecting the studio light as a milky haze (with
+  // the texture at 10% they were still mid-grey). Real eyes sit in the shade of brow and lids, darkest at
+  // the corners, and their shine is a small sharp highlight. In linear colour, after the texture:
+  // - paper-white texels (Arjun's whites) go to a warm light grey;
+  // - pale grey, unsaturated texels that aren't white (Meera's grey iris) darken, so the iris reads;
+  // - the whole eye takes the brow's shade, more where the eyeball turns away from the camera (corners);
+  // - the part facing up darkens under the upper lid.
+  // upgradeMaterial also trims the eyes' reflections (EYE_ENV / EYE_SPEC / EYE_ROUGH).
+  var EYE_GLSL = [
+    '{',
+    '  float lo = min(diffuseColor.r, min(diffuseColor.g, diffuseColor.b));',
+    '  float hi = max(diffuseColor.r, max(diffuseColor.g, diffuseColor.b));',
+    '  float white = smoothstep(0.5, 0.9, lo);',
+    '  float greyIris = (1.0 - white) * smoothstep(0.1, 0.3, lo) * (1.0 - smoothstep(0.08, 0.25, hi - lo));',
+    '  diffuseColor.rgb *= mix(vec3(1.0), vec3(0.56, 0.53, 0.51), white);',
+    '  diffuseColor.rgb *= 1.0 - 0.35 * greyIris;',
+    '  float ndv = clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0);',
+    '  diffuseColor.rgb *= 0.75 * mix(0.45, 1.0, smoothstep(0.35, 0.95, ndv));',
+    '  diffuseColor.rgb *= 1.0 - 0.45 * smoothstep(-0.1, 0.6, normal.y);',
+    '}',
+  ].join('\\n');
+  var EYE_ENV = 0.25, EYE_SPEC = 0.35, EYE_ROUGH = 0.28;
   function isCloth(m) { return /top|pants|shoes|kit|outfit|sport|shirt|jacket|cloth|short|hood/i.test(m.name || ''); }
   function upgradeMaterial(m) {
+    // eyes first: a model with KHR_materials_specular (Meera) loads as MeshPhysicalMaterial, which the
+    // upgrades below skip
+    if (m && m.isMeshStandardMaterial && !(m.userData && m.userData.upgraded) && isEye(m)) {
+      m.onBeforeCompile = function (sh) {
+        sh.fragmentShader = sh.fragmentShader.replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\\n' + EYE_GLSL);
+      };
+      m.customProgramCacheKey = function () { return 'ojas-eye'; };
+      m.envMapIntensity = EYE_ENV;
+      if ('specularIntensity' in m) m.specularIntensity = EYE_SPEC;
+      m.roughness = Math.min(m.roughness, EYE_ROUGH);
+      m.userData.eye = true; // the scene-wide envMapIntensity passes leave eyes alone
+      m.userData.upgraded = true;
+      m.needsUpdate = true;
+      return m;
+    }
     if (!m || !m.isMeshStandardMaterial || m.isMeshPhysicalMaterial || (m.userData && m.userData.upgraded)) return m;
     if (isHairCard(m)) {
       m.transparent = false;
@@ -992,7 +1032,7 @@ export function getAvatarViewerHtml(opts: {
       (Array.isArray(o.material) ? o.material : [o.material]).forEach(function (m) {
         // crisper fabric and face textures at grazing angles
         ['map', 'normalMap', 'roughnessMap'].forEach(function (k) { if (m[k]) { m[k].anisotropy = aniso; m[k].needsUpdate = true; } });
-        if (!isVrm && 'envMapIntensity' in m) m.envMapIntensity = 0.6;
+        if (!isVrm && 'envMapIntensity' in m && !m.userData.eye) m.envMapIntensity = 0.6;
         m.needsUpdate = true;
       });
     });

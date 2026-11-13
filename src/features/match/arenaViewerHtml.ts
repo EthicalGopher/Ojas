@@ -273,7 +273,7 @@ export function getArenaHtml(cfg: ArenaConfig): string {
           if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; }
           if (!o.material) return;
           (Array.isArray(o.material) ? o.material : [o.material]).forEach(function (m) {
-            if ('envMapIntensity' in m) m.envMapIntensity = 0.5;
+            if ('envMapIntensity' in m && !m.userData.eye) m.envMapIntensity = 0.5; // eyes keep their own (materialRuntimeJs)
           });
         });
         shown++;
