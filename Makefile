@@ -138,6 +138,11 @@ arjun-stage4: ## Arjun stage 4: KTX2 (Basis) GPU-compressed textures from the st
 	@test -x $(KTX_SOFTWARE)/bin/toktx || { echo "toktx not found in $(KTX_SOFTWARE)/bin (set KTX_SOFTWARE)"; exit 1; }
 	$(BLENDER) -b $(ARJUN_VERSIONS)/arjun_v3_perf.blend -P scripts/blender/arjun_improve/stage4_textures.py -- $(KTX_SOFTWARE) $(ARJUN_VERSIONS)/arjun_v4_ktx2.glb
 
+arjun-stage5: ## Arjun stage 5: rebuilt to match his film (clothes' textures, hair volume), KTX2, into $(ARJUN_VERSIONS)/arjun_v5_film.glb (needs opencv, toktx)
+	python scripts/blender/arjun_improve/film_textures.py $(ARJUN_VERSIONS)/arjun_v3_perf.glb scripts/blender/.cache/arjun_film_tex
+	$(BLENDER) -b $(ARJUN_VERSIONS)/arjun_v3_perf.blend -P scripts/blender/arjun_improve/stage5_film.py -- scripts/blender/.cache/arjun_film_tex $(ARJUN_VERSIONS)/arjun_v5_film.blend
+	$(BLENDER) -b $(ARJUN_VERSIONS)/arjun_v5_film.blend -P scripts/blender/arjun_improve/stage4_textures.py -- $(KTX_SOFTWARE) $(ARJUN_VERSIONS)/arjun_v5_film.glb
+
 helper-bones-test: ## Check the match page's helper-bone solver against the Blender bake (needs make arjun-stage1; Node >= 22.18)
 	node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON src/features/match/helperBones.test.mjs
 

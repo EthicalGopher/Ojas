@@ -76,9 +76,8 @@ export const STORY_VIDEOS: Record<string, {
     still: require('../../../../assets/video/arjun_still.jpg'),
     plate: require('../../../../assets/video/arjun_plate.jpg'),
     spot: { x: 0.475, foot: 0.9037, height: 0.7556, yaw: -0.5 },
-    // Matched to the film's last frame on the emulator, part by part: low golden sun from the left,
-    // snow bounce from below; olive-brown jacket, grey trousers, near-black hair. His skin keeps its own
-    // colour: the film's face is in shade, and matching it darkened his skin itself, changing who he is.
+    // The film's light on the model: low golden sun from the left, snow bounce from below. The model's
+    // own textures now carry the film's colours (stage 5), so nothing is tinted.
     look: {
       sun: { color: '#ffc890', intensity: 2.4, from: [-2.5, 1.8, 1.2] },
       sky: '#c8d6f0',
@@ -87,13 +86,8 @@ export const STORY_VIDEOS: Record<string, {
       rims: 0.22,
       exposure: 0.95,
       reflections: 0.5,
-      tint: {
-        hair_main: [0.18, 0.15, 0.13],
-        hair_brows: [0.4, 0.35, 0.3],
-        gear_upper: [1.0, 0.92, 0.75],
-        gear_lower: [0.9, 0.9, 0.88],
-      },
-      clothRelief: 0.35,
+      tint: {},
+      clothRelief: 1,
     },
     webPath: 'video/arjun_story.mp4',
     moves: { hero_move1: { from: 0, to: 3.45 }, hero_move2: { from: 4.6, to: 7.9 } },
