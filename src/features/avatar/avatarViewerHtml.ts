@@ -1,3 +1,5 @@
+import { FACE_SOURCE } from './faceSource';
+
 // HTML for the 3D avatar WebView. Loaded with baseUrl http://127.0.0.1:8888 so three.js
 // and bundled models come from the APK through LocalAssetServer (works offline).
 //
@@ -170,6 +172,7 @@ export function actorRuntimeJs(): string {
   }
 
 ${materialRuntimeJs()}
+${FACE_SOURCE}
   // One character on the stage: its model, clips, loadout and followers, all under its own pivot.
   // env: { scene, post(msg), onShown(entry) }; opts: { lively }.
   function createActor(env, opts) {
@@ -286,6 +289,7 @@ ${materialRuntimeJs()}
     disposeCurrent();
     // Rest pose is read before the first mixer update, so it is the model's bind pose.
     if (entry.mixer) entry.fingers = collectFingers(entry.root);
+    entry.face = entry.mixer && window.OjasFace ? OjasFace.setup(entry.root) : null; // faceSource.ts
     current = entry;
     normalize(entry.root);
     pivot.add(entry.root);
@@ -686,6 +690,13 @@ ${materialRuntimeJs()}
     return p;
   }
 
+  // The face for the clip on top: a working face through squats, a smile on cheers and victories.
+  function clipFace(p) {
+    var a = p.active, name = a ? a.getClip().name : '';
+    if (name === 'squat') return { effort: 0.35 + 0.35 * Math.sin(Math.PI * (a.time / a.getClip().duration) * 2), smile: 0 };
+    return { effort: 0, smile: /cheer|victory|hero_move2/i.test(name) ? 1 : 0 };
+  }
+
   function fadeTo(p, clip, reps, loop) {
     var next = p.mixer.clipAction(clip);
     next.reset();
@@ -803,6 +814,7 @@ ${materialRuntimeJs()}
       if (current.mixer) {
         livelyTick();
         current.mixer.mixer.update(dt);
+        if (current.face) current.face.update(dt, clipFace(current.mixer));
         if (api.pose) api.pose(current, t);
         relaxFingers();
       } else proceduralIdle(t);

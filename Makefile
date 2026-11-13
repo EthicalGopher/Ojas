@@ -117,6 +117,22 @@ arjun: ## Build Arjun with his own clips from the Survival Character FBX + textu
 	$(BLENDER) -b -P scripts/blender/author_hero_clips.py -- $(CLIPS_SRC) arjun $(CLIPS_DIR)/clips_arjun.glb
 	$(BLENDER) -b -P scripts/blender/build_arjun.py -- $(ARJUN_SRC)/Survival_Character.fbx $(ARJUN_SRC)/textures $(CLIPS_DIR)/clips_arjun.glb android/app/src/main/assets/web/avatars/arjun.glb $(ARJUN_MIXAMO)
 
+ARJUN_VERSIONS = scripts/blender/.cache/arjun_versions
+
+arjun-stage1: ## Arjun improvement stage 1 (helper bones + 4-weight fit) into $(ARJUN_VERSIONS)/arjun_v1_deform.glb; app assets untouched
+	@mkdir -p $(ARJUN_VERSIONS)
+	$(BLENDER) -b -P scripts/blender/build_arjun.py -P scripts/blender/arjun_improve/stage1_deform.py -- $(ARJUN_SRC)/Survival_Character.fbx $(ARJUN_SRC)/textures $(CLIPS_DIR)/clips_arjun.glb $(ARJUN_VERSIONS)/arjun_v0_build.glb $(ARJUN_MIXAMO)
+
+arjun-stage2: ## Arjun stages 1+2 (deformation, then facial shape keys) into $(ARJUN_VERSIONS)/arjun_v2_face.glb; app assets untouched
+	@mkdir -p $(ARJUN_VERSIONS)
+	$(BLENDER) -b -P scripts/blender/build_arjun.py -P scripts/blender/arjun_improve/stage1_deform.py -P scripts/blender/arjun_improve/stage2_face.py -- $(ARJUN_SRC)/Survival_Character.fbx $(ARJUN_SRC)/textures $(CLIPS_DIR)/clips_arjun.glb $(ARJUN_VERSIONS)/arjun_v0_build.glb $(ARJUN_MIXAMO)
+
+helper-bones-test: ## Check the match page's helper-bone solver against the Blender bake (needs make arjun-stage1; Node >= 22.18)
+	node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON src/features/match/helperBones.test.mjs
+
+face-test: ## Check the face driver on Arjun's morph targets (make arjun-stage2 or the app's arjun.glb; Node >= 22.18)
+	node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON src/features/avatar/face.test.mjs
+
 moment-word-test: ## Run the MomentWord layout tests (Node >= 22.18)
 	@node -e "const [a,b]=process.versions.node.split('.').map(Number); process.exit(a>22||(a===22&&b>=18)?0:1)" || { echo "$@ needs Node >= 22.18 (found $$(node -v))"; exit 1; }
 	node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON src/components/game/momentWordLayout.test.mjs

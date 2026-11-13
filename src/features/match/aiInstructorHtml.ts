@@ -33,6 +33,8 @@ export type AiInstructorMode = 'squat' | 'idle' | 'rest' | 'cheer' | 'stand' | '
 
 import { ASSET_BUST } from '../../utils/avatarShopService';
 import { EXERCISE_MOVES_SOURCE } from './exerciseMovesSource';
+import { HELPER_BONES_SOURCE } from './helperBonesSource';
+import { FACE_SOURCE } from '../avatar/faceSource';
 import { materialRuntimeJs } from '../avatar/avatarViewerHtml';
 
 // Per-launch query, shared with the shop / VS viewers (see ASSET_BUST).
@@ -86,6 +88,8 @@ export function getAiInstructorHtml(
 <body>
 <div id="backdrop"></div>
 <script>${EXERCISE_MOVES_SOURCE}</script>
+<script>${HELPER_BONES_SOURCE}</script>
+<script>${FACE_SOURCE}</script>
 <script>
 (function () {
   function post(msg) {
@@ -141,6 +145,12 @@ export function getAiInstructorHtml(
   var YAW = 0;
   var CROSSFADE = 0.35;
   var mixer = null, actions = {}, weights = {};
+  var helperRig = null; // Arjun's twist / corrective bones (helperBonesSource.ts); null for other rigs
+  var face = null; // blinks, glances, effort and cheer faces (faceSource.ts); null without ARKit targets
+  function faceState() {
+    var working = mode === 'squat' || /^ex_/.test(mode) || !!moveId;
+    return { effort: working ? Math.max(0, Math.min(1, shown)) : 0, smile: mode === 'cheer' ? 1 : 0 };
+  }
   var mode = 'idle', target = 0, shown = 0;
   // framing: half the width to fit (m), camera height and look-at height (fractions of standing height)
   var viewHalfW = 0.75, viewCam = 0.55, viewLook = 0.47;
@@ -491,6 +501,8 @@ ${materialRuntimeJs()}
         if (o.isMesh) o.frustumCulled = false; // skinned bounds don't follow the squat
       });
       captureRest(root);
+      helperRig = window.OjasHelperBones ? OjasHelperBones.setup(root) : null;
+      face = window.OjasFace ? OjasFace.setup(root) : null;
       mixer = new THREE.AnimationMixer(root);
       gltf.animations.forEach(function (clip) {
         var a = mixer.clipAction(clip);
@@ -594,6 +606,8 @@ ${materialRuntimeJs()}
       var k = 1 - Math.exp(-dt * 15);
       for (var i = 0; i < smooth.length; i++) smooth[i] += (poseTarget[i] - smooth[i]) * k;
       applyLive();
+      if (helperRig) helperRig.solve();
+      if (face) face.update(dt, faceState());
       renderer.render(scene, camera);
       return;
     }
@@ -610,6 +624,8 @@ ${materialRuntimeJs()}
         actions[k].setEffectiveWeight(weights[k]);
       });
       mixer.update(dt);
+      if (helperRig) helperRig.solve(); // clips without baked helper keys get them here too
+      if (face) face.update(dt, faceState());
     }
     renderer.render(scene, camera);
   }
