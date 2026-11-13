@@ -97,18 +97,6 @@ type BodyLook = NonNullable<ShopItemConfig['look']>;
 // Skin tints are linear multipliers on the base body's (light) skin; dyes are sRGB colours.
 const MEERA_LOOK: BodyLook = { tint: { skin_: [0.74, 0.58, 0.46] } };
 const COACH_LOOK: BodyLook = { tint: { skin_: [0.66, 0.5, 0.39] }, dye: { sport_top: '#1D5FA8' } };
-/** Simulated rivals: the base body in one of these looks (not characters anyone can pick). */
-const RIVAL_LOOKS: BodyLook[] = [
-  { tint: { skin_: [0.58, 0.43, 0.33] }, dye: { sport_top: '#0F7A64' } },
-  { tint: { skin_: [0.95, 0.86, 0.78] }, dye: { hair_: '#9A6A3A', sport_top: '#5B2C83' } },
-  { tint: { skin_: [0.48, 0.35, 0.27] }, dye: { sport_top: '#C2621F' } },
-  { tint: { skin_: [0.82, 0.66, 0.54] }, dye: { sport_top: '#B76E79' } },
-  { tint: { skin_: [0.86, 0.74, 0.64] }, dye: { hair_: '#8E3B1F', sport_top: '#1B2A4A' } },
-  { tint: { skin_: [0.7, 0.55, 0.44] }, dye: { sport_top: '#A3122A' } },
-  { dye: { hair_: '#C9A26B', sport_top: '#2E6B2E' } },
-  { tint: { skin_: [0.62, 0.47, 0.36] }, dye: { hair_: '#6B2D8C', sport_top: '#E8E8EC' } },
-  { tint: { skin_: [0.74, 0.58, 0.46] }, dye: { hair_: '#B0B4BC', sport_top: '#C9A227' } },
-];
 const ROCKETBOX_BODIES = ['local://avatars/ojas_default.glb', 'local://avatars/ojas_female.glb'];
 const isRocketbox = (character: AvatarModel) => ROCKETBOX_BODIES.includes(character.model_url);
 /** Removed from the shop, even while an older server still lists them. */
@@ -469,10 +457,22 @@ export function characterVsScene(model: AvatarModel): string {
   return resolveModelUrl(/arjun/.test(model.model_url) ? 'local://avatars/arjun_vs.jpg' : 'local://avatars/meera_vs.jpg');
 }
 
-/** A stable random look for a name (simulated rivals): the base body in one of the rival looks. */
+const RIVAL_MEN = ['aarav', 'vihaan', 'arjun', 'kabir', 'rohan', 'ishaan', 'aditya', 'kunal', 'rahul', 'dev', 'leo', 'noah', 'ryan'];
+const RIVAL_WOMEN = ['ananya', 'priya', 'diya', 'isha', 'kavya', 'meera', 'riya', 'sneha', 'tara', 'nisha', 'maya', 'zara', 'emma', 'sara'];
+
+/** A simulated rival's look: one of the two heroes (Meera or Arjun, stable per name) in their own outfit,
+ * so the rival in the match matches the VS screen. No cosmetics yet, so no random dyes. */
 export function lookForName(_catalog: AvatarModel[], name: string) {
   let h = 2166136261;
   for (let i = 0; i < name.length; i++) h = Math.imul(h ^ name.charCodeAt(i), 16777619) >>> 0;
-  const model: AvatarModel = { ...AI_RIVAL_MODEL, id: 'rival', name: 'Rival', config: { look: RIVAL_LOOKS[h % RIVAL_LOOKS.length] } };
+  const heroes = BUNDLED_AVATARS.filter((b) => b.category === 'character' && b.thumbnail_url);
+  const meera = heroes.find((b) => !/arjun/.test(b.model_url));
+  const arjun = heroes.find((b) => /arjun/.test(b.model_url));
+  // Simulated rivals are named from simulatedOpponent.ts FIRST_NAMES: match the hero to the name
+  // (men's names first, since "ishaan" contains "isha"); neutral names fall back to the hash.
+  const n = name.toLowerCase();
+  const model =
+    (RIVAL_MEN.some((m) => n.includes(m)) ? arjun : RIVAL_WOMEN.some((w) => n.includes(w)) ? meera : undefined) ??
+    heroes[h % heroes.length];
   return { model, items: baseLookItems(model) };
 }

@@ -18,13 +18,13 @@ import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import { Camera } from 'expo-camera';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import {
-  Bot,
   Clock,
   Dumbbell,
   Eye,
   EyeOff,
   Flame,
   LogOut,
+  Menu,
   RefreshCw,
   RotateCcw,
   Smartphone,
@@ -35,17 +35,11 @@ import {
   X,
   Zap,
   AlertTriangle,
-  Check,
-  ChevronsDown,
   Equal,
-  Ruler,
-  ScanLine,
-  Sun,
   Video,
   VideoOff,
   PersonStanding,
 } from 'lucide-react-native';
-import { ProgressRing } from '../../../components/ui/ProgressRing';
 import {
   disconnectMatchSocket,
   addMatchMessageListener,
@@ -75,6 +69,10 @@ import {
 import { AIOpponentView } from './AIOpponentView';
 import { ArenaIntro } from './ArenaIntro';
 import { DuelOpponentView } from './DuelOpponentView';
+import { PositionCheck, PositionCheckHandle } from './PositionCheck';
+import { DuelHud } from './DuelHud';
+import { GText } from '../../../components/game';
+import { Slant } from '../../../components/game/Slant';
 import type { AIInstructor3DHandle } from './AIInstructor3D';
 import { SimulatedOpponent } from '../../../utils/simulatedOpponent';
 import { getAvatarUri } from '../../../components/Avatar';
@@ -155,6 +153,7 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
   const recordedResultRef = useRef(false);
   const webViewRef = useRef<WebView>(null);
   const matchPhaseRef = useRef<MatchPhase>('loading_resources');
+  const positionCheckRef = useRef<PositionCheckHandle>(null);
   // The 3D opponent loads while players sync and the camera is set up; the match waits for it.
   const opponentModelReadyRef = useRef(false);
   const markOpponentModelReady = useCallback(() => {
@@ -456,7 +455,7 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
           if (p.length === 76 && p.every((v: number) => Number.isFinite(v))) duelRef.current?.pushPose(p);
         } else if (msg.data.startsWith('pose_sub:')) {
           opponentWantsPoseRef.current = msg.data === 'pose_sub:1';
-          webViewRef.current?.injectJavaScript(`window.__poseStream = ${opponentWantsPoseRef.current}; true;`);
+          webViewRef.current?.injectJavaScript(`window.__poseStream = ${opponentWantsPoseRef.current || matchPhaseRef.current === 'setup_countdown'}; true;`);
         }
       }
 
@@ -557,6 +556,19 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
   }, []);
 
   // Transition to 30s setup countdown when both resources are ready
+  // Watchdog: the pose tracker page can stall without ever sending MODEL_READY (seen after several
+  // matches in a row, when old WebGL contexts are not freed yet). Reload it instead of waiting forever.
+  const [trackerRetries, setTrackerRetries] = useState(0);
+  useEffect(() => {
+    if (localReady || trackerRetries >= 3) return;
+    const t = setTimeout(() => {
+      // remount it (a new key): reload() on an html-string page leaves it on about:blank
+      console.warn('[Match] pose tracker not ready after 20s, restarting it');
+      setTrackerRetries((n) => n + 1);
+    }, 20000);
+    return () => clearTimeout(t);
+  }, [localReady, trackerRetries]);
+
   useEffect(() => {
     if (localReady && opponentReady && matchPhase === 'loading_resources') {
       setMatchPhase('setup_countdown');
@@ -637,6 +649,13 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
   }, [matchPhase, selfUsername]);
 
   // 5-Second Post-Match Auto Requeue / Countdown Timer
+  // The camera page streams 3D poses while you get into position (your character copies you) and
+  // whenever the opponent has asked for them (live moves).
+  useEffect(() => {
+    const on = matchPhase === 'setup_countdown' || opponentWantsPoseRef.current;
+    webViewRef.current?.injectJavaScript(`window.__poseStream = ${on}; true;`);
+  }, [matchPhase]);
+
   useEffect(() => {
     if (matchPhase !== 'match_ended') {
       setAutoCountdown(5);
@@ -689,6 +708,11 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
         // Live pose visibility during camera adjustment mode
         if (data.type === 'POSE_VISIBILITY' && typeof data.visibility === 'number') {
           setVisibility(data.visibility);
+        }
+
+        // Getting into position: your character copies you and the move check reads the pose
+        if (matchPhaseRef.current === 'setup_countdown' && data.type === 'POSE_WORLD' && Array.isArray(data.p)) {
+          positionCheckRef.current?.pushPose(data.p);
         }
 
         // Our pose, for an opponent who switched live moves on
@@ -944,6 +968,7 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
       {mode === 'ffa' ? (
         <View style={styles.yourContainerFull}>
           <WebView
+            key={`pose-${trackerRetries}`}
             ref={webViewRef}
             source={{
               html: htmlBundle,
@@ -1041,6 +1066,7 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
             ]}
           >
             <WebView
+              key={`pose-${trackerRetries}`}
               ref={webViewRef}
               source={{
                 html: htmlBundle,
@@ -1075,7 +1101,9 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
           ready={matchPhase !== 'loading_resources'}
           statusText={
             !localReady
-              ? 'Loading pose tracker...'
+              ? trackerRetries > 0
+                ? 'Restarting pose tracker...'
+                : 'Loading pose tracker...'
               : mode === 'ffa'
               ? ffaTotalPlayers > 0
                 ? `${ffaReadyCount}/${ffaTotalPlayers} athletes ready...`
@@ -1089,85 +1117,18 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
         />
       )}
 
-      {/* OVERLAY 2: Camera setup - countdown ring, body-frame guide and positioning status */}
-      {matchPhase === 'setup_countdown' && (() => {
-        const status =
-          setupCount <= 3
-            ? { label: 'GET READY', hint: 'The match starts in a moment', color: '#E25822', Icon: Zap }
-            : visibility >= 0.7
-            ? { label: 'PERFECT', hint: 'Hold this spot - you are fully in frame', color: '#10B981', Icon: Check }
-            : visibility >= 0.35
-            ? { label: 'MOVE BACK', hint: 'A little further from the phone', color: '#F59E0B', Icon: ChevronsDown }
-            : { label: 'STEP BACK', hint: 'Get your whole body inside the frame', color: '#EF4444', Icon: ScanLine };
-        const framePct = Math.round(Math.min(1, Math.max(0, visibility)) * 100);
-        const rivalName = mode === 'ffa' ? 'Battle Ground' : mode === 'ai_battle' ? currentBot.name : `@${opponentUsername}`;
-        const StatusIcon = status.Icon;
-        // Split modes (AI duel / faceoff) only cover the player's own camera half; keep clear of
-        // the floating action bar at the bottom.
-        const isSplit = mode !== 'quickjoin' && mode !== 'ffa' && !aiFullscreen;
-        const compact = isSplit || isLandscape || aiFullscreen;
-        const region = isSplit
-          ? isLandscape
-            ? { top: 0, bottom: 0, left: windowWidth / 2, right: 0 }
-            : { top: windowHeight / 2, bottom: 0, left: 0, right: 0 }
-          : { top: 0, bottom: 0, left: 0, right: 0 };
-
-        return (
-          <View
-            style={[
-              styles.setupOverlay,
-              region,
-              { paddingTop: isSplit && !isLandscape ? 12 : isLandscape ? 16 : 48, paddingBottom: isLandscape ? 84 : 136 },
-            ]}
-            pointerEvents="none"
-          >
-            {/* Top bar: who you're facing + countdown ring */}
-            <View style={styles.setupTopBar}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.setupEyebrow}>GET INTO POSITION</Text>
-                <Text style={styles.setupTitle} numberOfLines={1}>vs {rivalName}</Text>
-              </View>
-              <ProgressRing size={62} strokeWidth={5} progress={setupCount / 30} color={status.color} trackColor="rgba(255,255,255,0.15)">
-                <Text style={styles.setupCount}>{setupCount}</Text>
-              </ProgressRing>
-            </View>
-
-            {/* Body frame guide (full-screen camera only) */}
-            {!compact && <View style={styles.frameGuide}>
-              {(['tl', 'tr', 'bl', 'br'] as const).map((corner) => (
-                <View key={corner} style={[styles.frameCorner, styles[`frame_${corner}`], { borderColor: status.color }]} />
-              ))}
-            </View>}
-
-            {/* Bottom panel: status, frame meter, tips */}
-            <Animated.View style={[styles.setupBottom, { opacity: instructionAnim.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1] }) }]}>
-              <View style={styles.setupStatusRow}>
-                <View style={[styles.setupStatusPill, { backgroundColor: status.color }]}>
-                  <StatusIcon size={16} color="#FFFFFF" strokeWidth={3} />
-                  <Text style={styles.setupStatusText}>{status.label}</Text>
-                </View>
-                <Text style={styles.setupFramePct}>{framePct}%</Text>
-              </View>
-              <Text style={styles.setupHint}>{status.hint}</Text>
-              <View style={styles.setupMeterTrack}>
-                <View style={[styles.setupMeterFill, { width: `${Math.max(3, framePct)}%`, backgroundColor: status.color }]} />
-              </View>
-              {!compact && <View style={styles.setupTips}>
-                {[
-                  { Icon: Ruler, text: '5-7 ft away' },
-                  { Icon: Smartphone, text: 'Phone upright' },
-                  { Icon: Sun, text: 'Good light' },
-                ].map(({ Icon, text }) => (
-                  <View key={text} style={styles.setupTip}>
-                    <Icon size={13} color="rgba(255,255,255,0.8)" />
-                    <Text style={styles.setupTipText}>{text}</Text>
-                  </View>
-                ))}
-              </View>}
-            </Animated.View>
-          </View>
-        );
-      })()}
+      {/* OVERLAY 2: getting into position - your character copies you (not the camera) and a short move check */}
+      {matchPhase === 'setup_countdown' && (
+        <View style={[StyleSheet.absoluteFill, { zIndex: 40, elevation: 40 }]} pointerEvents="none">
+          <PositionCheck
+            ref={positionCheckRef}
+            exerciseId={exerciseId}
+            rivalName={mode === 'ffa' ? 'Battle Ground' : mode === 'ai_battle' ? currentBot.name : opponentUsername}
+            secondsLeft={setupCount}
+            visibility={visibility}
+          />
+        </View>
+      )}
 
       {/* Top HUD Scoreboard (Active during Match) */}
       {(matchPhase === 'active_match' || matchPhase === 'match_ended') && (
@@ -1187,15 +1148,16 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
         />
       )}
 
-      {/* Active Match Low Visibility Alert Banner (Shown if visibility < 40% during game) */}
+      {/* Active Match Low Visibility: a slanted warning at the bottom, clear of the characters */}
       {matchPhase === 'active_match' && visibility < 0.40 && (
-        <View style={styles.activeLowVisibilityOverlay} pointerEvents="none">
-          <View style={styles.activeLowVisibilityPill}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <AlertTriangle size={16} color="#FFFFFF" strokeWidth={2.6} />
-              <Text style={styles.activeLowVisibilityText}>LOW VISIBILITY</Text>
+        <View style={styles.lowVisWrap} pointerEvents="none">
+          <View style={styles.lowVisBanner}>
+            <Slant fill="#DC2626" to="#EF4444" />
+            <AlertTriangle size={18} color="#FFFFFF" strokeWidth={2.6} />
+            <View>
+              <GText variant="hero" size={16} style={{ color: '#FFFFFF', letterSpacing: 1 }}>STEP BACK</GText>
+              <GText variant="label" size={11} style={{ color: '#FEE2E2' }}>Get your whole body in view to count reps</GText>
             </View>
-            <Text style={styles.activeLowVisibilitySub}>Step back into full camera frame to count reps</Text>
           </View>
         </View>
       )}
@@ -1256,9 +1218,6 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
             {/* AI Bot Post-Match Quote if AI battle */}
             {mode === 'ai_battle' && (
               <View style={styles.aiEndQuoteCard}>
-                <View style={{ backgroundColor: '#1E293B', width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' }}>
-                  <Bot size={14} color="#E25822" />
-                </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.aiEndQuoteBotName}>{currentBot.name} • {currentBot.tier}</Text>
                   <Text style={styles.aiEndQuoteText}>
@@ -1464,15 +1423,12 @@ const DraggableActionsWidget: React.FC<DraggableWidgetProps> = ({
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const isLandscape = windowWidth > windowHeight;
 
-  const defaultY = isLandscape
-    ? Math.max(12, windowHeight - 64)
-    : Math.max(12, windowHeight - 120);
-  const defaultX = isLandscape
-    ? Math.max(12, (windowWidth - 310) / 2)
-    : 16;
+  // Folded into one menu button in the bottom-left corner, clear of the characters; tap to open.
+  const defaultY = isLandscape ? Math.max(12, windowHeight - 64) : Math.max(12, windowHeight - 120);
+  const defaultX = 16;
 
   const pan = useRef(new Animated.ValueXY({ x: defaultX, y: defaultY })).current;
-  const [isExpanded, setIsExpanded] = useState(true);
+  const [isExpanded, setIsExpanded] = useState(false);
 
   // Keep widget in visible bounds on orientation change
   useEffect(() => {
@@ -1512,16 +1468,16 @@ const DraggableActionsWidget: React.FC<DraggableWidgetProps> = ({
       {...panResponder.panHandlers}
     >
       <View style={styles.widgetPillBox}>
-        {/* Dumbbell / Bot Icon Floating Handle & Toggle */}
+        {/* Menu handle: opens / closes the match controls */}
         <TouchableOpacity
           style={styles.dumbbellHandleBtn}
           activeOpacity={0.8}
           onPress={() => setIsExpanded(!isExpanded)}
         >
-          {isAiBattle ? (
-            <Bot size={18} color="#11141A" strokeWidth={2.5} />
+          {isExpanded ? (
+            <X size={18} color="#FFFFFF" strokeWidth={2.5} />
           ) : (
-            <Dumbbell size={18} color="#11141A" strokeWidth={2.5} />
+            <Menu size={18} color="#FFFFFF" strokeWidth={2.5} />
           )}
         </TouchableOpacity>
 
@@ -1583,7 +1539,7 @@ const DraggableActionsWidget: React.FC<DraggableWidgetProps> = ({
               activeOpacity={0.75}
               onPress={onFlipCamera}
             >
-              <SwitchCamera size={16} color="#11141A" />
+              <SwitchCamera size={16} color="#FFFFFF" />
             </TouchableOpacity>
 
             {/* 4. Rotate Orientation (Portrait / Landscape) */}
@@ -1592,7 +1548,7 @@ const DraggableActionsWidget: React.FC<DraggableWidgetProps> = ({
               activeOpacity={0.75}
               onPress={onToggleOrientation}
             >
-              <Smartphone size={16} color="#11141A" />
+              <Smartphone size={16} color="#FFFFFF" />
             </TouchableOpacity>
 
             {/* 5. Try Again / Rematch */}
@@ -1601,7 +1557,7 @@ const DraggableActionsWidget: React.FC<DraggableWidgetProps> = ({
               activeOpacity={0.75}
               onPress={onTryAgain}
             >
-              <RotateCcw size={16} color="#11141A" />
+              <RotateCcw size={16} color="#FFFFFF" />
             </TouchableOpacity>
 
             {/* 6. Addictive Auto-Rematch / Next Battle Toggle (Swords) - Only for PVP */}
@@ -1615,7 +1571,7 @@ const DraggableActionsWidget: React.FC<DraggableWidgetProps> = ({
                 activeOpacity={0.75}
                 onPress={onToggleAutoRematch}
               >
-                <Swords size={16} color={autoRematch ? '#11141A' : '#64748B'} strokeWidth={2.5} />
+                <Swords size={16} color={autoRematch ? '#FFFFFF' : '#94A3B8'} strokeWidth={2.5} />
                 {autoRematch && <View style={styles.addictiveActiveDot} />}
               </TouchableOpacity>
             )}
@@ -1627,7 +1583,7 @@ const DraggableActionsWidget: React.FC<DraggableWidgetProps> = ({
                 activeOpacity={0.75}
                 onPress={onSendFriendRequest}
               >
-                <UserPlus size={16} color="#11141A" />
+                <UserPlus size={16} color="#FFFFFF" />
               </TouchableOpacity>
             )}
           </View>
@@ -1724,10 +1680,6 @@ const ScoreBoard: React.FC<{
     return result;
   }, [mode, selfUsername, selfScore, ffaLeaderboard]);
 
-  const outcome: 'WIN' | 'LOSE' | 'DRAW' =
-    selfScore > opponentScore ? 'WIN' : selfScore < opponentScore ? 'LOSE' : 'DRAW';
-  const leader: 'self' | 'opponent' | null =
-    selfScore === opponentScore ? null : selfScore > opponentScore ? 'self' : 'opponent';
   const urgent = !ended && timeLeft > 0 && timeLeft <= 10;
 
   useEffect(() => {
@@ -1901,79 +1853,19 @@ const ScoreBoard: React.FC<{
   }
 
   return (
-    <View style={styles.scoreBoard} pointerEvents="none">
-      <PlayerBadge
-        isSelf
-        label="YOU"
-        username={selfUsername}
-        avatarUrl={selfAvatarUrl}
-        score={selfScore}
-        suffix={scoreSuffix}
-        color={SELF_COLOR}
-        leading={!ended && leader === 'self'}
-        scale={selfScale}
-      />
-
-      <View style={styles.timerColumn}>
-        <Animated.View
-          style={[
-            styles.timerBadge,
-            ended && styles.timerBadgeEnded,
-            { borderColor: timerColor },
-            ended && { backgroundColor: timerColor + '26' },
-            { transform: [{ scale: pulseScale }] },
-          ]}
-        >
-          {ended ? (
-            <Text style={[styles.timerOutcome, { color: timerColor }]} numberOfLines={1}>
-              {outcome === 'WIN'
-                ? 'VICTORY (+10)'
-                : outcome === 'DRAW'
-                ? 'DRAW (+5)'
-                : 'DEFEAT (-10)'}
-            </Text>
-          ) : (
-            <>
-              <Text style={[styles.timerValue, { color: timerColor }]}>
-                {formatMatchTime(timeLeft)}
-              </Text>
-              <Text style={styles.timerUnit}>{timeLeft >= 60 ? 'MIN' : 'SEC'}</Text>
-            </>
-          )}
-        </Animated.View>
-
-        {/* Live State showcase below timer */}
-        {!ended && poseState && (
-          <View style={styles.liveStateHolder}>
-            <View
-              style={[
-                styles.liveStateBadge,
-                {
-                  backgroundColor: poseState.bg,
-                  borderColor: poseState.border,
-                },
-              ]}
-            >
-              <Text style={[styles.liveStateText, { color: poseState.color }]} numberOfLines={1} adjustsFontSizeToFit>
-                {poseState.text}
-              </Text>
-            </View>
-          </View>
-        )}
-      </View>
-
-      <PlayerBadge
-        label={(opponentUsername || 'OPPONENT').toUpperCase()}
-        username={opponentUsername}
-        avatarUrl={opponentAvatarUrl}
-        score={opponentScore}
-        suffix={scoreSuffix}
-        color={OPPONENT_COLOR}
-        leading={!ended && leader === 'opponent'}
-        scale={opponentScale}
-        isBot={mode === 'ai_battle'}
-      />
-    </View>
+    <DuelHud
+      selfName={selfUsername}
+      rivalName={opponentUsername}
+      selfScore={selfScore}
+      rivalScore={opponentScore}
+      selfScale={selfScale}
+      rivalScale={opponentScale}
+      timeLeft={timeLeft}
+      ended={ended}
+      isBot={mode === 'ai_battle'}
+      suffix={scoreSuffix}
+      poseState={poseState}
+    />
   );
 };
 
@@ -1998,13 +1890,7 @@ const PlayerBadge: React.FC<{
     <View style={[styles.playerSide, !isSelf && styles.playerSideRight]}>
       <View style={[styles.playerBadge, compact && styles.playerBadgeCompact, !isSelf && styles.playerBadgeReverse, leading && styles.playerBadgeLeading]}>
         <View style={styles.avatarWrap}>
-          {isBot ? (
-            <View style={[styles.botAvatarCircle, { backgroundColor: '#1E293B', width: avatarSize, height: avatarSize, borderRadius: avatarSize / 2, justifyContent: 'center', alignItems: 'center' }]}>
-              <Bot size={avatarSize / 2} color="#E25822" />
-            </View>
-          ) : (
-            <Avatar username={username} avatarUrl={avatarUrl} size={avatarSize} />
-          )}
+          <Avatar username={username} avatarUrl={avatarUrl} size={avatarSize} />
         </View>
         <View style={[isSelf ? styles.playerTextLeft : styles.playerTextRight, compact && (isSelf ? { marginLeft: 6 } : { marginRight: 6 })]}>
           <Text style={styles.playerLabel} numberOfLines={1}>
@@ -2208,6 +2094,8 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     textTransform: 'uppercase',
   },
+  lowVisWrap: { position: 'absolute', left: 0, right: 0, bottom: 74, alignItems: 'center', zIndex: 95 },
+  lowVisBanner: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 32, paddingVertical: 8 },
   activeLowVisibilityOverlay: {
     position: 'absolute',
     top: 0,
@@ -2424,33 +2312,24 @@ const styles = StyleSheet.create({
     elevation: 25,
   },
   widgetPillBox: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 32,
-    paddingHorizontal: 8,
+    backgroundColor: 'rgba(11, 13, 20, 0.92)',
+    borderRadius: 10,
+    paddingHorizontal: 6,
     paddingVertical: 6,
     flexDirection: 'row',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
-    shadowRadius: 12,
-    elevation: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.8)',
+    borderWidth: 2,
+    borderColor: 'rgba(226, 88, 34, 0.55)',
     gap: 6,
+    elevation: 12,
   },
   dumbbellHandleBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: '#E8D5C4', // Soft warm skin tone dumbbell icon badge
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    backgroundColor: '#E25822',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 3,
   },
   actionButtonsRow: {
     flexDirection: 'row',
@@ -2458,51 +2337,47 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   widgetActionBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: '#F1F5F9',
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.14)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   leaveActionBtn: {
-    backgroundColor: '#EF4444',
+    backgroundColor: '#DC2626',
+    borderColor: '#DC2626',
   },
   mutedActionBtn: {
-    backgroundColor: 'rgba(239, 68, 68, 0.15)',
-    borderWidth: 1,
-    borderColor: 'rgba(239, 68, 68, 0.3)',
+    backgroundColor: 'transparent',
+    borderColor: 'rgba(255, 255, 255, 0.1)',
   },
   addictiveActionBtn: {
-    backgroundColor: '#F1F5F9',
     position: 'relative',
   },
   addictiveActionBtnActive: {
-    backgroundColor: '#E8D5C4',
-    borderWidth: 1.5,
-    borderColor: '#E8D5C4',
-    shadowColor: '#E8D5C4',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.6,
-    shadowRadius: 6,
-    elevation: 4,
+    backgroundColor: '#E25822',
+    borderColor: '#FF8A3D',
   },
   addictiveActiveDot: {
     position: 'absolute',
-    top: 2,
-    right: 2,
+    top: 3,
+    right: 3,
     width: 8,
     height: 8,
     borderRadius: 4,
     backgroundColor: '#10B981',
     borderWidth: 1,
-    borderColor: '#FFFFFF',
+    borderColor: '#0B0D14',
   },
   challengeActionBtn: {
     backgroundColor: '#E8D5C4',
   },
   friendActionBtn: {
-    backgroundColor: '#C8B6FF', // Soft lavender
+    backgroundColor: '#1F4FB8',
+    borderColor: '#3B8DFF',
   },
   ffaScoreBoardContainer: {
     position: 'absolute',

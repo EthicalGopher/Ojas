@@ -65,6 +65,17 @@ export const AIInstructor3D = forwardRef<AIInstructor3DHandle, AIInstructor3DPro
       },
     }));
 
+    // ...and while loading: a page that never finishes (no progress for 25 s) is reloaded too. After
+    // several matches in a row old WebGL contexts can linger and a new page stalls before LOADED.
+    useEffect(() => {
+      if (status !== 'loading') return;
+      const t = setInterval(() => {
+        if (Date.now() - lastBeat.current > 25000) reload();
+      }, 2000);
+      return () => clearInterval(t);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [status, reloadKey]);
+
     useEffect(() => {
       if (status !== 'ready') return;
       const t = setInterval(() => {
@@ -90,7 +101,10 @@ export const AIInstructor3D = forwardRef<AIInstructor3DHandle, AIInstructor3DPro
       try {
         const msg = JSON.parse(event.nativeEvent.data);
         if (msg.type === 'HEARTBEAT') lastBeat.current = Date.now();
-        else if (msg.type === 'PROGRESS') setProgress(msg.progress);
+        else if (msg.type === 'PROGRESS') {
+          lastBeat.current = Date.now();
+          setProgress(msg.progress);
+        }
         else if (msg.type === 'LOADED') {
           lastBeat.current = Date.now();
           setStatus('ready');
