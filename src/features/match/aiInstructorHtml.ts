@@ -169,6 +169,9 @@ export function getAiInstructorHtml(
     var dist = Math.max(fitH, fitW);
     camera.position.set(0, TARGET_HEIGHT * (viewCam + headroom), dist);
     camera.lookAt(0, TARGET_HEIGHT * (viewLook + headroom), 0);
+    // near plane well out (phones' 16-bit depth let the skin show through tight clothes and gloves)
+    camera.near = Math.max(0.05, Math.min(dist * 0.5, dist - 1.2));
+    camera.updateProjectionMatrix();
   }
 
   // Scale to a common height, stand on y = 0, centred. Measured on the posed bones: the skinned

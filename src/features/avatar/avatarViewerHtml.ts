@@ -132,6 +132,9 @@ export function materialRuntimeJs(): string {
       m.transparent = false;
       m.alphaTest = 0.5;
       m.alphaToCoverage = false;
+      // No normal map on the cards: tilted across the flat, two-sided cards it turned the sun's
+      // highlight into a silver-grey patch over the temple. The strands are drawn in the colour map.
+      m.normalMap = null;
       m.depthWrite = true;
       m.userData.upgraded = true;
       m.needsUpdate = true;
@@ -1734,6 +1737,19 @@ export function getAvatarViewerHtml(opts: {
     renderer.setSize(window.innerWidth, window.innerHeight);
   });
 
+  // Near plane as far out as the shot allows. Phones can have a 16-bit depth buffer: with the near plane
+  // at 5 cm and the camera 4 m away, depth steps are ~5 mm, coarser than the gap between skin and a
+  // tight outfit or gloves, so the skin showed through them in patches (Meera's "torn" sportswear).
+  // Keeping 1.2 m in front of the character's middle (and never more than half the distance) leaves
+  // close-ups at 5 cm and makes the depth steps ~50x finer for full-body shots.
+  var nearC = new THREE.Vector3();
+  function fitNear() {
+    pivot.getWorldPosition(nearC);
+    nearC.y += TARGET_HEIGHT / 2;
+    var d = camera.position.distanceTo(nearC);
+    var n = Math.max(0.05, Math.min(d * 0.5, d - 1.2));
+    if (Math.abs(n - camera.near) > 0.01) { camera.near = n; camera.updateProjectionMatrix(); }
+  }
   function tick() {
     requestAnimationFrame(tick);
     var dt = Math.min(clock.getDelta(), 0.1);
@@ -1749,6 +1765,7 @@ export function getAvatarViewerHtml(opts: {
     else if (view === 'lobby') lobbyCamera(t);
     if (aura) updateAura(dt, t);
     if (sparks.length) updateSparks(dt);
+    fitNear();
     renderer.render(scene, camera);
     if (drawnIn > 0 && actor.current() && --drawnIn === 0) post({ type: 'DRAWN' });
   }
