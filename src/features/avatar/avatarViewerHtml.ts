@@ -98,6 +98,19 @@ export function materialRuntimeJs(): string {
     return toonRamp;
   }
   var OUTLINE = 0.006; // metres, in the model's own units
+  var OUTLINE_HAND = 0.0022;
+  var TOON_GLSL = [
+    'float ojasLit = 0.0; float ojasTop = 0.0;',
+    '#if NUM_DIR_LIGHTS > 0',
+    'for (int i = 0; i < NUM_DIR_LIGHTS; i++) {',
+    '  float li = dot(directionalLights[i].color, vec3(0.299, 0.587, 0.114));',
+    '  ojasTop = max(ojasTop, li);',
+    '  ojasLit = max(ojasLit, li * max(dot(normal, directionalLights[i].direction), 0.0));',
+    '}',
+    '#endif',
+    'float ojasK = ojasTop > 0.0 ? ojasLit / ojasTop : 1.0;',
+    'outgoingLight = diffuseColor.rgb * (ojasK > 0.42 ? 1.0 : (ojasK > 0.12 ? 0.82 : 0.64));',
+  ].join('\\n');
   function isCloth(m) { return /top|pants|shoes|kit|outfit|sport|shirt|jacket|cloth|short|hood/i.test(m.name || ''); }
   // Skin on a physical material: soft sheen, a faint clearcoat and the wrap lighting (skinLighting)
   function skinUp(p) {
@@ -131,11 +144,11 @@ export function materialRuntimeJs(): string {
       if (m.normalMap) t.normalScale.copy(m.normalScale);
       // flat comic colours: the filmic tone mapping washed the yellow out to cream under the lobby's lights
       t.toneMapped = false;
-      // the stage lights add up past 1 (and differ per page): the lit tone is capped at the authored colour,
-      // so it reads the same in the lobby and on the brighter match stage; the shade bands stay
+      // Comic tones that don't depend on how bright a page's lights are (they differ per page and add up
+      // past 1): lit = the authored colour, then two shade bands, from the direction of the brightest light
+      // (relative to it), so the muscles read the same in the lobby and on the match stage.
       t.onBeforeCompile = function (sh) {
-        sh.fragmentShader = sh.fragmentShader.replace('#include <output_fragment>',
-          'outgoingLight = min(outgoingLight, diffuseColor.rgb);\\n#include <output_fragment>');
+        sh.fragmentShader = sh.fragmentShader.replace('#include <output_fragment>', TOON_GLSL + '\\n#include <output_fragment>');
       };
       t.customProgramCacheKey = function () { return 'ojas-toon'; };
       t.name = m.name;
@@ -210,10 +223,12 @@ export function materialRuntimeJs(): string {
     });
     inked.forEach(function (o) {
       var ink = new THREE.MeshBasicMaterial({ color: 0x141418, side: THREE.BackSide });
+      // hands get a fine line: a hull as thick as a finger folds over itself (slivers along the fingers)
+      var width = /^toon_hand/.test(o.material.name) ? OUTLINE_HAND : OUTLINE;
       ink.onBeforeCompile = function (sh) {
-        sh.vertexShader = sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\\n transformed += normal * ' + OUTLINE.toFixed(4) + ';');
+        sh.vertexShader = sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\\n transformed += normal * ' + width.toFixed(4) + ';');
       };
-      ink.customProgramCacheKey = function () { return 'ojas-outline'; };
+      ink.customProgramCacheKey = function () { return 'ojas-outline-' + width.toFixed(4); };
       ink.userData = { upgraded: true, outlineInk: true };
       var line = new THREE.SkinnedMesh(o.geometry, ink);
       line.name = o.name + '_outline';

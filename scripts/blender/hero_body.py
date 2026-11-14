@@ -238,9 +238,20 @@ def _clean_weights(o, short):
                 if e.group == g.index and e.weight > 0:
                     t.add([v.index], e.weight, 'ADD')
         o.vertex_groups.remove(g)
+    # FC1's hands keep their own weights (smoothing them into the hand bone stiffened the knuckles)
+    hand_mat = {i for i, m in enumerate(me.materials) if m and m.name == 'toon_hand'}
+    hand_v = {v for p in me.polygons if p.material_index in hand_mat for v in p.vertices}
+    kept = {i: [(g.group, g.weight) for g in me.vertices[i].groups] for i in hand_v}
     bpy.context.view_layer.objects.active = o
     bpy.ops.object.mode_set(mode='WEIGHT_PAINT')
     bpy.ops.object.vertex_group_smooth(group_select_mode='ALL', factor=0.5, repeat=2)
+    bpy.ops.object.mode_set(mode='OBJECT')
+    for i, gw in kept.items():
+        for g in list(me.vertices[i].groups):
+            o.vertex_groups[g.group].remove([i])
+        for gi, w in gw:
+            o.vertex_groups[gi].add([i], w, 'REPLACE')
+    bpy.ops.object.mode_set(mode='WEIGHT_PAINT')
     bpy.ops.object.vertex_group_clean(group_select_mode='ALL', limit=0.01)
     bpy.ops.object.vertex_group_limit_total(group_select_mode='ALL', limit=4)
     bpy.ops.object.vertex_group_normalize_all(group_select_mode='ALL', lock_active=False)
@@ -281,7 +292,41 @@ def _hand_piece(fc1_body, short, side, wrist, axis, back):
     return bm
 
 
-FINGER_THICKEN = 1.3   # the concept's hands are chunky; FC1's fingers are slender
+FINGER_THICKEN = 1.0   # (thickening around each bone crumpled the fingers where two bones share them)
+FINGER_CLOSE = 0.8     # FC1's fingers are spread apart in its bind pose; they close this far toward the middle one
+
+
+def _close_fingers(rig, body, short):
+    """the hands' bind pose with the fingers together (FC1's are splayed, so every clip showed a claw): each
+    finger's base turns toward the middle finger, about the palm's normal; that pose becomes the rest pose"""
+    import hero_shape
+    mw = rig.matrix_world
+    P = {short(pb.name): pb for pb in rig.pose.bones}
+    bpy.context.view_layer.objects.active = rig
+    bpy.ops.object.mode_set(mode='POSE')
+    for side in ('L_', 'R_'):
+        head = lambda n: mw @ P[side + n].head
+        if not all(side + n in P for n in ('Index1', 'Mid1', 'Ring1', 'Pinky1', 'Mid2')):
+            continue
+        mid = (head('Mid2') - head('Mid1')).normalized()
+        across = (head('Pinky1') - head('Index1')).normalized()
+        palm = across.cross(mid).normalized()
+        for n in ('Index', 'Ring', 'Pinky'):
+            b, nxt = P[side + n + '1'], P.get(side + n + '2')
+            if not nxt:
+                continue
+            h = head(n + '1')
+            d = ((mw @ nxt.head) - h)
+            d -= palm * d.dot(palm)
+            m = mid - palm * mid.dot(palm)
+            ang = d.normalized().angle(m.normalized())
+            sign = 1 if d.cross(m).dot(palm) > 0 else -1
+            R = Matrix.Rotation(sign * ang * FINGER_CLOSE, 4, palm)
+            M = mw @ b.matrix
+            b.matrix = mw.inverted() @ (Matrix.Translation(h) @ R @ Matrix.Translation(-h) @ M)
+            bpy.context.view_layer.update()
+    bpy.ops.object.mode_set(mode='OBJECT')
+    hero_shape._apply_pose_as_rest(rig, [body])
 
 
 def _thicken_fingers(hb, fc1_body, rig, short, side, xf):
@@ -441,6 +486,7 @@ def sculpt_body(fc1_body, rig, short, lo_path):
         p.use_smooth = True
 
     _clean_weights(body, short)
+    _close_fingers(rig, body, short)
     _smooth_groin(body)
     head = make_head(body, rig, short)
     region_materials(body, short)
@@ -839,9 +885,9 @@ def dress_skin(body, head, short, hi_path, out_dir):
 # ends lower: a stern look), and one line from between the eyes down to the chin with a small kink. Front-view
 # coordinates (x, z) in metres; the shapes are mirrored for the left eye.
 FACE_MAP = 1024
-EYE = dict(x_in=0.013, x_out=0.064, z_in=1.566, z_out=1.575, depth=0.0125, outline=0.0024)
+EYE = dict(x_in=0.012, x_out=0.064, z_in=1.565, z_out=1.576, depth=0.015, outline=0.0036)   # bold: reads at phone size
 FACE_LINE = [(-0.004, 1.565), (-0.009, 1.536), (-0.012, 1.527), (-0.007, 1.521), (-0.011, 1.47)]
-FACE_LINE_WIDTH = 0.0022
+FACE_LINE_WIDTH = 0.0032
 EYE_WHITE = '#FBFAF4'
 
 
@@ -1052,7 +1098,7 @@ def paint_lines(pos, valid, lines, texel=0.0008):
 # with the right fist raised in front of the shoulder, knuckles to the viewer, thumb up; a slow breath.
 THUMB_WRIST = Vector((-0.04, -0.34, -0.06))   # the wrist, from the right shoulder (metres, world)
 THUMB_POLE = Vector((-0.4, 0.2, -1.0))          # the elbow bends down and out
-FIST = {1: 1.35, 2: 1.55, 3: 0.95}              # finger curl (radians) per joint
+FIST = {1: 1.55, 2: 1.75, 3: 1.15}              # finger curl (radians) per joint: a closed fist
 IDLE_FRAMES = 72
 
 
@@ -1126,14 +1172,16 @@ def thumbs_up_clip(rig, base='stand'):
     fwd = (head('CC_R_Mid1') - head('CC_R_Hand')).normalized()
     palm = fwd.cross(across).normalized()
     for name in ('Index', 'Mid', 'Ring', 'Pinky'):
+        if f'CC_R_{name}2' not in P:
+            continue
+        # one hinge for the whole finger, from its straight direction (worked out per joint, it collapsed once
+        # the knuckle had bent toward the palm, and the middle and tip joints turned about nothing in particular)
+        axis = (head(f'CC_R_{name}2') - head(f'CC_R_{name}1')).normalized().cross(palm).normalized()
         for i in (1, 2, 3):
             bn = f'CC_R_{name}{i}'
             if bn not in P:
                 continue
-            nxt = P.get(f'CC_R_{name}{i + 1}')
             hd = head(bn)
-            direction = ((mw @ nxt.head) - hd).normalized() if nxt else (mw @ P[bn].tail - hd).normalized()
-            axis = direction.cross(palm).normalized()
             M = mw @ P[bn].matrix
             Rq = Matrix.Rotation(FIST[i], 4, axis)
             _set_world(rig, P[bn], Matrix.Translation(hd) @ Rq @ Matrix.Translation(-hd) @ M)

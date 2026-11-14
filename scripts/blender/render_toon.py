@@ -1,7 +1,7 @@
 """Render a toon hero (materials named toon_*) the way the app draws it: three flat tones and a black outline.
 
     blender -b -P scripts/blender/render_toon.py -- <hero.glb> <out.png> [--clip C --frame F] [--yaw D]
-        [--size WxH] [--transparent 1] [--hide mesh,mesh] [--backdrop plate.jpg --crop X --cx PX]
+        [--size WxH] [--transparent 1] [--hide mesh,mesh] [--focus bone --radius m] [--backdrop plate.jpg --crop X --cx PX]
 
 The app (avatarViewerHtml.ts) uses MeshToonMaterial with a 3-step ramp (110/190/255) and a back-face hull
 pushed out 6 mm, black. Here: diffuse lighting -> Shader to RGB -> constant ramp, times the material's colour
@@ -22,8 +22,9 @@ opts = dict(zip(argv[2::2], argv[3::2]))
 CLIP, FRAME = opts.get('--clip'), int(opts.get('--frame', '1'))
 YAW = math.radians(float(opts.get('--yaw', '0')))
 W, H = (int(x) for x in opts.get('--size', '720x1080').split('x'))
-TONES = (110 / 255, 190 / 255, 1.0)
+TONES = (0.64, 0.82, 1.0)        # the app's toon tones (avatarViewerHtml TOON_GLSL), lit = authored colour
 OUTLINE = 0.006
+OUTLINE_HAND = 0.0022
 
 bpy.ops.wm.read_factory_settings(use_empty=True)
 sc = bpy.context.scene
@@ -61,8 +62,8 @@ def toonify(m):
     ramp.color_ramp.interpolation = 'CONSTANT'
     els = ramp.color_ramp.elements
     els[0].position, els[0].color = 0.0, (TONES[0],) * 3 + (1,)
-    els[1].position, els[1].color = 0.33, (TONES[1],) * 3 + (1,)
-    e = els.new(0.66)
+    els[1].position, els[1].color = 0.12, (TONES[1],) * 3 + (1,)
+    e = els.new(0.42)
     e.color = (TONES[2],) * 3 + (1,)
     bw = nt.nodes.new('ShaderNodeRGBToBW')
     nt.links.new(s2r.outputs['Color'], bw.inputs['Color'])
@@ -107,6 +108,13 @@ for o in [o for o in bpy.data.objects if o.type == 'MESH']:
         sol.use_flip_normals = True
         sol.use_rim = False
         sol.material_offset = len(o.material_slots) - 1
+        hand = {i for i, sl in enumerate(o.material_slots) if sl.material and sl.material.name.startswith('toon_hand')}
+        if hand:  # hands get the fine line, like the app
+            vg = o.vertex_groups.new(name='outline_w')
+            on_hand = {v for p in o.data.polygons if p.material_index in hand for v in p.vertices}
+            vg.add([v.index for v in o.data.vertices if v.index not in on_hand], 1.0, 'REPLACE')
+            sol.vertex_group = vg.name
+            sol.thickness_vertex_group = OUTLINE_HAND / OUTLINE
 
 sc.render.engine = 'BLENDER_EEVEE_NEXT' if 'BLENDER_EEVEE_NEXT' in [e.identifier for e in bpy.types.RenderSettings.bl_rna.properties['engine'].enum_items] else 'BLENDER_EEVEE'
 sc.view_settings.view_transform = 'Standard'
@@ -130,6 +138,11 @@ for o in bpy.data.objects:
         me = o.evaluated_get(dg).to_mesh()
         pts += [o.matrix_world @ v.co for v in me.vertices]
         o.evaluated_get(dg).to_mesh_clear()
+if opts.get('--focus'):   # frame one bone's neighbourhood: --focus CC_R_Hand --radius 0.15
+    fb = arm.pose.bones[opts['--focus']]
+    fc = arm.matrix_world @ fb.head
+    r = float(opts.get('--radius', '0.15'))
+    pts = [p for p in pts if (p - fc).length < r] or pts
 lo = Vector((min(p.x for p in pts), min(p.y for p in pts), min(p.z for p in pts)))
 hi = Vector((max(p.x for p in pts), max(p.y for p in pts), max(p.z for p in pts)))
 c = (lo + hi) / 2
