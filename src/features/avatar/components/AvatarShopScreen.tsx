@@ -189,13 +189,7 @@ export const AvatarShopScreen: React.FC<AvatarShopScreenProps> = ({ onBack }) =>
               </GText>
             )}
 
-            <View style={styles.earnCard}>
-              <CoinDot size={14} />
-              <GText variant="caption" style={{ flex: 1, color: 'rgba(225,235,255,0.75)' }}>
-                You are level {level}. 1 coin for every {XP_PER_COIN} XP: reps, matches, calories and daily quests all count
-                {tabs.some((t) => t.key === 'level') ? ', and levels unlock free heroes.' : '.'}
-              </GText>
-            </View>
+       
           </ScrollView>
       </View>
 
