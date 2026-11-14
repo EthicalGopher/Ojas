@@ -554,23 +554,23 @@ def cull_covered_skin(body, cloths):
 
 fc1_body = next(o for o in meshes if o.name == 'FC1_body')
 if HERO:
+    # the sculpt itself is the body (hero_body.py): FC1's rig is fitted to it, FC1's hands are stitched on
+    import hero_body
     rig = fc1_body.parent
-    sculpt = os.environ.get('HERO_SCULPT')
-    detail = None
-    if sculpt:
-        hero_shape.wrap_to_sculpt(fc1_body, rig, short, sculpt)
-        detail = hero_shape.bake_detail(fc1_body, sculpt, os.path.join(os.path.dirname(os.path.abspath(OUT_PATH)), 'hero_maps'))
-    else:
-        hero_shape.reshape(fc1_body, rig, short)
-    kit = hero_shape.make_kit(fc1_body, rig, short, body_shell)
-    CULL.add('skin_leg')
-    cull_covered_skin(fc1_body, kit)
-    skin = hero_shape.toon_material('toon_skin', hero_shape.YELLOW)
-    hero_shape.make_head(fc1_body, rig, short, skin, hero_shape.toon_material('toon_eye', '#FFFFFF'),
-                         hero_shape.toon_material('toon_ink', '#111114'))
-    if detail:
-        hero_shape.detail_materials(fc1_body, detail)
+    sculpt = os.environ['HERO_SCULPT']
+    base = os.path.dirname(sculpt)
+    hero_shape.wrap_to_sculpt(fc1_body, rig, short, sculpt)
+    if os.environ.get('HERO_WRAP_BLEND'):  # the fitted rig and body, for working on hero_body.py alone
+        bpy.ops.wm.save_as_mainfile(filepath=os.environ['HERO_WRAP_BLEND'], copy=True)
+        if os.environ.get('HERO_STOP_AFTER_WRAP'):
+            sys.exit(0)
+    body, head = hero_body.sculpt_body(fc1_body, rig, short, os.path.join(base, 'male_body_lo.ply'))
+    shorts, sleeve = hero_shape.make_kit(body, rig, short, body_shell)
+    # no skin is culled under the kit: culled skin showed as holes wherever the cloth lifted off the body (the
+    # sleeve's top when the arm rose, the shorts in squats); the cloth follows the skin's bones closely instead
     hero_shape.finish_materials([o for o in bpy.data.objects if o.type == 'MESH'], short)
+    hero_body.dress_skin(body, head, short, os.path.join(base, 'male_body_hi.ply'),
+                         os.path.join(base, 'maps'))  # the maps for inspection; the GLB embeds them
 else:
     cull_covered_skin(fc1_body, make_sportswear(fc1_body))
 
@@ -582,6 +582,8 @@ tgt.name = 'CC_rig'
 # ---------------------------------------------------------------- clips
 
 retarget_clips(tgt, CLIPS_PATH, EXTRA)
+if HERO:
+    hero_body.thumbs_up_clip(tgt)
 
 # ---------------------------------------------------------------- textures and export
 
@@ -591,6 +593,8 @@ for img in bpy.data.images:
     users = [m.name for m in bpy.data.materials
              if m.use_nodes and any(n.type == 'TEX_IMAGE' and n.image == img for n in m.node_tree.nodes)]
     face = any(u == 'skin_head' for u in users)
+    if any(u.startswith(('toon_skin', 'toon_head')) for u in users):
+        continue  # the default hero's maps keep their size (hero_body.dress_skin)
     size = 2048 if face else 1024
     if img.size[0] > size:
         img.scale(size, size)

@@ -98,6 +98,7 @@ export function materialRuntimeJs(): string {
     return toonRamp;
   }
   var OUTLINE = 0.006; // metres, in the model's own units
+  var TOON_LIGHT = 0.72;
   function isCloth(m) { return /top|pants|shoes|kit|outfit|sport|shirt|jacket|cloth|short|hood/i.test(m.name || ''); }
   // Skin on a physical material: soft sheen, a faint clearcoat and the wrap lighting (skinLighting)
   function skinUp(p) {
@@ -129,6 +130,9 @@ export function materialRuntimeJs(): string {
       var t = new THREE.MeshToonMaterial({ color: m.color.clone(), gradientMap: toonGradient(), map: m.map || null,
         normalMap: m.normalMap || null });
       if (m.normalMap) t.normalScale.copy(m.normalScale);
+      // flat comic colours: the filmic tone mapping washed the yellow out to cream under the lobby's lights
+      t.toneMapped = false;
+      t.color.multiplyScalar(TOON_LIGHT); // the stage lights add up past 1: the lit tone lands on the authored colour
       t.name = m.name;
       t.userData = Object.assign({}, m.userData, { toon: true, upgraded: true, outline: !/^toon_(eye|ink)/.test(m.name) });
       return t;
@@ -420,11 +424,23 @@ ${FACE_SOURCE}
     });
     return list;
   }
+  // The bones a clip animates itself (cached on the clip): a clip that poses the fingers (the default hero's
+  // thumbs up, hero_idle) keeps them; retargeted clips carry this same relaxed curl, so they look the same.
+  function clipBones(clip) {
+    if (!clip._bones) {
+      clip._bones = {};
+      clip.tracks.forEach(function (t) { clip._bones[t.name.split('.')[0]] = true; });
+    }
+    return clip._bones;
+  }
   function relaxFingers() {
     var f = current && current.fingers;
     if (!f) return;
     var k = api.fist || 0;
+    var playing = current.mixer && current.mixer.active;
+    var owned = playing && k <= 0.001 ? clipBones(playing.getClip()) : null;
     for (var i = 0; i < f.length; i++) {
+      if (owned && owned[f[i].bone.name]) continue;
       if (k > 0.001) f[i].bone.quaternion.copy(f[i].target).slerp(f[i].fist, k);
       else f[i].bone.quaternion.copy(f[i].target);
     }

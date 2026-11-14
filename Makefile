@@ -107,11 +107,22 @@ MIXAMO_SHARED = cheer=$(MIXAMO)/Cheering.fbx stand=$(MIXAMO)/StandingIdle.fbx id
 MEERA_MIXAMO = $(MIXAMO_SHARED) hero_idle=$(MIXAMO)/FastRun.fbx,inplace hero_move1=$(MIXAMO)/FastRun.fbx,inplace,x6
 ARJUN_MIXAMO = $(MIXAMO_SHARED) hero_idle=$(MIXAMO)/Walking.fbx,inplace hero_world=$(MIXAMO)/Climbing.fbx,still,from=60,to=112 hero_move1=$(MIXAMO)/Climbing.fbx,still,from=60,to=112,x3
 
-HERO_SCULPT ?= scripts/blender/.cache/hero_base/male_body.ply
+HERO_BASE ?= scripts/blender/.cache/hero_base
+HERO_SCULPT ?= $(HERO_BASE)/male_body.ply
+HERO_FBX ?= $(HERO_BASE)/male_body.fbx
+AVATARS = android/app/src/main/assets/web/avatars
 
-hero: ## Build the default hero (yellow toon athlete, scripts/blender/hero_shape.py) on the FC1 body and rig into the app assets; needs an APK rebuild
-	@test -f $(HERO_SCULPT) || { echo "$(HERO_SCULPT) missing: run scripts/blender/hero_sculpt_prep.py on male_body.fbx first"; exit 1; }
-	FC1_HERO=1 HERO_SCULPT=$(HERO_SCULPT) $(BLENDER) -b -P scripts/blender/build_fc1.py -- $(FC1_SRC) $(CLIPS_DIR)/clips_meera.glb android/app/src/main/assets/web/avatars/hero.glb $(MIXAMO_SHARED)
+hero-prep: ## Prepare the user's anatomy sculpt (HERO_FBX, male_body.fbx) for the default hero: shape target, bake source, game mesh
+	$(BLENDER) -b -P scripts/blender/hero_sculpt_prep.py -- $(HERO_FBX) $(HERO_BASE)
+
+hero: ## Build the default hero (the sculpt rigged on FC1's skeleton, toon look: scripts/blender/hero_body.py) into the app assets; needs an APK rebuild
+	@test -f $(HERO_BASE)/male_body_lo.ply || { echo "$(HERO_BASE)/male_body_lo.ply missing: run make hero-prep first"; exit 1; }
+	FC1_HERO=1 HERO_SCULPT=$(HERO_SCULPT) $(BLENDER) -b -P scripts/blender/build_fc1.py -- $(FC1_SRC) $(CLIPS_DIR)/clips_meera.glb $(AVATARS)/hero.glb $(MIXAMO_SHARED)
+
+hero-art: ## Render the default hero's card, VS stand art and shop thumbnail (thumbs up, toon look) from hero.glb; needs an APK rebuild
+	$(BLENDER) -b -P scripts/blender/render_toon.py -- $(AVATARS)/hero.glb $(AVATARS)/hero_card.png --clip hero_idle --frame 1 --yaw 18 --size 720x1080 --transparent 1
+	$(BLENDER) -b -P scripts/blender/render_toon.py -- $(AVATARS)/hero.glb $(AVATARS)/hero_stand.png --clip hero_idle --frame 1 --yaw 0 --size 720x1080 --transparent 1
+	$(BLENDER) -b -P scripts/blender/render_toon.py -- $(AVATARS)/hero.glb $(AVATARS)/hero.png --clip hero_idle --frame 1 --yaw 18 --size 192x224 --transparent 1
 
 fc1: ## Build the base character (Meera) with her own clips from the FC1 download into the app assets; needs an APK rebuild
 	$(BLENDER) -b -P scripts/blender/author_hero_clips.py -- $(CLIPS_SRC) meera $(CLIPS_DIR)/clips_meera.glb
