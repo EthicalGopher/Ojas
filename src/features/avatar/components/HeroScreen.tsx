@@ -17,7 +17,7 @@ import { Slant } from '../../../components/game/Slant';
 import { juice } from '../../../juice/juice';
 import { AvatarViewer3D, FilmLook, HeroPlacement, StoryShot } from './AvatarViewer3D';
 import { CoinDot, RARITY_COLORS } from './AvatarShopScreen';
-import { AvatarModel, LOCAL_ASSET_ORIGIN, equipAvatar, heroName, getLoadout, loadoutItems, purchaseAvatar, resolveModelUrl } from '../../../utils/avatarShopService';
+import { AvatarModel, DEFAULT_AVATAR_ID, LOCAL_ASSET_ORIGIN, equipAvatar, heroName, getLoadout, loadoutItems, purchaseAvatar, resolveModelUrl } from '../../../utils/avatarShopService';
 import { XP_PER_COIN } from '../../../utils/gamification';
 import { useUserStore } from '../../../store/userStore';
 import { useColors } from '../../../theme';
@@ -105,6 +105,27 @@ export const STORY_VIDEOS: Record<string, {
     spot: { x: 0.505, foot: 0.9898, height: 0.8991, yaw: 0 },
     webPath: 'video/meera_story.mp4',
     moves: { hero_move1: { from: 0, to: 2.95 }, hero_move2: { from: 5.4, to: 8 } },
+  },
+};
+
+// Heroes without a film stand in a rendered world instead (scripts/blender/render_gym.py): a 16:9 plate for
+// their screen and one for the lobby, each rendered for the spot the 3D hero stands on (same fractions as a
+// film's spot), so the room's perspective fits him. No story movie: the screen opens on the showcase.
+export const HERO_BACKDROPS: Record<string, {
+  plate: number;
+  spot: { x: number; foot: number; height: number; yaw: number };
+  lobby: number;
+  lobbySpot: { x: number; foot: number; height: number; yaw: number };
+  /** the loop they stand in */
+  base: string;
+}> = {
+  [DEFAULT_AVATAR_ID]: {
+    plate: require('../../../../assets/video/hero_gym.jpg'),
+    // (16:9 plates fill wider phone screens by cropping top and bottom: these leave room for 20:9)
+    spot: { x: 0.5, foot: 0.86, height: 0.66, yaw: 0 },
+    lobby: require('../../../../assets/video/hero_gym_lobby.jpg'),
+    lobbySpot: { x: 0.37, foot: 0.93, height: 0.74, yaw: 0 },
+    base: 'hero_idle',
   },
 };
 
@@ -276,9 +297,11 @@ export const HeroScreen: React.FC<HeroScreenProps> = ({ hero, status, catalog, c
   const [from, to] = hero.config.cardColors ?? ['#4F6BD8', '#1A2250'];
   const tint = info?.effect.color ?? from;
   const film = STORY_VIDEOS[hero.id];
+  const backdrop = film ? null : HERO_BACKDROPS[hero.id] ?? null;
+  const hasStory = !!film || !!(info?.movie?.length && !backdrop);
   const short = useWindowDimensions().height < 400;
 
-  const [phase, setPhase] = useState<'story' | 'show'>(info?.movie?.length ? 'story' : 'show');
+  const [phase, setPhase] = useState<'story' | 'show'>(hasStory ? 'story' : 'show');
   const [storyKey, setStoryKey] = useState(1);
   const [shot, setShot] = useState(-1);
   const [move, setMove] = useState<{ clip: string; key: number } | null>(null);
@@ -287,8 +310,9 @@ export const HeroScreen: React.FC<HeroScreenProps> = ({ hero, status, catalog, c
   const [box, setBox] = useState<{ w: number; h: number } | null>(null);
   const still = useRef(new Animated.Value(1)).current;
   const placement = useMemo<HeroPlacement | null>(
-    () => (film && box ? { ...coverSpot(film.spot, box.w, box.h), yaw: film.spot.yaw, base: 'stand', look: film.look } : null),
-    [film, box],
+    () => (film && box ? { ...coverSpot(film.spot, box.w, box.h), yaw: film.spot.yaw, base: 'stand', look: film.look }
+      : backdrop && box ? { ...coverSpot(backdrop.spot, box.w, box.h), yaw: backdrop.spot.yaw, base: backdrop.base } : null),
+    [film, backdrop, box],
   );
 
   const stageItems = useMemo(() => loadoutItems(catalog, getLoadout(profile, hero.id), hero), [catalog, profile, hero]);
@@ -298,7 +322,7 @@ export const HeroScreen: React.FC<HeroScreenProps> = ({ hero, status, catalog, c
   );
 
   // fades: the movie opens from black; captions and the title card fade in; the showcase UI fades in
-  const black = useRef(new Animated.Value(1)).current;
+  const black = useRef(new Animated.Value(phase === 'story' ? 1 : 0)).current; // (no story: no dip from black)
   const caption = useRef(new Animated.Value(0)).current;
   const ui = useRef(new Animated.Value(phase === 'show' ? 1 : 0)).current;
   const bars = useRef(new Animated.Value(phase === 'story' ? 1 : 0)).current;
@@ -468,7 +492,20 @@ export const HeroScreen: React.FC<HeroScreenProps> = ({ hero, status, catalog, c
           style={StyleSheet.absoluteFill}
         />
       )}
-      {!film && (
+      {backdrop && <Image source={backdrop.plate} style={[StyleSheet.absoluteFill, { width: '100%', height: '100%' }]} resizeMode="cover" />}
+      {backdrop && placement && (
+        <AvatarViewer3D
+          model={hero}
+          items={stageItems}
+          autoRotate={false}
+          interactive
+          view="placed"
+          placement={placement}
+          move={move}
+          style={StyleSheet.absoluteFill}
+        />
+      )}
+      {!film && !backdrop && (
         <AvatarViewer3D
           model={hero}
           items={stageItems}
@@ -617,10 +654,12 @@ export const HeroScreen: React.FC<HeroScreenProps> = ({ hero, status, catalog, c
                 </View>
 
                 <View style={[styles.extras, short && { marginTop: 0 }]}>
-                  <Pressable onPress={startStory} accessibilityRole="button" accessibilityLabel="Watch the story" style={styles.extra}>
-                    <Clapperboard size={18} color="rgba(225,235,255,0.9)" />
-                    <GText variant="label" size={11} style={styles.extraText}>Story</GText>
-                  </Pressable>
+                  {hasStory && (
+                    <Pressable onPress={startStory} accessibilityRole="button" accessibilityLabel="Watch the story" style={styles.extra}>
+                      <Clapperboard size={18} color="rgba(225,235,255,0.9)" />
+                      <GText variant="label" size={11} style={styles.extraText}>Story</GText>
+                    </Pressable>
+                  )}
                   {!film && (
                     <View style={styles.extra}>
                       <Sparkles size={18} color={tint} />

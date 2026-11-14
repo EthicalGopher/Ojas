@@ -2,7 +2,7 @@
 // Centre: the player's 3D character. Top-left: profile + level. Top-right: currencies
 // and icon buttons. Left: quick menu. Right: daily quests. Bottom: angled menu bar + angled play button.
 import React, { useEffect, useMemo, useState } from 'react';
-import { Modal, Pressable, ScrollView, StatusBar, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Image, Modal, Pressable, ScrollView, StatusBar, StyleSheet, useWindowDimensions, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Bell, Bot, Check, ChevronDown, Clock, Coins, Dumbbell, Flame, Lock, PersonStanding, Settings, Shirt, ShoppingBag, Swords, Trophy, Users, X } from 'lucide-react-native';
@@ -12,7 +12,7 @@ import { Slant } from '../components/game/Slant';
 import { GradientFill } from '../components/game/Gradient';
 import { ExerciseIcon } from '../components/ExerciseIcon';
 import { AvatarViewer3D } from '../features/avatar/components/AvatarViewer3D';
-import { LoopVideo, STORY_VIDEOS } from '../features/avatar/components/HeroScreen';
+import { HERO_BACKDROPS, LoopVideo, STORY_VIDEOS, coverSpot } from '../features/avatar/components/HeroScreen';
 import { useCharacterCreator } from '../features/avatar/components/CharacterCreator';
 import { TourTarget } from '../features/tour/TourTarget';
 import { DeformityScannerModal } from '../features/camera/components/DeformityScannerModal';
@@ -71,6 +71,12 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({ isGuest, onPlay, onOpe
   const look = useEquippedLook();
   const heroInfo = look.model.config.hero;
   const film = STORY_VIDEOS[look.model.id];
+  // a hero without a film stands in his rendered world (the default hero's gym)
+  const backdrop = film ? null : HERO_BACKDROPS[look.model.id] ?? null;
+  const placement = useMemo(
+    () => (backdrop ? { ...coverSpot(backdrop.lobbySpot, width, height), yaw: backdrop.lobbySpot.yaw, base: backdrop.base } : null),
+    [backdrop, width, height],
+  );
 
   const [play, setPlay] = useState<LastPlay>(DEFAULT_LAST_PLAY);
   const [hint, setHint] = useState<string | null>(null);
@@ -132,7 +138,20 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({ isGuest, onPlay, onOpe
         onTouchStart={() => juice.unlock()}
       >
         {/* a hero with a film plays it on repeat; no 3D to load */}
-        {film ? <LoopVideo source={film.source} poster={film.still} webPath={film.webPath} /> : <AvatarViewer3D
+        {film ? <LoopVideo source={film.source} poster={film.still} webPath={film.webPath} /> : backdrop ? (
+          <>
+            <Image source={backdrop.lobby} style={[StyleSheet.absoluteFill, { width: '100%', height: '100%' }]} resizeMode="cover" />
+            <AvatarViewer3D
+              model={look.model}
+              items={look.items}
+              autoRotate={false}
+              interactive
+              view="placed"
+              placement={placement}
+              style={StyleSheet.absoluteFill}
+            />
+          </>
+        ) : <AvatarViewer3D
           model={look.model}
           items={look.items}
           autoRotate={false}

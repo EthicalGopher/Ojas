@@ -34,7 +34,7 @@ KNEE = Vector((0.100, 0.000, 0.490))
 FOLD = {'FacialBone': 'Head', 'JawRoot': 'Head', 'UpperJaw': 'Head', 'L_Eye': 'Head', 'R_Eye': 'Head',
         'Tongue01': 'Head', 'Tongue02': 'Head', 'Tongue03': 'Head', 'Teeth01': 'Head', 'Teeth02': 'Head',
         'L_Breast': 'Spine02', 'R_Breast': 'Spine02', 'L_RibsTwist': 'Spine02', 'R_RibsTwist': 'Spine02'}
-HAND_SCALE = 1.25   # x FC1's hand
+HAND_SCALE = 1.4    # x FC1's hand (slim: at 1.25 the relaxed hand read as a flat paddle under his forearm)
 TAPER = 0.03
 YELLOW = '#F2CF5B'
 INK = '#141418'
@@ -1098,6 +1098,8 @@ def paint_lines(pos, valid, lines, texel=0.0008):
 # with the right fist raised in front of the shoulder, knuckles to the viewer, thumb up; a slow breath.
 THUMB_WRIST = Vector((-0.04, -0.34, -0.06))   # the wrist, from the right shoulder (metres, world)
 THUMB_POLE = Vector((-0.4, 0.2, -1.0))          # the elbow bends down and out
+RELAXED = {1: 0.45, 2: 0.75, 3: 0.45}          # the other hand's loose curl
+LEFT_HAND_TURN = math.radians(-50)              # about the forearm: the back of the hand toward the viewer
 FIST = {1: 1.55, 2: 1.75, 3: 1.15}              # finger curl (radians) per joint: a closed fist
 IDLE_FRAMES = 72
 
@@ -1185,6 +1187,27 @@ def thumbs_up_clip(rig, base='stand'):
             M = mw @ P[bn].matrix
             Rq = Matrix.Rotation(FIST[i], 4, axis)
             _set_world(rig, P[bn], Matrix.Translation(hd) @ Rq @ Matrix.Translation(-hd) @ M)
+    # the other hand hangs relaxed, loosely curled like the concept's, turned so the back of it faces forward
+    # (straight down the side, from the front only its thin edge showed)
+    lh = P['CC_L_Hand']
+    fa_axis = (head('CC_L_Hand') - head('CC_L_Forearm')).normalized()
+    hd = head('CC_L_Hand')
+    _set_world(rig, lh, Matrix.Translation(hd) @ Matrix.Rotation(LEFT_HAND_TURN, 4, fa_axis) @ Matrix.Translation(-hd)
+               @ (mw @ lh.matrix))
+    l_across = (head('CC_L_Pinky1') - head('CC_L_Index1')).normalized()
+    l_fwd = (head('CC_L_Mid1') - head('CC_L_Hand')).normalized()
+    l_palm = l_across.cross(l_fwd).normalized()
+    for name in ('Index', 'Mid', 'Ring', 'Pinky'):
+        if f'CC_L_{name}2' not in P:
+            continue
+        axis = (head(f'CC_L_{name}2') - head(f'CC_L_{name}1')).normalized().cross(l_palm).normalized()
+        for i in (1, 2, 3):
+            bn = f'CC_L_{name}{i}'
+            if bn not in P:
+                continue
+            hd = head(bn)
+            M = mw @ P[bn].matrix
+            _set_world(rig, P[bn], Matrix.Translation(hd) @ Matrix.Rotation(RELAXED[i], 4, axis) @ Matrix.Translation(-hd) @ M)
     up = Vector((0.1, -0.25, 1.0)).normalized()
     if 'CC_R_Thumb1' in P and 'CC_R_Thumb2' in P:
         _aim(rig, P['CC_R_Thumb1'], head('CC_R_Thumb1') + up, lambda: P['CC_R_Thumb2'].head)
