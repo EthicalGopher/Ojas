@@ -95,7 +95,7 @@ import { generateRandomUsername } from '../utils/usernameGenerator';
 import { supabase } from '../utils/supabase';
 import { useUserStore } from '../store/userStore';
 import { AvatarViewer3D } from '../features/avatar/components/AvatarViewer3D';
-import { CoinDot, RARITY_COLORS } from '../features/avatar/components/AvatarShopScreen';
+import { CoinDot } from '../features/avatar/components/AvatarShopScreen';
 import { GradientFill } from '../features/squad/components/SquadUI';
 import {
   AvatarModel,
@@ -1156,8 +1156,6 @@ const useStyles = makeStyles((colors: ThemeColors) =>
     elevation: 4, shadowColor: '#0B3B36', shadowOpacity: 0.2, shadowRadius: 6, shadowOffset: { width: 0, height: 2 },
   },
   avatarName: { flexShrink: 1, color: '#1C2B2A', fontSize: 16, fontWeight: '900' },
-  avatarRarityDot: { width: 8, height: 8, borderRadius: 4, marginLeft: 2 },
-  avatarRarity: { flex: 1, color: '#5E7270', fontSize: 12, fontWeight: '800', textTransform: 'capitalize' },
   avatarOwned: { color: '#8AA09D', fontSize: 12, fontWeight: '700' },
   avatarActions: { flexDirection: 'row', gap: 10, marginTop: 14 },
   avatarSecondaryBtn: {

@@ -9,7 +9,7 @@ import { GradientFill } from '../../../components/game/Gradient';
 import { AvatarModel, heroName, resolveModelUrl } from '../../../utils/avatarShopService';
 import { useUserStore } from '../../../store/userStore';
 import { useColors } from '../../../theme';
-import { CoinDot, RARITY_COLORS } from './AvatarShopScreen';
+import { CoinDot } from './AvatarShopScreen';
 import type { HeroStatus } from './HeroScreen';
 
 export const CARD_ASPECT = 1.5; // height / width, as the card art (720 x 1080)
@@ -69,11 +69,6 @@ export const HeroCard: React.FC<{
           <Check size={13} color="#FFFFFF" strokeWidth={3.5} />
         </View>
       )}
-      {hero.rarity !== 'common' && (
-        <View style={[styles.rarity, { backgroundColor: RARITY_COLORS[hero.rarity] }]}>
-          <GText variant="label" size={9} style={{ color: '#FFFFFF' }}>{hero.rarity.toUpperCase()}</GText>
-        </View>
-      )}
       <View style={styles.banner}>
         <GText variant="display" size={width > 150 ? 18 : 15} numberOfLines={1} style={{ color: '#FFFFFF' }}>{name}</GText>
         {status === 'buy' ? (
@@ -107,7 +102,6 @@ const styles = StyleSheet.create({
   center: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' },
   ribbon: { position: 'absolute', top: 14, left: -30, width: 110, paddingVertical: 3, alignItems: 'center', transform: [{ rotate: '-45deg' }] },
   tick: { position: 'absolute', top: 8, right: 8, width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#FFFFFF' },
-  rarity: { position: 'absolute', top: 8, right: 8, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 },
   banner: {
     position: 'absolute',
     left: 0,

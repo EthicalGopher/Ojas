@@ -1,11 +1,10 @@
-"""The default hero (the player's own athlete): a muscular, faceless, yellow toon figure in grey shorts with a
-grey sleeve on his left arm, from the player-supplied concept art. build_fc1.py builds him when FC1_HERO=1 on
+"""The default hero (the player's own athlete): a muscular, faceless, yellow toon figure in grey shorts, from
+the player-supplied concept art (its left-arm sleeve left out). build_fc1.py builds him when FC1_HERO=1 on
 FC1's rig, so he has every clip the other heroes have; his body is the user's anatomy sculpt (hero_body.py).
 
 Here (world metres, the body faces -Y, his left is +X):
 - wrap_to_sculpt: FC1's rig into the sculpt's stance;
-- make_kit: loose grey shorts and a left-arm sleeve, shells of the body (build_fc1.body_shell); no skin is
-  culled under them;
+- make_kit: loose grey shorts, a shell of the body (build_fc1.body_shell); no skin is culled under them;
 - finish_materials: the remaining FC1 skin becomes toon_skin.
 Materials are named toon_* for the viewer's toon shading and outline (avatarViewerHtml.ts).
 """
@@ -18,7 +17,6 @@ from mathutils.bvhtree import BVHTree
 
 YELLOW = '#F2CF5B'
 GREY = '#7C7C80'
-SLEEVE = '#77777C'
 SHOE = '#3A3A40'
 
 SHOULDER_OUT = 0.05   # each arm chain moves out (and a little up)
@@ -79,12 +77,10 @@ def _bone_deltas(rig, short):
     return deltas
 
 
-def make_kit(body, rig, short, body_shell, sport_trim_unused=None):
-    """grey shorts (mid-thigh) and a sleeve on his left arm"""
-    from mathutils.geometry import intersect_point_line
+def make_kit(body, rig, short, body_shell):
+    """grey shorts (the concept's left-arm sleeve was dropped: the user wanted both arms bare)"""
     up = Vector((0, 0, 1))
     shorts_mat = toon_material('toon_shorts', GREY)
-    sleeve_mat = toon_material('toon_sleeve', SLEEVE)
     # loose shorts, like the concept's: from the hips to above the knee, a shell of the skin (so they bend
     # exactly with it, squats included) smoothed over its dips, standing off further toward the hems
     WAIST, HEM = 0.975, 0.60
@@ -94,42 +90,7 @@ def make_kit(body, rig, short, body_shell, sport_trim_unused=None):
                         lambda p: 0.013 + 0.02 * max(0.0, min(1.0, (0.86 - p.z) / (0.86 - HEM))) ** 1.3,
                         [shorts_mat, shorts_mat], lambda c: False)
     _even_hems(shorts)
-    bones = {short(b.name): b for b in rig.data.bones}
-    mwr = rig.matrix_world
-    a, e, w = (mwr @ bones['L_Upperarm'].head_local, mwr @ bones['L_Forearm'].head_local, mwr @ bones['L_Hand'].head_local)
-    top = a.lerp(e, 0.3)
-
-    def sleeve_field(c):
-        """negative inside the sleeve: from 30% down the upper arm to the wrist"""
-        q, t = intersect_point_line(c, top, e)
-        q2, t2 = intersect_point_line(c, e, w)
-        inside = (0 <= t <= 1.05 and (c - q).length < 0.12) or (0 <= t2 <= 1.0 and (c - q2).length < 0.1)
-        return -1.0 if inside and c.x > 0.05 else 1.0
-
-    cuts = [(top, (e - a).normalized()), (w - (w - e).normalized() * 0.005, (w - e).normalized())]
-    sleeve = body_shell(body, 'Hero_sleeve', {'skin_arm'}, cuts,
-                        lambda m, c: sleeve_field(c) < 0, 6, 0.001, lambda p: 0.014,
-                        [sleeve_mat, sleeve_mat], lambda c: False)
-    _even_hems(sleeve)
-    _arm_only(sleeve, short, 'L_')
-    return [shorts, sleeve]
-
-
-def _arm_only(o, short, side):
-    """a sleeve hangs on the arm's bones only (the body's torso weights near its top tore it when the arm rose)"""
-    arm = {g.index for g in o.vertex_groups if short(g.name).startswith(tuple(side + k for k in ('Upperarm', 'Forearm', 'Hand')))}
-    upper = next(g for g in o.vertex_groups if short(g.name) == side + 'Upperarm')
-    for v in o.data.vertices:
-        keep = [(g.group, g.weight) for g in v.groups if g.group in arm]
-        tot = sum(w for _, w in keep)
-        for g in list(v.groups):
-            if g.group not in arm:
-                o.vertex_groups[g.group].remove([v.index])
-        if tot <= 1e-6:
-            upper.add([v.index], 1.0, 'REPLACE')
-        else:
-            for gi, w in keep:
-                o.vertex_groups[gi].add([v.index], w / tot, 'REPLACE')
+    return shorts
 
 
 def _even_hems(o, iterations=6):

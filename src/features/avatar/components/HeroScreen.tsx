@@ -16,7 +16,7 @@ import { GradientFill } from '../../../components/game/Gradient';
 import { Slant } from '../../../components/game/Slant';
 import { juice } from '../../../juice/juice';
 import { AvatarViewer3D, FilmLook, HeroPlacement, StoryShot } from './AvatarViewer3D';
-import { CoinDot, RARITY_COLORS } from './AvatarShopScreen';
+import { CoinDot } from './AvatarShopScreen';
 import { AvatarModel, DEFAULT_AVATAR_ID, LOCAL_ASSET_ORIGIN, equipAvatar, heroName, getLoadout, loadoutItems, purchaseAvatar, resolveModelUrl } from '../../../utils/avatarShopService';
 import { XP_PER_COIN } from '../../../utils/gamification';
 import { useUserStore } from '../../../store/userStore';
@@ -605,9 +605,6 @@ export const HeroScreen: React.FC<HeroScreenProps> = ({ hero, status, catalog, c
           <View style={[styles.left, { left: Math.max(insets.left, 16) + 12, top: insets.top + (short ? 50 : 64) }]}>
             <View style={styles.nameRow}>
               <GText variant="hero" size={short ? 30 : 40} numberOfLines={1} style={{ color: '#FFFFFF' }}>{shownName}</GText>
-              <View style={[styles.rarity, { borderColor: RARITY_COLORS[hero.rarity] }]}>
-                <GText variant="label" size={10} style={{ color: RARITY_COLORS[hero.rarity], letterSpacing: 1 }}>{hero.rarity.toUpperCase()}</GText>
-              </View>
             </View>
             {info && (
               <>
@@ -784,7 +781,6 @@ const styles = StyleSheet.create({
   },
   left: { position: 'absolute', width: 320 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  rarity: { borderWidth: 1, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 1 },
   stats: { marginTop: 12, gap: 7 },
   statRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   statLabel: { width: 62, color: 'rgba(225,235,255,0.85)' },

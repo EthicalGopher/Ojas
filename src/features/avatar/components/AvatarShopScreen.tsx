@@ -8,7 +8,6 @@ import { HeroScreen, HeroStatus } from './HeroScreen';
 import { HeroCard } from './HeroCard';
 import {
   AvatarModel,
-  AvatarRarity,
   BUNDLED_AVATARS,
   fetchAvatarCatalog,
   findAvatar,
@@ -19,13 +18,6 @@ import {
 import { computeCoinBalance, computeTotalXp, levelFromXp, XP_PER_COIN } from '../../../utils/gamification';
 import { useUserStore } from '../../../store/userStore';
 import { useColors } from '../../../theme';
-
-export const RARITY_COLORS: Record<AvatarRarity, string> = {
-  common: '#94A3B8',
-  rare: '#38BDF8',
-  epic: '#A78BFA',
-  legendary: '#F59E0B',
-};
 
 /** The Shop sells characters. Some are bought with coins, some unlock by reaching a level, and the
  * starters are free. */

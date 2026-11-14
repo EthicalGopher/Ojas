@@ -565,9 +565,9 @@ if HERO:
         if os.environ.get('HERO_STOP_AFTER_WRAP'):
             sys.exit(0)
     body, head = hero_body.sculpt_body(fc1_body, rig, short, os.path.join(base, 'male_body_lo.ply'))
-    shorts, sleeve = hero_shape.make_kit(body, rig, short, body_shell)
-    # no skin is culled under the kit: culled skin showed as holes wherever the cloth lifted off the body (the
-    # sleeve's top when the arm rose, the shorts in squats); the cloth follows the skin's bones closely instead
+    hero_shape.make_kit(body, rig, short, body_shell)
+    # no skin is culled under the shorts: culled skin showed as holes wherever the cloth lifted off the body
+    # (in squats); the cloth follows the skin's bones closely instead
     hero_shape.finish_materials([o for o in bpy.data.objects if o.type == 'MESH'], short)
     hero_body.dress_skin(body, head, short, os.path.join(base, 'male_body_hi.ply'),
                          os.path.join(base, 'maps'))  # the maps for inspection; the GLB embeds them
