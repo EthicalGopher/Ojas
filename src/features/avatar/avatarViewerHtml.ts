@@ -862,6 +862,14 @@ ${FACE_SOURCE}
     var base = clips.hero_idle || (opts.lively ? (clips.idle || calm) : calm);
     var p = { mixer: mixer, clips: clips, base: base, home: base, active: null, busy: false, nextAt: performance.now() + 2500 };
     if (wantBase && clips[wantBase]) p.base = clips[wantBase];
+    // still: one clip's first frame, held (no breathing, no moves, no reactions)
+    if (opts.still && clips[opts.still]) {
+      p.base = p.home = clips[opts.still];
+      p.still = true;
+      fadeTo(p, p.base, 1, true);
+      p.active.paused = true;
+      return p;
+    }
     fadeTo(p, p.base, 1, true);
     mixer.addEventListener('finished', function (e) {
       if (e.action !== p.active || !p.busy) return;
@@ -1025,7 +1033,7 @@ ${FACE_SOURCE}
       },
       tapReact: function () {
         var p = current && current.mixer;
-        if (!p) return;
+        if (!p || p.still) return;
         var list = moves();
         if (!list.length) return;
         var m = p.lastMove === list[0].name ? list[1] : list[0]; // taps get the fun ones
@@ -1052,6 +1060,8 @@ export function getAvatarViewerHtml(opts: {
   lively?: boolean;
   /** Stand the character on a game arena platform with a glowing ring. */
   platform?: boolean;
+  /** Hold this clip's first frame, still (e.g. 'stand'): no idle loop, moves or tap reactions. */
+  still?: string;
 }): string {
   const config = JSON.stringify(opts);
   return `<!DOCTYPE html>
@@ -1228,7 +1238,7 @@ export function getAvatarViewerHtml(opts: {
         post({ type: 'LOADED' });
       },
     },
-    { lively: !!CONFIG.lively }
+    { lively: !!CONFIG.lively, still: CONFIG.still || null }
   );
   var pivot = actor.pivot;
   window.loadModel = actor.loadModel;

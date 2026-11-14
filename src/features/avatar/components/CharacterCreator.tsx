@@ -142,7 +142,7 @@ export const CharacterCreator: React.FC = () => {
           {film ? (
             <Image source={film.still} style={[StyleSheet.absoluteFill, { width: '100%', height: '100%' }]} resizeMode="cover" />
           ) : (
-            <AvatarViewer3D model={body} items={stageItems} autoRotate={false} interactive lively platform style={StyleSheet.absoluteFill} />
+            <AvatarViewer3D model={body} items={stageItems} autoRotate={false} interactive still="stand" platform style={StyleSheet.absoluteFill} />
           )}
           <Pressable onPress={close} hitSlop={10} accessibilityRole="button" accessibilityLabel="Close" style={styles.close}>
             <X size={20} color="#FFFFFF" strokeWidth={3} />
@@ -151,7 +151,7 @@ export const CharacterCreator: React.FC = () => {
             <Slant fill="rgba(255,255,255,0.12)" stroke="rgba(255,255,255,0.25)" />
             <GText variant="display" size={20} style={{ color: '#FFFFFF' }} numberOfLines={1}>{name}</GText>
           </View>
-          {!film && <GText variant="caption" style={styles.hint} pointerEvents="none">Drag to spin · Tap to cheer</GText>}
+          {!film && <GText variant="caption" style={styles.hint} pointerEvents="none">Drag to spin</GText>}
         </View>
 
         {/* Picker */}

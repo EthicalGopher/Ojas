@@ -18,6 +18,8 @@ interface AvatarViewer3DProps {
   initialYaw?: number;
   /** Lobby mode: warm-up loop, random moves, and a reaction when tapped. */
   lively?: boolean;
+  /** Hold this clip's first frame, still (e.g. 'stand'): no idle loop, moves or tap reactions. */
+  still?: string;
   /** Stand on a game arena platform with a glowing ring. */
   platform?: boolean;
   /** A one-off move started (cheer, squat, rest); `tapped` when the player tapped the character. */
@@ -95,6 +97,7 @@ export const AvatarViewer3D: React.FC<AvatarViewer3DProps> = ({
   interactive = true,
   initialYaw = 0,
   lively = false,
+  still,
   platform = false,
   onAction,
   effectColor,
@@ -126,6 +129,7 @@ export const AvatarViewer3D: React.FC<AvatarViewer3DProps> = ({
         initialYaw,
         lively,
         platform,
+        still,
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
