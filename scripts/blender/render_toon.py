@@ -1,11 +1,14 @@
 """Render a toon hero (materials named toon_*) the way the app draws it: three flat tones and a black outline.
 
     blender -b -P scripts/blender/render_toon.py -- <hero.glb> <out.png> [--clip C --frame F] [--yaw D]
-        [--size WxH] [--transparent 1] [--fit body|full] [--ortho 1]
+        [--size WxH] [--transparent 1] [--hide mesh,mesh] [--backdrop plate.jpg --crop X --cx PX]
 
 The app (avatarViewerHtml.ts) uses MeshToonMaterial with a 3-step ramp (110/190/255) and a back-face hull
 pushed out 6 mm, black. Here: diffuse lighting -> Shader to RGB -> constant ramp, times the material's colour
 map (and its normal map), plus a Solidify hull with flipped normals in black.
+
+--backdrop: the hero over a photo (the VS screen's scene): the photo's columns from --crop, --size wide; the hero
+centred on column --cx, with a soft contact shadow; written as JPEG.
 """
 import math
 import sys
@@ -140,6 +143,36 @@ sc.camera = co
 co.location = (c.x + 5 * math.sin(YAW), c.y - 5 * math.cos(YAW), c.z)
 co.rotation_euler = (math.radians(90), 0, YAW)
 sc.render.resolution_x, sc.render.resolution_y = W, H
-sc.render.filepath = OUT
+BACKDROP = opts.get('--backdrop')
+if BACKDROP:
+    sc.render.film_transparent = True
+    # the figure's centre goes to column --cx: shift the camera sideways
+    cx = float(opts.get('--cx', W / 2))
+    co.location.x -= (cx - W / 2) / W * cam.ortho_scale * (1 if W >= H else W / H)
+sc.render.filepath = OUT + '.png' if BACKDROP else OUT
 bpy.ops.render.render(write_still=True)
+if BACKDROP:
+    import numpy as np
+    fig = bpy.data.images.load(OUT + '.png')
+    F = np.array(fig.pixels[:], np.float32).reshape(H, W, 4)
+    plate = bpy.data.images.load(BACKDROP)
+    pw, ph = plate.size
+    P = np.array(plate.pixels[:], np.float32).reshape(ph, pw, 4)
+    x0 = int(opts.get('--crop', '0'))
+    B = P[:H, x0:x0 + W, :3].copy()
+    # contact shadow: a soft dark ellipse under the feet (rows are bottom-up in Blender images)
+    rows = np.where(F[..., 3].max(1) > 0.5)[0]
+    foot = rows.min() if len(rows) else 0
+    yy, xx = np.mgrid[0:H, 0:W]
+    e = ((xx - cx) / (W * 0.16)) ** 2 + ((yy - foot - 4) / (H * 0.02)) ** 2
+    B *= (1 - 0.45 * np.exp(-e * 2.0))[..., None]
+    a = F[..., 3:4]
+    C = F[..., :3] * a + B * (1 - a)    # straight alpha; both images' pixels are sRGB values (8-bit files)
+    out = bpy.data.images.new('vs', W, H, alpha=False)
+    out.pixels[:] = np.concatenate([C, np.ones((H, W, 1), np.float32)], -1).ravel()
+    out.filepath_raw = OUT
+    out.file_format = 'JPEG'
+    out.save(quality=90)
+    import os
+    os.remove(OUT + '.png')
 print('TOON', OUT)

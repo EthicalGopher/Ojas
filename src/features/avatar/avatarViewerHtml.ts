@@ -98,7 +98,6 @@ export function materialRuntimeJs(): string {
     return toonRamp;
   }
   var OUTLINE = 0.006; // metres, in the model's own units
-  var TOON_LIGHT = 0.72;
   function isCloth(m) { return /top|pants|shoes|kit|outfit|sport|shirt|jacket|cloth|short|hood/i.test(m.name || ''); }
   // Skin on a physical material: soft sheen, a faint clearcoat and the wrap lighting (skinLighting)
   function skinUp(p) {
@@ -132,7 +131,13 @@ export function materialRuntimeJs(): string {
       if (m.normalMap) t.normalScale.copy(m.normalScale);
       // flat comic colours: the filmic tone mapping washed the yellow out to cream under the lobby's lights
       t.toneMapped = false;
-      t.color.multiplyScalar(TOON_LIGHT); // the stage lights add up past 1: the lit tone lands on the authored colour
+      // the stage lights add up past 1 (and differ per page): the lit tone is capped at the authored colour,
+      // so it reads the same in the lobby and on the brighter match stage; the shade bands stay
+      t.onBeforeCompile = function (sh) {
+        sh.fragmentShader = sh.fragmentShader.replace('#include <output_fragment>',
+          'outgoingLight = min(outgoingLight, diffuseColor.rgb);\\n#include <output_fragment>');
+      };
+      t.customProgramCacheKey = function () { return 'ojas-toon'; };
       t.name = m.name;
       t.userData = Object.assign({}, m.userData, { toon: true, upgraded: true, outline: !/^toon_(eye|ink)/.test(m.name) });
       return t;
