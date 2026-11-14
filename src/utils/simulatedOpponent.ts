@@ -17,7 +17,7 @@ const FIRST_NAMES = [
   'sam', 'alex', 'jordan', 'maya', 'leo', 'zara', 'noah', 'emma', 'ryan', 'sara',
 ];
 
-const SUFFIXES = ['fit', 'lifts', 'moves', 'runs', 'strong', 'active', 'gains', 'reps', 'flex', 'trains'];
+
 
 const pick = <T,>(items: T[]): T => items[Math.floor(Math.random() * items.length)];
 
@@ -27,15 +27,13 @@ export function generateOpponentUsername(): string {
   const year = String(1995 + Math.floor(Math.random() * 12));
   const shortNum = String(Math.floor(1 + Math.random() * 98));
 
-  switch (Math.floor(Math.random() * 4)) {
+  switch (Math.floor(Math.random() * 2)) {
     case 0:
-      return `${name}_${pick(SUFFIXES)}${shortNum}`;
+      return `${name}_${shortNum}`;
     case 1:
-      return `${name}.${pick(SUFFIXES)}`;
-    case 2:
       return `${name}${year}`;
     default:
-      return `${pick(SUFFIXES)}_${name}`;
+      return `${name}`;
   }
 }
 

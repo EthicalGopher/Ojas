@@ -291,7 +291,7 @@ export default function AppShell() {
                   setWaitingMessage(
                     isFFA
                       ? 'Gathering athletes (Max 10). Match starts when the timer ends or the lobby fills...'
-                      : 'Finding a worthy rival...'
+                      : 'Finding a worthy opponent...'
                   );
                   setWaitingBadge(isFFA ? 'WAITING: 30s' : undefined);
                   setWaitingSubInfo(isFFA ? '1 Athlete Joined' : undefined);

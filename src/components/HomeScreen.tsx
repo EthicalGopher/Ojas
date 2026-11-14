@@ -201,7 +201,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     } else {
       onEnterQueue(
         'FINDING OPPONENT',
-        'Finding a worthy rival...',
+        'Finding a worthy Opponent...',
         undefined,
         undefined,
         false

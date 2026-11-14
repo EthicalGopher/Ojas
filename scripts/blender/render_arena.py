@@ -1,4 +1,4 @@
-"""Renders the photoreal plates for the match intro (bodybuilding championship "OJAS CLASSIC").
+"""Renders the photoreal plates for the match intro (a bodybuilding championship stage).
 
 The phone cannot path-trace, so each camera shot is pre-rendered in Cycles and the app draws the two
 live athletes on top with a camera that matches exactly (src/features/match/arenaViewerHtml.ts).
@@ -252,8 +252,6 @@ for k, x in enumerate((-5.7, 5.7)):
     box(f"pillar_{k}", (1.2, 0.7, 7.6), (x, 5.0, 3.8), M["black_metal"], bevel=0.03)
     for j, dx in enumerate((-0.38, 0.0, 0.38)):
         box(f"pillar_led_{k}{j}", (0.05, 0.03, 6.8), (x + dx, 4.63, 3.9), M["led_g"] if j == 1 else M["led_o"])
-text("title", "OJAS CLASSIC", 1.1, (0, 5.05, STAGE_H + 5.3), M["gold"], 0.08, 0.012)
-text("subtitle", "CHAMPIONSHIP", 0.36, (0, 5.05, STAGE_H + 4.6), M["led_o"], 0.02, 0.0)
 
 # Truss (box truss: four chords + lacing) on two towers
 def truss_beam(name, a, c, w=0.32):
