@@ -141,6 +141,8 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
   const [liveMoves, setLiveMoves] = useState(false);
   const liveMovesRef = useRef(false);
   const opponentWantsPoseRef = useRef(false);
+  // the floating camera box (menu: camera button)
+  const [showSelfCam, setShowSelfCam] = useState(true);
   const duelRef = useRef<AIInstructor3DHandle>(null);
   const positioning = matchPhase === 'loading_resources' || matchPhase === 'setup_countdown';
 
@@ -919,12 +921,12 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
             },
           ]}
         >
-          {/* Left half (landscape) / top half (portrait): you, your 3D character over the live pose-tracker camera */}
+          {/* Left half (landscape) / top half (portrait): you, your 3D character copying the camera */}
           <View
             style={[
               styles.yourContainer,
-              // Getting into position: your camera fills the screen so you can see whether you are too
-              // close, too far or out of frame; the opponent loads behind it. In the match: left half.
+              // Getting into position: your character fills the screen under the get-ready HUD; the
+              // opponent loads behind it. In the match: the left half.
               positioning
                 ? [StyleSheet.absoluteFill, { zIndex: 3, elevation: 8 }]
                 : {
@@ -933,28 +935,7 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
                   },
             ]}
           >
-            <WebView
-              key={`pose-${trackerRetries}`}
-              ref={webViewRef}
-              source={{
-                html: htmlBundle,
-                baseUrl: 'http://127.0.0.1:8888',
-              }}
-              userAgent="MobilePoseApp/1.0"
-              style={StyleSheet.absoluteFill}
-              allowsInlineMediaPlayback
-              mediaPlaybackRequiresUserAction={false}
-              mediaCapturePermissionGrantType="grant"
-              javaScriptEnabled
-              domStorageEnabled
-              allowFileAccess
-              allowUniversalAccessFromFileURLs
-              allowingReadAccessToURL="*"
-              mixedContentMode="always"
-              originWhitelist={['*']}
-              onMessage={handleWebViewMessage}
-            />
-            {/* your 3D character over the camera (which keeps counting reps underneath) */}
+            {/* your 3D character (the camera is in the floating box) */}
             {matchPhase !== 'loading_resources' && <SelfCharacterView ref={selfViewRef} exerciseId={exerciseId} />}
             {!positioning && <SideTag label="YOU" side="you" />}
           </View>
@@ -1001,6 +982,34 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
           </View>
 
         </View>
+      )}
+
+      {/* Your camera in a small floating box (like a video call's self-view), so you can see where you
+          stand. It is the pose tracker itself: always mounted, hidden only by opacity. FFA keeps its own. */}
+      {mode !== 'ffa' && (
+        <CameraPip visible={!showVersus && showSelfCam && matchPhase !== 'match_ended'}>
+          <WebView
+            key={`pose-${trackerRetries}`}
+            ref={webViewRef}
+            source={{
+              html: htmlBundle,
+              baseUrl: 'http://127.0.0.1:8888',
+            }}
+            userAgent="MobilePoseApp/1.0"
+            style={StyleSheet.absoluteFill}
+            allowsInlineMediaPlayback
+            mediaPlaybackRequiresUserAction={false}
+            mediaCapturePermissionGrantType="grant"
+            javaScriptEnabled
+            domStorageEnabled
+            allowFileAccess
+            allowUniversalAccessFromFileURLs
+            allowingReadAccessToURL="*"
+            mixedContentMode="always"
+            originWhitelist={['*']}
+            onMessage={handleWebViewMessage}
+          />
+        </CameraPip>
       )}
 
       {/* OVERLAY 1: arena intro (championship stage) while players sync */}
@@ -1228,6 +1237,8 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
         isSkeletonVisible={isSkeletonVisible}
         onToggleLiveMoves={mode === 'quickjoin' ? handleToggleLiveMoves : undefined}
         isLiveMoves={liveMoves}
+        onToggleSelfCam={mode !== 'ffa' ? () => setShowSelfCam((v) => !v) : undefined}
+        isSelfCamVisible={showSelfCam}
         onSendFriendRequest={handleSendFriendRequest}
         canAddFriend={!isSimulated}
       />}
@@ -1244,6 +1255,57 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
     );
   }
   return screen;
+};
+
+/** A small draggable box with your live camera (self-view). Starts in the bottom-right corner and
+ * stays inside the screen when dropped. Hidden means transparent, so the tracker keeps running. */
+const PIP_W = 168;
+const PIP_H = 126;
+const CameraPip: React.FC<{ visible: boolean; children: React.ReactNode }> = ({ visible, children }) => {
+  const { width, height } = useWindowDimensions();
+  const startX = width - PIP_W - 14;
+  const startY = height - PIP_H - 64;
+  const pos = useRef(new Animated.ValueXY({ x: startX, y: startY })).current;
+  const last = useRef({ x: startX, y: startY });
+  const size = useRef({ width, height });
+  size.current = { width, height };
+
+  // back to the corner when the screen size changes (rotation)
+  useEffect(() => {
+    last.current = { x: startX, y: startY };
+    pos.setValue(last.current);
+  }, [startX, startY, pos]);
+
+  const pan = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 3 || Math.abs(g.dy) > 3,
+      onPanResponderMove: (_, g) => pos.setValue({ x: last.current.x + g.dx, y: last.current.y + g.dy }),
+      onPanResponderRelease: (_, g) => {
+        const { width: w, height: h } = size.current;
+        const x = Math.max(8, Math.min(w - PIP_W - 8, last.current.x + g.dx));
+        const y = Math.max(8, Math.min(h - PIP_H - 8, last.current.y + g.dy));
+        last.current = { x, y };
+        Animated.spring(pos, { toValue: { x, y }, friction: 7, useNativeDriver: false }).start();
+      },
+    })
+  ).current;
+
+  return (
+    <Animated.View
+      {...pan.panHandlers}
+      pointerEvents={visible ? 'auto' : 'none'}
+      accessibilityLabel="Your camera. Drag to move"
+      style={[styles.pip, { opacity: visible ? 1 : 0, transform: pos.getTranslateTransform() }]}
+    >
+      <View style={StyleSheet.absoluteFill} pointerEvents="none">
+        {children}
+      </View>
+      <View style={styles.pipLabel} pointerEvents="none">
+        <GText variant="label" size={10} style={{ color: '#FFFFFF', letterSpacing: 1 }}>YOUR CAMERA</GText>
+      </View>
+    </Animated.View>
+  );
 };
 
 /** Name tag at the bottom of each half: orange for you (left), blue for the opponent (right). */
@@ -1836,6 +1898,29 @@ const styles = StyleSheet.create({
     top: '50%',
     height: 3,
     marginTop: -1.5,
+  },
+  pip: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: PIP_W,
+    height: PIP_H,
+    borderRadius: 14,
+    overflow: 'hidden',
+    backgroundColor: '#000',
+    borderWidth: 2,
+    borderColor: '#FF6A2B',
+    zIndex: 80,
+    elevation: 24,
+  },
+  pipLabel: {
+    position: 'absolute',
+    left: 6,
+    bottom: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
   },
   sideTag: {
     position: 'absolute',
