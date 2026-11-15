@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
-  Alert,
   Animated,
   Dimensions,
   Modal,
@@ -11,6 +10,7 @@ import {
   View,
   StatusBar,
 } from 'react-native';
+import { showAlert } from '../../../components/alert';
 import { WebView } from 'react-native-webview';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import * as Speech from 'expo-speech';
@@ -977,13 +977,13 @@ export const DeformityScannerModal: React.FC<DeformityScannerModalProps> = ({
         onApplyConditions(conditionUpdates);
       }
 
-      Alert.alert(
+      showAlert(
         'Profile and Challenges Customized',
         'Your Daily Challenges and therapeutic exercises have been dynamically updated for your posture profile.',
         [{ text: 'Great', onPress: () => { setIsReportVisible(false); onClose(); } }]
       );
     } catch (e) {
-      Alert.alert('Notice', 'Customized posture plan applied for this session.');
+      showAlert('Notice', 'Customized posture plan applied for this session.');
       setIsReportVisible(false);
       onClose();
     } finally {

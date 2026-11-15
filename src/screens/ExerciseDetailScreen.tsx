@@ -1,7 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Modal,
   RefreshControl,
   ScrollView,
@@ -12,6 +11,8 @@ import {
   View,
   Pressable,
 } from 'react-native';
+import { showAlert } from '../components/alert';
+import { requireEnergy } from '../components/game/EnergyMeter';
 import {
   Activity,
   Award,
@@ -233,7 +234,7 @@ export const ExerciseDetailScreen: React.FC<ExerciseDetailScreenProps> = ({
             }
           } else {
             setActiveSentInvite(null);
-            Alert.alert('Duel Declined', `@${activeSentInvite.receiverUsername} declined your battle invitation.`);
+            showAlert('Duel Declined', `@${activeSentInvite.receiverUsername} declined your battle invitation.`);
           }
         }
       }
@@ -261,6 +262,7 @@ export const ExerciseDetailScreen: React.FC<ExerciseDetailScreenProps> = ({
 
   const handleChallengeFriend = async (targetFriend: { id: string; username: string }) => {
     if (!user?.id) return;
+    if (!requireEnergy()) return;
     const currentUsername =
       profile?.username || user.user_metadata?.username || user.email?.split('@')[0] || 'Athlete';
 
@@ -290,14 +292,14 @@ export const ExerciseDetailScreen: React.FC<ExerciseDetailScreenProps> = ({
           if (prev <= 1) {
             clearInterval(inviteTimerRef.current);
             setActiveSentInvite(null);
-            Alert.alert('Invite Expired', `Battle challenge to @${targetFriend.username} timed out.`);
+            showAlert('Invite Expired', `Battle challenge to @${targetFriend.username} timed out.`);
             return 0;
           }
           return prev - 1;
         });
       }, 1000);
     } catch (e: any) {
-      Alert.alert('Challenge Error', e?.message || 'Could not send battle challenge.');
+      showAlert('Challenge Error', e?.message || 'Could not send battle challenge.');
     } finally {
       setChallengingFriendId(null);
     }
@@ -305,7 +307,7 @@ export const ExerciseDetailScreen: React.FC<ExerciseDetailScreenProps> = ({
 
   const handleChallengeByUsername = async () => {
     if (!customUsername.trim()) {
-      Alert.alert('Missing Username', 'Please enter a valid athlete username to challenge.');
+      showAlert('Missing Username', 'Please enter a valid athlete username to challenge.');
       return;
     }
     const targetUsername = customUsername.trim();
@@ -361,11 +363,11 @@ export const ExerciseDetailScreen: React.FC<ExerciseDetailScreenProps> = ({
 
   const handleModePress = (mode: QueueMode, locked: boolean, aiLocked: boolean) => {
     if (aiLocked) {
-      Alert.alert('Squats Only', 'AI Duel is currently supported only for Squats. Other exercises will be unlocked soon!', [{ text: 'OK' }]);
+      showAlert('Squats Only', 'AI Duel is currently supported only for Squats. Other exercises will be unlocked soon!', [{ text: 'OK' }]);
       return;
     }
     if (locked) {
-      Alert.alert('Account Required', 'Sign in or create an athlete account to battle live players in online duels.', [{ text: 'OK' }]);
+      showAlert('Account Required', 'Sign in or create an athlete account to battle live players in online duels.', [{ text: 'OK' }]);
       return;
     }
     switch (mode.kind) {
@@ -555,7 +557,7 @@ export const ExerciseDetailScreen: React.FC<ExerciseDetailScreenProps> = ({
                   accessibilityState={{ selected: active }}
                   onPress={() => {
                     if (locked) {
-                      Alert.alert(`${label} Locked`, 'Sign in or create an account to view global rankings and record your scores.', [{ text: 'OK' }]);
+                      showAlert(`${label} Locked`, 'Sign in or create an account to view global rankings and record your scores.', [{ text: 'OK' }]);
                       return;
                     }
                     juice.play('toggle');

@@ -41,7 +41,7 @@ import { makeStyles, radius, ThemeColors, useColors } from '../theme';
 import { useExerciseListStore } from '../store/exerciseListStore';
 import { LobbyScreen } from '../screens/LobbyScreen';
 import { modeNeedsAuth, type LobbyMode } from '../screens/lobbyLogic';
-import { GameTopBar, ScreenBackground } from './game';
+import { GameTopBar, ScreenBackground, requireEnergy } from './game';
 import { GameSettingsModal } from './GameSettingsModal';
 import type { SessionOrigin } from '../store/userStore';
 
@@ -182,7 +182,14 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     };
   }, [currentUser, setCounts]);
 
+  // Every match uses energy: with none left, the player is offered a free solo workout instead.
+  const trainSoloInstead = (exerciseId: string, origin: SessionOrigin) => () => {
+    const ex = exercisesList.find((e) => e.id === exerciseId);
+    onOpenCamera(exerciseId, ex?.name, false, origin);
+  };
+
   const handleJoinQueue = (exercise: ExerciseItem, queue: 'quick_start' | 'ffa', origin: SessionOrigin = 'detail') => {
+    if (!requireEnergy(trainSoloInstead(exercise.id, origin))) return;
     const userId =
       currentUser?.user_metadata?.username ||
       currentUser?.email ||
@@ -240,6 +247,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     exerciseId: string,
     customRoomId?: string
   ) => {
+    if (!requireEnergy()) return;
     const userId =
       currentUser?.user_metadata?.username ||
       currentUser?.email ||
@@ -263,10 +271,12 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   }, [onTabChange, setActiveSubTab]);
 
   const handleOpenAiDuel = useCallback((exerciseId?: string, origin: SessionOrigin = 'detail') => {
+    if (!requireEnergy(trainSoloInstead(exerciseId || '1', origin))) return;
     if (exerciseId) setAiModalExerciseId(exerciseId);
     setAiOrigin(origin);
     setShowAiModal(true);
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [exercisesList, onOpenCamera]);
 
   const handleStartAiDuel = useCallback((bot: AIBotProfile, exerciseId: string) => {
     setShowAiModal(false);
@@ -379,7 +389,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         <CommunityScreen
           currentUser={currentUser}
           onBack={goLobby}
-          onOpenMatchCamera={onOpenMatchCamera}
+          onOpenMatchCamera={(...args) => {
+            if (requireEnergy()) onOpenMatchCamera(...args);
+          }}
         />
       );
     }

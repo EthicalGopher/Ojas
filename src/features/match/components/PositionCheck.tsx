@@ -52,7 +52,7 @@ const STEPS: { title: string; hint: string; test: (p: Pose) => boolean }[] = [
 ];
 
 /** The packet as its mirror image: your right hand moves the character's arm on the right of the screen. */
-function mirror(p: Pose): Pose {
+export function mirror(p: Pose): Pose {
   const m = p.slice();
   for (const [a, b] of PAIRS) {
     for (let k = 0; k < 4; k++) {
@@ -75,7 +75,9 @@ export const PositionCheck = forwardRef<PositionCheckHandle, {
   secondsLeft: number;
   /** 0-1: how much of the body the camera sees. */
   visibility: number;
-}>(({ exerciseId, rivalName, secondsLeft, visibility }, ref) => {
+  /** false when the match screen already shows your character (SelfCharacterView) under this HUD. */
+  character?: boolean;
+}>(({ exerciseId, rivalName, secondsLeft, visibility, character = true }, ref) => {
   const c = useColors();
   const look = useEquippedLook();
   const viewRef = useRef<AIInstructor3DHandle>(null);
@@ -122,7 +124,7 @@ export const PositionCheck = forwardRef<PositionCheckHandle, {
 
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
-      {look.ready ? (
+      {!character ? null : look.ready ? (
         <AIInstructor3D
           ref={viewRef}
           mode="stand"

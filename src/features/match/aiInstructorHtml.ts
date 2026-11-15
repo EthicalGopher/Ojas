@@ -162,8 +162,9 @@ export function getAiInstructorHtml(
     var fov = camera.fov * Math.PI / 180;
     var aspect = camera.aspect;
     // Fit the standing height, and the width of the crouch on narrow (landscape split) views.
-    // Full-screen views have the timer over the top of the frame: leave headroom so it clears the head.
-    var headroom = aspect > 1.6 ? 0.11 : 0;
+    // The match scoreboard sits over the top of the frame: leave headroom so it clears the head. The
+    // split-screen halves (you | opponent) are narrow, so the body fills more of the height: more room.
+    var headroom = aspect > 1.6 ? 0.11 : 0.2;
     var fitH = (TARGET_HEIGHT * (0.6 + headroom * 1.1)) / Math.tan(fov / 2);
     var fitW = (viewHalfW / aspect) / Math.tan(fov / 2);
     var dist = Math.max(fitH, fitW);

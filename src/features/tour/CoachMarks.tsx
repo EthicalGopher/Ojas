@@ -60,9 +60,9 @@ export const TOUR_STEPS: TourStep[] = [
     round: true,
   },
   {
-    target: 'tab-posture',
-    title: 'Posture',
-    body: 'Stand in front of the camera for a body posture check: knees, legs, shoulders and back.',
+    target: 'tab-utilities',
+    title: 'Utilities',
+    body: 'Your tools in one place: the body posture check, Human vs AI duels, the AI Tutor and free solo workouts.',
     round: true,
   },
   {

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { AppState, StyleSheet, View, Text, TouchableOpacity } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as ScreenOrientation from 'expo-screen-orientation';
 
@@ -16,18 +16,17 @@ import { StreakSplash } from '../components/StreakSplash';
 import { AppSplash } from '../components/AppSplash';
 import { AppTutorial } from '../components/AppTutorial';
 import { CoachMarks } from '../features/tour/CoachMarks';
+import { AlertHost } from '../components/alert';
+import { requireEnergy } from '../components/game/EnergyMeter';
+import { hasEnergyForMatch, useEnergyStore } from '../store/energyStore';
+import { showAlert } from '../components/alert';
 import { useTourStore } from '../features/tour/tourStore';
 
 import { Swords, Video, Zap, Check, X, Flame } from 'lucide-react-native';
 import { Avatar } from '../components/Avatar';
 import type { MainTab } from '../components/HomeScreen';
 import type { ModelComplexity } from '../utils/deviceSpecs';
-import {
-  connectMatchSocket,
-  disconnectMatchSocket,
-  addMatchMessageListener,
-  searchQueueWithBotFallback,
-} from '../utils/matchmaking';
+import { connectMatchSocket, disconnectMatchSocket } from '../utils/matchmaking';
 import { useGameStats } from '../hooks/useGameStats';
 import { juice } from '../juice/juice';
 import { getNotifications, scheduleStreakReminders } from '../utils/streakReminders';
@@ -79,8 +78,18 @@ export default function AppShell() {
   const tutorialReplay = useUserStore((s) => s.tutorialReplay);
   const completeTutorial = useUserStore((s) => s.completeTutorial);
   const tourRunning = useTourStore((s) => s.running);
-  const { level: playerLevelInfo, streak } = useGameStats();
-  const playerLevel = playerLevelInfo.level;
+  const { streak } = useGameStats();
+
+  // Match energy for this player (server for accounts, device for guests); re-read when the app comes back.
+  useEffect(() => {
+    const load = () => useEnergyStore.getState().load(currentUser?.id ?? null, !!currentUser?.isGuest);
+    load();
+    if (!currentUser) return;
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') load();
+    });
+    return () => sub.remove();
+  }, [currentUser?.id, currentUser?.isGuest]);
 
   // Keep tomorrow's streak reminders in step with today's activity.
   useEffect(() => {
@@ -159,6 +168,13 @@ export default function AppShell() {
 
   const handleAcceptIncomingInvite = async () => {
     if (!incomingInvite) return;
+    // Out of energy: the challenge is declined (the sender is not left waiting) and the player sees why.
+    if (!hasEnergyForMatch()) {
+      declineCustomBattleInvite(incomingInvite).catch(() => {});
+      setIncomingInvite(null);
+      requireEnergy();
+      return;
+    }
     const currentUsername =
       currentUser?.user_metadata?.username ||
       currentUser?.email?.split('@')[0] ||
@@ -187,6 +203,33 @@ export default function AppShell() {
     await declineCustomBattleInvite(incomingInvite);
     setIncomingInvite(null);
   };
+
+  // A friend's 1v1 challenge opens in the alert box.
+  useEffect(() => {
+    if (!incomingInvite) return;
+    const invite = incomingInvite;
+    showAlert(
+      '1v1 challenge',
+      `@${invite.senderUsername} has challenged you to a 1v1 ${invite.exerciseName} duel! Accepting uses 1 energy.`,
+      [
+        { text: 'Decline', style: 'cancel', onPress: handleDeclineIncomingInvite },
+        { text: 'Accept battle', onPress: handleAcceptIncomingInvite },
+      ],
+      {
+        tone: 'info',
+        body: () => (
+          <View style={styles.inviteAvatarRow}>
+            <View style={styles.avatarGlowRing}>
+              <Avatar username={invite.senderUsername} size={56} config={invite.senderAvatar} />
+            </View>
+            <Swords size={22} color={colors.accent} />
+            <Text style={styles.inviteSenderName}>@{invite.senderUsername}</Text>
+          </View>
+        ),
+      },
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [incomingInvite]);
 
   // New users see the tutorial once: profiles.is_tutorial is false until they finish or skip it.
   // Only an explicit false counts, so a missing column or an unloaded profile never shows it.
@@ -265,97 +308,12 @@ export default function AppShell() {
                 }
               }, 0);
             }}
-            onRequeue={(nextMode, exId) => {
+            onOpenHistory={() => {
               setTimeout(() => {
                 setSimulatedOpponent(null);
                 setIsMatchCamera(false);
                 setIsFullscreen(false);
-                setActiveTab(sessionOrigin === 'train' ? 'workouts' : 'home');
-                if (sessionOrigin === 'lobby') {
-                  useUserStore.getState().setHomeSubTab('lobby');
-                } else if (sessionOrigin !== 'train' && exId) {
-                  useUserStore.getState().setSelectedExerciseId(exId);
-                }
-                const userId =
-                  currentUser?.user_metadata?.username ||
-                  currentUser?.email ||
-                  currentUser?.user?.id ||
-                  currentUser?.id ||
-                  `Player_${Math.floor(1000 + Math.random() * 9000)}`;
-
-                // Requeue as a 1v1 duel (old faceoff too): real athletes first, bot as fallback.
-                if (nextMode === 'ffa' || nextMode === 'quickjoin' || nextMode === 'ai_battle' || nextMode === 'faceoff') {
-                  const queue = nextMode === 'ffa' ? 'ffa' : 'quick_start';
-                  const isFFA = queue === 'ffa';
-                  setWaitingTitle(isFFA ? 'BATTLE GROUND LOBBY' : 'FINDING OPPONENT');
-                  setWaitingMessage(
-                    isFFA
-                      ? 'Gathering athletes (Max 10). Match starts when the timer ends or the lobby fills...'
-                      : 'Finding a worthy opponent...'
-                  );
-                  setWaitingBadge(isFFA ? 'WAITING: 30s' : undefined);
-                  setWaitingSubInfo(isFFA ? '1 Athlete Joined' : undefined);
-                  setIsFFALobby(isFFA);
-                  setFfaLobbyCountdown(30);
-                  setFfaLobbyPlayerCount(1);
-                  setMatchWaiting(true);
-
-                  const openMatch = (opponent: string, mode: MatchMode, simulated: SimulatedOpponent | null = null) => {
-                    setSimulatedOpponent(simulated);
-                    setMatchWaiting(false);
-                    setIsFFALobby(false);
-                    setOpponentUsername(opponent);
-                    setMatchMode(mode);
-                    setMatchExerciseId(exId);
-                    setIsMatchCamera(true);
-                    setIsFullscreen(true);
-                  };
-
-                  searchQueueWithBotFallback({
-                    userId,
-                    exerciseId: exId,
-                    queue,
-                    playerLevel,
-                    onLobbyUpdate: (countdown, playerCount) => {
-                      setWaitingMessage(`Match starts in ${countdown}s (or when 10 athletes join)...`);
-                      setWaitingBadge(`STARTING IN ${countdown}s`);
-                      setWaitingSubInfo(`${playerCount} ${playerCount === 1 ? 'Athlete' : 'Athletes'} in Lobby (Max 10)`);
-                      setFfaLobbyCountdown(countdown);
-                      setFfaLobbyPlayerCount(playerCount);
-                    },
-                    onResult: (outcome) => {
-                      if (outcome.kind === 'simulated') {
-                        openMatch(outcome.opponent.username, 'quickjoin', outcome.opponent);
-                      } else if (outcome.kind === 'ffa') {
-                        openMatch('Battle Ground', 'ffa');
-                      } else {
-                        openMatch(outcome.opponent, 'quickjoin');
-                      }
-                    },
-                  });
-                } else {
-                  setWaitingTitle('FINDING OPPONENT');
-                  setWaitingMessage('Searching for a worthy rival in the queue...');
-                  setWaitingBadge(undefined);
-                  setWaitingSubInfo(undefined);
-                  setIsFFALobby(false);
-                  setMatchWaiting(true);
-
-                  connectMatchSocket(userId, `${exId}_faceoff`);
-
-                  const cleanup = addMatchMessageListener((msg: any) => {
-                    if (msg.type === 'matched') {
-                      setMatchWaiting(false);
-                      setIsFFALobby(false);
-                      setOpponentUsername(msg.opponent);
-                      setMatchMode('faceoff');
-                      setMatchExerciseId(exId);
-                      setIsMatchCamera(true);
-                      setIsFullscreen(true);
-                      cleanup();
-                    }
-                  });
-                }
+                useUserStore.getState().openProfileTab('history');
               }, 0);
             }}
           />
@@ -481,59 +439,6 @@ export default function AppShell() {
           />
         ) : null}
 
-        {/* Incoming 1v1 Battle Challenge Modal */}
-        {incomingInvite && (
-          <View style={styles.incomingInviteOverlay}>
-            <View style={styles.incomingInviteCard}>
-              <View style={styles.incomingBadgePill}>
-                <Swords size={13} color="#E8D5C4" />
-                <Text style={styles.incomingBadgeText}>INCOMING 1V1 DUEL</Text>
-              </View>
-
-              <View style={styles.incomingAvatarWrapper}>
-                <View style={styles.avatarGlowRing}>
-                  <Avatar
-                    username={incomingInvite.senderUsername}
-                    size={72}
-                    config={incomingInvite.senderAvatar}
-                  />
-                </View>
-              </View>
-
-              <Text style={styles.incomingSenderName}>
-                @{incomingInvite.senderUsername}
-              </Text>
-              <Text style={styles.incomingChallengeText}>
-                has challenged you to a 1v1{' '}
-                <Text style={{ color: '#E8D5C4', fontWeight: '900' }}>
-                  {incomingInvite.exerciseName}
-                </Text>{' '}
-                duel!
-              </Text>
-
-              <View style={styles.incomingActionRow}>
-                <TouchableOpacity
-                  style={styles.incomingDeclineBtn}
-                  activeOpacity={0.75}
-                  onPress={handleDeclineIncomingInvite}
-                >
-                  <X size={15} color="#94A3B8" style={{ marginRight: 4 }} />
-                  <Text style={styles.incomingDeclineText}>Decline</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.incomingAcceptBtn}
-                  activeOpacity={0.85}
-                  onPress={handleAcceptIncomingInvite}
-                >
-                  <Swords size={16} color="#0C0F14" style={{ marginRight: 6 }} />
-                  <Text style={styles.incomingAcceptText}>ACCEPT BATTLE</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        )}
-
         {/* Daily streak moment, over everything including the tab bar */}
         {splashDone && currentUser && !isFullscreen && !isMatchCamera && !showTutorial && !tourRunning && <StreakSplash />}
 
@@ -563,6 +468,9 @@ export default function AppShell() {
 
         {/* Brand splash: stays over the app until auth is done, then fades out */}
         {!splashDone && <AppSplash ready onDone={() => setSplashDone(true)} />}
+
+        {/* Ojas's own alert box (showAlert), over everything */}
+        <AlertHost />
       </View>
     </SafeAreaProvider>
   );
@@ -633,113 +541,22 @@ const useStyles = makeStyles((colors: ThemeColors) =>
     fontWeight: '600',
     marginTop: 14,
   },
-  incomingInviteOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.86)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-    zIndex: 200,
-  },
-  incomingInviteCard: {
-    backgroundColor: colors.surface,
-    borderRadius: 28,
-    padding: 24,
-    width: '100%',
-    maxWidth: 350,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.5,
-    shadowRadius: 25,
-    elevation: 10,
-  },
-  incomingBadgePill: {
+  inviteAvatarRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(232, 213, 196, 0.15)',
-    borderRadius: 14,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderWidth: 1,
-    borderColor: 'rgba(232, 213, 196, 0.35)',
-    gap: 6,
-    marginBottom: 16,
+    gap: 12,
   },
-  incomingBadgeText: {
-    color: '#E8D5C4',
-    fontSize: 11,
+  inviteSenderName: {
+    color: colors.text,
+    fontSize: 18,
     fontWeight: '900',
-    letterSpacing: 0.8,
-  },
-  incomingAvatarWrapper: {
-    marginBottom: 12,
+    flexShrink: 1,
   },
   avatarGlowRing: {
     padding: 3,
     borderRadius: 44,
     borderWidth: 2,
     borderColor: '#C8B6FF',
-  },
-  incomingSenderName: {
-    color: colors.text,
-    fontSize: 20,
-    fontWeight: '900',
-  },
-  incomingChallengeText: {
-    color: colors.textMuted,
-    fontSize: 13.5,
-    textAlign: 'center',
-    marginTop: 6,
-    lineHeight: 19,
-  },
-  incomingActionRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 22,
-    width: '100%',
-  },
-  incomingDeclineBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.surfaceHi,
-    borderRadius: 18,
-    paddingVertical: 14,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  incomingDeclineText: {
-    color: colors.textMuted,
-    fontSize: 13.5,
-    fontWeight: '800',
-  },
-  incomingAcceptBtn: {
-    flex: 1.5,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#E8D5C4',
-    borderRadius: 18,
-    paddingVertical: 14,
-    shadowColor: '#E8D5C4',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 4,
-  },
-  incomingAcceptText: {
-    color: '#0C0F14',
-    fontSize: 13,
-    fontWeight: '900',
-    letterSpacing: 0.5,
   },
 })
 );

@@ -5,7 +5,8 @@
 // world, side-on, with their name, role, stats and signature moves down the left, and the play / buy
 // button below. Story replays the movie; Skip jumps to the showcase.
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Animated, Easing, Image, Modal, Platform, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { ActivityIndicator, Animated, Easing, Image, Modal, Platform, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { showAlert } from '../../../components/alert';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { WebView } from 'react-native-webview';
@@ -393,30 +394,30 @@ export const HeroScreen: React.FC<HeroScreenProps> = ({ hero, status, catalog, c
     if (result.ok) {
       useUserStore.getState().noteEquipped(hero.id);
       await refreshProfile();
-    } else Alert.alert(failTitle, result.error || 'Please try again.');
+    } else showAlert(failTitle, result.error || 'Please try again.');
     setIsBusy(false);
     return result.ok;
   };
   const handleBuy = () => {
     if (hero.notOnServer) {
-      Alert.alert('Coming soon', `${hero.name} goes on sale once the shop update is installed on the server.`);
+      showAlert('Coming soon', `${hero.name} goes on sale once the shop update is installed on the server.`);
       return;
     }
     if (coins < hero.price_coins) {
-      Alert.alert(
+      showAlert(
         'Not enough coins',
         `${hero.name} costs ${hero.price_coins} coins and you have ${coins}. Earn ${hero.price_coins - coins} more by training: every ${XP_PER_COIN} XP gives you 1 coin.`,
       );
       return;
     }
-    Alert.alert(`Recruit ${hero.name}?`, `This spends ${hero.price_coins} of your ${coins} coins.`, [
+    showAlert(`Recruit ${hero.name}?`, `This spends ${hero.price_coins} of your ${coins} coins.`, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Buy',
         onPress: async () => {
           if (await run(() => purchaseAvatar(hero.id), 'Purchase failed')) {
             juice.play('level_up');
-            Alert.alert('New hero', `${hero.name} joined your roster and is your hero now.`);
+            showAlert('New hero', `${hero.name} joined your roster and is your hero now.`);
           }
         },
       },
@@ -424,12 +425,12 @@ export const HeroScreen: React.FC<HeroScreenProps> = ({ hero, status, catalog, c
   };
   const handleClaim = async () => {
     if (hero.notOnServer) {
-      Alert.alert('Coming soon', `${hero.name} unlocks once the shop update is installed on the server.`);
+      showAlert('Coming soon', `${hero.name} unlocks once the shop update is installed on the server.`);
       return;
     }
     if (await run(() => equipAvatar(hero.id), 'Could not unlock')) {
       juice.play('level_up');
-      Alert.alert('Unlocked', `Level ${hero.unlock_level} reward: ${hero.name} is your hero now.`);
+      showAlert('Unlocked', `Level ${hero.unlock_level} reward: ${hero.name} is your hero now.`);
     }
   };
 
@@ -454,7 +455,7 @@ export const HeroScreen: React.FC<HeroScreenProps> = ({ hero, status, catalog, c
   } else if (status === 'level') {
     label = `Lv ${hero.unlock_level}`;
     tone = 'locked';
-    onAction = () => Alert.alert('Locked', `${hero.name} unlocks at level ${hero.unlock_level}. You are level ${level}: keep training to get there.`);
+    onAction = () => showAlert('Locked', `${hero.name} unlocks at level ${hero.unlock_level}. You are level ${level}: keep training to get there.`);
   } else {
     price = true;
     tone = affordable ? 'accent' : 'locked';

@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   Animated,
-  Alert,
   Dimensions,
   Image,
   PanResponder,
@@ -23,6 +22,7 @@ import {
   Eye,
   EyeOff,
   Flame,
+  History,
   LogOut,
   Menu,
   RefreshCw,
@@ -50,10 +50,12 @@ import { getPoseHtmlBundle } from '../../camera/components/CameraScreen';
 import { PackGate } from '../../../components/PackGate';
 import { packForExercise } from '../../../utils/assetPacksLogic';
 import { recordExerciseMatchResult } from '../../../utils/rankingService';
+import { addMatchHistory, type MatchHistoryResult } from '../../../utils/matchHistoryService';
+import { useEnergyStore } from '../../../store/energyStore';
+import { showAlert } from '../../../components/alert';
 import { recordCaloriesToProfile, recordDailyChallengeProgress } from '../../../utils/profileService';
 import { calculateExerciseCalories } from '../../../utils/calorieService';
 import { useUserStore } from '../../../store/userStore';
-import { useMatchmakingStore } from '../../../store/matchmakingStore';
 import { useDailyChallengeStore } from '../../../store/dailyChallengeStore';
 import { sendFriendRequest } from '../../../utils/friendService';
 import { sendCustomBattleInvite } from '../../../utils/customBattleService';
@@ -70,8 +72,9 @@ import { AIOpponentView } from './AIOpponentView';
 import { ArenaIntro } from './ArenaIntro';
 import { DuelOpponentView } from './DuelOpponentView';
 import { PositionCheck, PositionCheckHandle } from './PositionCheck';
+import { SelfCharacterHandle, SelfCharacterView } from './SelfCharacterView';
 import { DuelHud } from './DuelHud';
-import { GText } from '../../../components/game';
+import { EnergyPanel, GText } from '../../../components/game';
 import { Slant } from '../../../components/game/Slant';
 import type { AIInstructor3DHandle } from './AIInstructor3D';
 import { SimulatedOpponent } from '../../../utils/simulatedOpponent';
@@ -87,7 +90,8 @@ type MatchPhase = 'loading_resources' | 'setup_countdown' | 'active_match' | 'ma
 
 interface MatchCameraScreenProps {
   onClose: () => void;
-  onRequeue?: (mode: MatchMode, exerciseId: string) => void;
+  /** Leaves the match and opens Profile > History (signed-in players). */
+  onOpenHistory?: () => void;
   selectedModel?: string;
   mode: MatchMode;
   opponentUsername?: string;
@@ -101,7 +105,7 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
   onClose,
-  onRequeue,
+  onOpenHistory,
   selectedModel = 'medium',
   mode: requestedMode = 'quickjoin',
   opponentUsername = 'opponent',
@@ -114,7 +118,6 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
   // Simulated opponents play through the normal PvP screen, driven by the AI rep simulation.
   const isSimulated = !!simulatedOpponent && mode !== 'ai_battle';
   const usesAiSimulation = mode === 'ai_battle' || isSimulated;
-  const [simRound, setSimRound] = useState(0);
   // Versus card replaces the old "syncing players" loading screen and fades out once synced.
   const [showVersus, setShowVersus] = useState(true);
   const [hasPermission, setHasPermission] = useState<boolean>(false);
@@ -133,16 +136,12 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
   const [timeLeft, setTimeLeft] = useState(120); // 2 mins duel match timer
   const [matchEnded, setMatchEnded] = useState(false);
   const [isSkeletonVisible, setIsSkeletonVisible] = useState(true);
-  // AI duel: the 3D AI fills the screen. The player's camera keeps running (it counts the
-  // reps) behind it, or in a small corner window when switched on from the floating widget.
-  // 1v1 duels work the same way: the opponent's 3D character fills the screen.
-  const aiFullscreen = mode === 'ai_battle' || mode === 'quickjoin';
+  // Duels (AI and 1v1) are split in two: you (live camera) on the left, the opponent on the right.
   // Live moves (floating widget, off by default): the opponent's character mirrors their real pose.
   const [liveMoves, setLiveMoves] = useState(false);
   const liveMovesRef = useRef(false);
   const opponentWantsPoseRef = useRef(false);
   const duelRef = useRef<AIInstructor3DHandle>(null);
-  const [showSelfCam, setShowSelfCam] = useState(false);
   const positioning = matchPhase === 'loading_resources' || matchPhase === 'setup_countdown';
 
   // Animated values for setup phase choreography
@@ -154,13 +153,13 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
   const webViewRef = useRef<WebView>(null);
   const matchPhaseRef = useRef<MatchPhase>('loading_resources');
   const positionCheckRef = useRef<PositionCheckHandle>(null);
+  const selfViewRef = useRef<SelfCharacterHandle>(null);
   // The 3D opponent loads while players sync and the camera is set up; the match waits for it.
   const opponentModelReadyRef = useRef(false);
   const markOpponentModelReady = useCallback(() => {
     opponentModelReadyRef.current = true;
   }, []);
   const [dimensions, setDimensions] = useState(() => Dimensions.get('window'));
-  const [autoCountdown, setAutoCountdown] = useState<number>(5);
   const [opponentAvatarUrl, setOpponentAvatarUrl] = useState<string | null>(null);
   const [currentPoseState, setCurrentPoseState] = useState<{ text: string; color: string; bg: string; border: string }>({
     text: 'READY',
@@ -168,8 +167,6 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
     bg: 'rgba(15, 23, 42, 0.95)',
     border: '#38BDF8',
   });
-
-  const { autoRematch, toggleAutoRematch, setAutoRematch } = useMatchmakingStore();
 
   const currentBot: AIBotProfile = useMemo(() => {
     if (simulatedOpponent) return simulatedOpponent.bot;
@@ -199,7 +196,7 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
       });
       setOpponentScore(0);
     }
-  }, [usesAiSimulation, currentBot, exerciseId, simRound]);
+  }, [usesAiSimulation, currentBot, exerciseId]);
 
   // When in AI battle and local pose is ready, automatically set opponentReady
   useEffect(() => {
@@ -309,6 +306,38 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
     matchPhaseRef.current = matchPhase;
   }, [matchPhase]);
 
+  // Every match uses one energy bar, taken when the match itself starts (leaving during setup is free).
+  const energySpentRef = useRef(false);
+  useEffect(() => {
+    if (matchPhase !== 'active_match' || energySpentRef.current) return;
+    energySpentRef.current = true;
+    useEnergyStore.getState().spend().catch(() => {});
+  }, [matchPhase]);
+
+  // Latest scores for handlers registered once (socket listeners, forfeit buttons).
+  const liveRef = useRef({ selfScore, opponentScore, timeLeft });
+  liveRef.current = { selfScore, opponentScore, timeLeft };
+  const historySavedRef = useRef(false);
+  const saveHistory = (result: MatchHistoryResult, forfeit = false) => {
+    if (historySavedRef.current || !user?.id) return;
+    historySavedRef.current = true;
+    const live = liveRef.current;
+    addMatchHistory(user.id, {
+      exercise_id: exerciseId || '1',
+      mode: mode === 'ffa' ? 'ffa' : mode === 'ai_battle' ? 'ai_battle' : 'quickjoin',
+      opponent: mode === 'ai_battle' ? currentBot.name : mode === 'ffa' ? 'Battle Ground' : opponentUsername,
+      result,
+      self_score: live.selfScore,
+      opponent_score: mode === 'ffa' ? null : live.opponentScore,
+      points_delta: MATCH_POINTS[result],
+      calories: calculateExerciseCalories(exerciseId, live.selfScore, 0),
+      duration_seconds: 120 - Math.max(0, live.timeLeft),
+      forfeit,
+    });
+  };
+  const saveHistoryRef = useRef(saveHistory);
+  saveHistoryRef.current = saveHistory;
+
   // Record result and trigger in-app notification when match finishes
   useEffect(() => {
     if (matchEnded && !recordedResultRef.current && user?.id) {
@@ -333,6 +362,7 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
           mode: 'ffa',
           opponentUsername: 'Battle Ground',
         });
+        saveHistoryRef.current(result);
 
         recordExerciseMatchResult(user.id, exerciseId, result, selfScore).then(() => {
           recordCaloriesToProfile(user.id, caloriesBurned, selfScore).then(() => {
@@ -358,6 +388,7 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
           aiQuote,
           botLevel: currentBot.level,
         });
+        saveHistoryRef.current(result);
 
         recordExerciseMatchResult(user.id, exerciseId, result, selfScore).then(() => {
           recordCaloriesToProfile(user.id, caloriesBurned, selfScore).then(() => {
@@ -380,6 +411,7 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
           mode,
           opponentUsername,
         });
+        saveHistoryRef.current(result);
 
         recordExerciseMatchResult(user.id, exerciseId, result, selfScore).then(() => {
           recordCaloriesToProfile(user.id, caloriesBurned, selfScore).then(() => {
@@ -455,7 +487,7 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
           if (p.length === 76 && p.every((v: number) => Number.isFinite(v))) duelRef.current?.pushPose(p);
         } else if (msg.data.startsWith('pose_sub:')) {
           opponentWantsPoseRef.current = msg.data === 'pose_sub:1';
-          webViewRef.current?.injectJavaScript(`window.__poseStream = ${opponentWantsPoseRef.current || matchPhaseRef.current === 'setup_countdown'}; true;`);
+          webViewRef.current?.injectJavaScript(`window.__poseStream = ${opponentWantsPoseRef.current || matchPhaseRef.current === 'setup_countdown' || matchPhaseRef.current === 'active_match'}; true;`);
         }
       }
 
@@ -473,7 +505,7 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
         const currentPhase = matchPhaseRef.current;
         if (currentPhase === 'loading_resources' || currentPhase === 'setup_countdown') {
           // Camera adjustment / setup phase: Redirect without rating penalty
-          Alert.alert(
+          showAlert(
             'Opponent Left',
             `@${opponentUsername} left during setup. Returning to exercise details.`,
             [{ text: 'OK', onPress: () => handleClose() }]
@@ -483,10 +515,11 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
           if (!recordedResultRef.current && user?.id) {
             recordedResultRef.current = true;
             matchEndedRef.current = true;
-            await recordExerciseMatchResult(user.id, exerciseId, 'win', selfScore);
+            saveHistoryRef.current('win', true);
+            await recordExerciseMatchResult(user.id, exerciseId, 'win', liveRef.current.selfScore);
             await refreshProfile();
           }
-          Alert.alert(
+          showAlert(
             'Victory by Forfeit',
             `@${opponentUsername} forfeited the match! You won (+10 pts).`,
             [{ text: 'Great!', onPress: () => handleClose() }]
@@ -494,51 +527,10 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
         }
       }
 
+      // No rematches: every match starts from the lobby and uses energy. Older app versions may
+      // still ask; answer at once so they are not left waiting.
       if (msg.type === 'rematch_request') {
-        const getExerciseTitle = (exId?: string) => {
-          switch (exId) {
-            case '1': return 'Squats';
-            case '2': return 'Sit-ups';
-            case '3': return 'Triangle Pose';
-            case '4': return 'Lunges';
-            case '5': return 'Crunches';
-            case '6': return 'Cobra Pose';
-            case '7': return 'Push-ups';
-            case '8': return "Child's Pose";
-            case '9': return 'Tree Pose';
-            case '10': return 'Warrior II';
-            default: return 'the Match';
-          }
-        };
-        Alert.alert(
-          'Rematch Request',
-          `@${opponentUsername} wants to rematch in ${getExerciseTitle(exerciseId)}!`,
-          [
-            {
-              text: 'Decline',
-              style: 'cancel',
-              onPress: () => {
-                sendMatchMessage({ type: 'rematch_declined', sender: selfUsername });
-              },
-            },
-            {
-              text: 'Accept',
-              onPress: () => {
-                sendMatchMessage({ type: 'rematch_accepted', sender: selfUsername });
-                resetMatchState();
-              },
-            },
-          ]
-        );
-      }
-
-      if (msg.type === 'rematch_accepted') {
-        Alert.alert('Rematch Accepted', `@${opponentUsername} accepted the rematch! Starting now.`);
-        resetMatchState();
-      }
-
-      if (msg.type === 'rematch_declined') {
-        Alert.alert('Rematch Declined', `@${opponentUsername} declined the rematch.`);
+        sendMatchMessage({ type: 'rematch_declined', sender: selfUsername });
       }
     });
 
@@ -648,41 +640,13 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
     return () => clearInterval(duelTimer);
   }, [matchPhase, selfUsername]);
 
-  // 5-Second Post-Match Auto Requeue / Countdown Timer
-  // The camera page streams 3D poses while you get into position (your character copies you) and
+  // The camera page streams 3D poses during setup and the match (your character copies you), and
   // whenever the opponent has asked for them (live moves).
   useEffect(() => {
-    const on = matchPhase === 'setup_countdown' || opponentWantsPoseRef.current;
+    const on = matchPhase === 'setup_countdown' || matchPhase === 'active_match' || opponentWantsPoseRef.current;
     webViewRef.current?.injectJavaScript(`window.__poseStream = ${on}; true;`);
   }, [matchPhase]);
 
-  useEffect(() => {
-    if (matchPhase !== 'match_ended') {
-      setAutoCountdown(5);
-      return;
-    }
-
-    if (!autoRematch) return;
-
-    setAutoCountdown(5);
-    const interval = setInterval(() => {
-      setAutoCountdown((prev) => {
-        if (prev <= 1) {
-          clearInterval(interval);
-          // Trigger instant rematch / requeue
-          if (onRequeue) {
-            onRequeue(mode, exerciseId);
-          } else {
-            handleRestartMatch();
-          }
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [matchPhase, autoRematch, onRequeue, mode, exerciseId]);
 
   const handleWebViewMessage = useCallback(
     (event: WebViewMessageEvent) => {
@@ -710,9 +674,11 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
           setVisibility(data.visibility);
         }
 
-        // Getting into position: your character copies you and the move check reads the pose
-        if (matchPhaseRef.current === 'setup_countdown' && data.type === 'POSE_WORLD' && Array.isArray(data.p)) {
-          positionCheckRef.current?.pushPose(data.p);
+        // Your character copies you (setup and match); during setup the move check reads the pose too
+        if (data.type === 'POSE_WORLD' && Array.isArray(data.p)) {
+          const phase = matchPhaseRef.current;
+          if (phase === 'setup_countdown' || phase === 'active_match') selfViewRef.current?.pushPose(data.p);
+          if (phase === 'setup_countdown') positionCheckRef.current?.pushPose(data.p);
         }
 
         // Our pose, for an opponent who switched live moves on
@@ -784,12 +750,12 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
     }
   };
 
-  const handleClose = async (force: boolean = false) => {
+  const handleClose = async (force: boolean = false, toHistory: boolean = false) => {
     const currentPhase = matchPhaseRef.current;
 
     // If leaving during an active match, confirm defeat (-10 pts)
     if (!force && currentPhase === 'active_match' && !matchEndedRef.current) {
-      Alert.alert(
+      showAlert(
         'Forfeit Match?',
         'Leaving now counts as a Defeat (-10 pts) and awards victory to your opponent (+10 pts).',
         [
@@ -805,7 +771,8 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
               if (!recordedResultRef.current && user?.id) {
                 recordedResultRef.current = true;
                 matchEndedRef.current = true;
-                await recordExerciseMatchResult(user.id, exerciseId, 'defeat', selfScore);
+                saveHistoryRef.current('defeat', true);
+                await recordExerciseMatchResult(user.id, exerciseId, 'defeat', liveRef.current.selfScore);
                 await refreshProfile();
               }
 
@@ -854,61 +821,13 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
     try {
       await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
     } catch (e) {}
-    onClose();
-  };
-
-  const resetMatchState = () => {
-    if (usesAiSimulation) setSimRound((r) => r + 1);
-    setSelfScore(0);
-    setOpponentScore(0);
-    setTimeLeft(120);
-    setSetupCount(30);
-    setMatchEnded(false);
-    prevMatchHoldRef.current = 0;
-    matchEndedRef.current = false;
-    recordedResultRef.current = false;
-    setupPositionAnim.setValue(0);
-    instructionAnim.setValue(0);
-    setMatchPhase('setup_countdown');
-
-    setTimeout(() => {
-      Animated.sequence([
-        Animated.timing(setupPositionAnim, {
-          toValue: 1,
-          duration: 600,
-          useNativeDriver: false,
-        }),
-        Animated.spring(instructionAnim, {
-          toValue: 1,
-          friction: 7,
-          tension: 50,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    }, 1200);
-  };
-
-  const handleRestartMatch = () => {
-    if (isSimulated) {
-      Alert.alert('Rematch Sent', `Rematch request sent to @${opponentUsername}. Waiting for response...`);
-      // Answer after a short, human-feeling pause.
-      setTimeout(() => {
-        if (Math.random() < 0.65) {
-          Alert.alert('Rematch Accepted!', `@${opponentUsername} accepted the rematch! Starting now.`);
-          resetMatchState();
-        } else {
-          Alert.alert('Rematch Declined', `@${opponentUsername} declined the rematch.`);
-        }
-      }, 1500 + Math.random() * 2500);
-      return;
-    }
-    sendMatchMessage({ type: 'rematch_request', sender: selfUsername });
-    Alert.alert('Rematch Sent', `Rematch request sent to @${opponentUsername}. Waiting for response...`);
+    if (toHistory && onOpenHistory) onOpenHistory();
+    else onClose();
   };
 
   const handleChallengeSamePlayer = async () => {
     if (!user?.id || !opponentUsername || opponentUsername === 'opponent') {
-      Alert.alert('Challenge', 'Cannot challenge this opponent right now.');
+      showAlert('Challenge', 'Cannot challenge this opponent right now.');
       return;
     }
     const currentUsername =
@@ -928,26 +847,26 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
         'Squats',
         'quickjoin'
       );
-      Alert.alert('Challenge Sent', `Direct 1v1 battle invite sent to @${opponentUsername}!`);
+      showAlert('Challenge Sent', `Direct 1v1 battle invite sent to @${opponentUsername}!`);
     } catch (e: any) {
-      Alert.alert('Challenge Sent', `Direct challenge sent to @${opponentUsername}!`);
+      showAlert('Challenge Sent', `Direct challenge sent to @${opponentUsername}!`);
     }
   };
 
   const handleSendFriendRequest = async () => {
     if (!user?.id || !opponentUsername || opponentUsername === 'opponent') {
-      Alert.alert('Friend Request', 'Cannot send friend request to this athlete.');
+      showAlert('Friend Request', 'Cannot send friend request to this athlete.');
       return;
     }
     try {
       const res = await sendFriendRequest(user.id, opponentUsername);
       if (res.success) {
-        Alert.alert('Friend Request Sent', `Sent a friend request to @${opponentUsername}.`);
+        showAlert('Friend Request Sent', `Sent a friend request to @${opponentUsername}.`);
       } else {
-        Alert.alert('Friend Request', res.error || 'Friend request already pending or sent.');
+        showAlert('Friend Request', res.error || 'Friend request already pending or sent.');
       }
     } catch (e: any) {
-      Alert.alert('Friend Request', e?.message || 'Could not send friend request.');
+      showAlert('Friend Request', e?.message || 'Could not send friend request.');
     }
   };
 
@@ -1000,65 +919,14 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
             },
           ]}
         >
-          {/* Left Half (Landscape) / Top Half (Portrait): Opponent's Real-time Frame or AI HUD */}
-          <View
-            style={[
-              styles.opponentContainer,
-              aiFullscreen
-                ? styles.opponentContainerFull
-                : {
-                    width: isLandscape ? '50%' : '100%',
-                    height: isLandscape ? '100%' : '50%',
-                    borderRightWidth: isLandscape ? 2 : 0,
-                    borderRightColor: 'rgba(255, 255, 255, 0.15)',
-                    borderBottomWidth: isLandscape ? 0 : 2,
-                    borderBottomColor: 'rgba(255, 255, 255, 0.15)',
-                  },
-            ]}
-          >
-            {mode === 'ai_battle' ? (
-              <AIOpponentView
-                bot={currentBot}
-                botState={aiBotState}
-                exerciseId={exerciseId}
-                isMatchActive={matchPhase === 'active_match'}
-                isMatchEnded={matchPhase === 'match_ended'}
-                onReady={markOpponentModelReady}
-              />
-            ) : (
-              <DuelOpponentView
-                ref={duelRef}
-                opponentUsername={opponentUsername}
-                isSimulated={isSimulated}
-                botState={aiBotState}
-                opponentScore={opponentScore}
-                exerciseId={exerciseId}
-                isMatchActive={matchPhase === 'active_match'}
-                isMatchEnded={matchPhase === 'match_ended'}
-                opponentWon={opponentScore > selfScore}
-                live={liveMoves}
-                onReady={markOpponentModelReady}
-              />
-            )}
-          </View>
-
-          {/* Right Half (Landscape) / Bottom Half (Portrait): User's Live Pose Tracker Camera */}
+          {/* Left half (landscape) / top half (portrait): you, your 3D character over the live pose-tracker camera */}
           <View
             style={[
               styles.yourContainer,
-              aiFullscreen
-                ? [
-                    // Getting into position: your camera fills the screen so you can see whether you
-                    // are too close, too far or out of frame; the opponent loads behind it.
-                    positioning
-                      ? [StyleSheet.absoluteFill, { zIndex: 3, elevation: 8 }]
-                      : [
-                          styles.selfCamWidget,
-                          isLandscape ? styles.selfCamWidgetLandscape : null,
-                          // Hidden = kept running underneath the opaque 3D view, so pose tracking never stops.
-                          { zIndex: showSelfCam ? 2 : 0, elevation: showSelfCam ? 6 : 0 },
-                        ],
-                  ]
+              // Getting into position: your camera fills the screen so you can see whether you are too
+              // close, too far or out of frame; the opponent loads behind it. In the match: left half.
+              positioning
+                ? [StyleSheet.absoluteFill, { zIndex: 3, elevation: 8 }]
                 : {
                     width: isLandscape ? '50%' : '100%',
                     height: isLandscape ? '100%' : '50%',
@@ -1086,7 +954,52 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
               originWhitelist={['*']}
               onMessage={handleWebViewMessage}
             />
+            {/* your 3D character over the camera (which keeps counting reps underneath) */}
+            {matchPhase !== 'loading_resources' && <SelfCharacterView ref={selfViewRef} exerciseId={exerciseId} />}
+            {!positioning && <SideTag label="YOU" side="you" />}
           </View>
+
+          {/* The partition between the two players */}
+          {!positioning && <View pointerEvents="none" style={[styles.partition, isLandscape ? styles.partitionLandscape : styles.partitionPortrait]} />}
+
+          {/* Right half (landscape) / bottom half (portrait): the opponent */}
+          <View
+            style={[
+              styles.opponentContainer,
+              {
+                width: isLandscape ? '50%' : '100%',
+                height: isLandscape ? '100%' : '50%',
+                borderBottomWidth: 0,
+              },
+            ]}
+          >
+            {mode === 'ai_battle' ? (
+              <AIOpponentView
+                bot={currentBot}
+                botState={aiBotState}
+                exerciseId={exerciseId}
+                isMatchActive={matchPhase === 'active_match'}
+                isMatchEnded={matchPhase === 'match_ended'}
+                onReady={markOpponentModelReady}
+              />
+            ) : (
+              <DuelOpponentView
+                ref={duelRef}
+                opponentUsername={opponentUsername}
+                isSimulated={isSimulated}
+                botState={aiBotState}
+                opponentScore={opponentScore}
+                exerciseId={exerciseId}
+                isMatchActive={matchPhase === 'active_match'}
+                isMatchEnded={matchPhase === 'match_ended'}
+                opponentWon={opponentScore > selfScore}
+                live={liveMoves}
+                onReady={markOpponentModelReady}
+              />
+            )}
+            {!positioning && <SideTag label={mode === 'ai_battle' ? currentBot.name : opponentUsername || 'OPPONENT'} side="rival" />}
+          </View>
+
         </View>
       )}
 
@@ -1122,6 +1035,7 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
         <View style={[StyleSheet.absoluteFill, { zIndex: 40, elevation: 40 }]} pointerEvents="none">
           <PositionCheck
             ref={positionCheckRef}
+            character={false}
             exerciseId={exerciseId}
             rivalName={mode === 'ffa' ? 'Battle Ground' : mode === 'ai_battle' ? currentBot.name : opponentUsername}
             secondsLeft={setupCount}
@@ -1162,10 +1076,18 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
         </View>
       )}
 
-      {/* MATCH ENDED POPUP & AUTO-REMATCH / CONTINUOUS PLAY OVERLAY */}
+      {/* MATCH ENDED POPUP: result, stats, energy left; the next match is started from the lobby */}
       {matchPhase === 'match_ended' && (
-        <View style={styles.matchEndedOverlay}>
-          <View style={styles.matchEndedCard}>
+        <View style={[styles.matchEndedOverlay, isLandscape && { padding: 12 }]}>
+          <ScrollView
+            style={[styles.matchEndedScroll, isLandscape && { maxWidth: 820 }]}
+            contentContainerStyle={styles.matchEndedScrollContent}
+            bounces={false}
+            showsVerticalScrollIndicator={false}
+          >
+          <View style={[styles.matchEndedCard, isLandscape && styles.matchEndedCardLandscape]}>
+            {/* Landscape: two columns (result | stats, energy, buttons), so it fits the short height */}
+            <View style={isLandscape ? styles.matchEndedCol : styles.matchEndedColFull}>
             {/* Header Badge: Result */}
             {(() => {
               const isFFA = mode === 'ffa';
@@ -1227,6 +1149,8 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
               </View>
             )}
 
+            </View>
+            <View style={isLandscape ? styles.matchEndedCol : styles.matchEndedColFull}>
             {/* Post-Match Workout Stats Bar (Calories, Reps, Time, Rating) */}
             <View style={styles.matchWorkoutStatsGrid}>
               <View style={styles.matchWorkoutStatItem}>
@@ -1261,41 +1185,10 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
               </View>
             </View>
 
-            {/* Auto Rematch Toggle & 5s Countdown (Only for Multiplayer matches) */}
-            {mode !== 'ai_battle' && (
-              <View style={styles.autoRematchContainer}>
-                <TouchableOpacity
-                  style={[
-                    styles.autoRematchTogglePill,
-                    autoRematch ? styles.autoRematchToggleActive : styles.autoRematchToggleInactive,
-                  ]}
-                  activeOpacity={0.8}
-                  onPress={toggleAutoRematch}
-                >
-                  <Zap size={18} color={autoRematch ? '#11141A' : '#8E95A0'} />
-                  <View style={{ flex: 1 }}>
-                    <Text
-                      style={[
-                        styles.autoRematchToggleTitle,
-                        autoRematch ? styles.autoRematchToggleTitleActive : styles.autoRematchToggleTitleInactive,
-                      ]}
-                    >
-                      Auto-Queue Next Battle: {autoRematch ? 'ON' : 'OFF'}
-                    </Text>
-                    <Text style={styles.autoRematchToggleSub}>
-                      {autoRematch
-                        ? `Starting next match in ${autoCountdown}s...`
-                        : 'Toggle on for non-stop matches'}
-                    </Text>
-                  </View>
-                  {autoRematch && (
-                    <View style={styles.countdownBadgeSmall}>
-                      <Text style={styles.countdownBadgeText}>{autoCountdown}s</Text>
-                    </View>
-                  )}
-                </TouchableOpacity>
-              </View>
-            )}
+            {/* Energy after this match: no next match starts on its own, the player picks it in the lobby */}
+            <View style={styles.matchEndedEnergy}>
+              <EnergyPanel />
+            </View>
 
             {/* Action Buttons */}
             <View style={styles.matchEndedActionsRow}>
@@ -1305,36 +1198,23 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
                 onPress={() => handleClose(true)}
               >
                 <LogOut size={16} color="#CBD5E1" />
-                <Text style={styles.matchEndedCloseBtnText}>Exit to Workout</Text>
+                <Text style={styles.matchEndedCloseBtnText}>Back to Lobby</Text>
               </TouchableOpacity>
 
-              {mode === 'ai_battle' ? (
+              {!!onOpenHistory && !!user?.id && !String(user.id).startsWith('guest') && (
                 <TouchableOpacity
                   style={styles.matchEndedNextBtn}
                   activeOpacity={0.8}
-                  onPress={handleRestartMatch}
+                  onPress={() => handleClose(true, true)}
                 >
-                  <RotateCcw size={16} color="#11141A" />
-                  <Text style={styles.matchEndedNextBtnText}>Play Again</Text>
-                </TouchableOpacity>
-              ) : (
-                <TouchableOpacity
-                  style={styles.matchEndedNextBtn}
-                  activeOpacity={0.8}
-                  onPress={() => {
-                    if (onRequeue) {
-                      onRequeue(mode, exerciseId);
-                    } else {
-                      handleRestartMatch();
-                    }
-                  }}
-                >
-                  <Swords size={16} color="#11141A" />
-                  <Text style={styles.matchEndedNextBtnText}>Next Battle</Text>
+                  <History size={16} color="#11141A" />
+                  <Text style={styles.matchEndedNextBtnText}>Match History</Text>
                 </TouchableOpacity>
               )}
             </View>
+            </View>
           </View>
+          </ScrollView>
         </View>
       )}
 
@@ -1346,20 +1226,8 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
         onToggleOrientation={handleToggleOrientation}
         onToggleSkeleton={handleToggleSkeleton}
         isSkeletonVisible={isSkeletonVisible}
-        onToggleSelfCam={aiFullscreen ? () => setShowSelfCam((v) => !v) : undefined}
-        isSelfCamVisible={showSelfCam}
         onToggleLiveMoves={mode === 'quickjoin' ? handleToggleLiveMoves : undefined}
         isLiveMoves={liveMoves}
-        onTryAgain={handleRestartMatch}
-        onToggleAutoRematch={toggleAutoRematch}
-        autoRematch={autoRematch}
-        onNextBattle={() => {
-          if (onRequeue) {
-            onRequeue(mode, exerciseId);
-          } else {
-            handleRestartMatch();
-          }
-        }}
         onSendFriendRequest={handleSendFriendRequest}
         canAddFriend={!isSimulated}
       />}
@@ -1378,6 +1246,16 @@ export const MatchCameraScreen: React.FC<MatchCameraScreenProps> = ({
   return screen;
 };
 
+/** Name tag at the bottom of each half: orange for you (left), blue for the opponent (right). */
+const SideTag: React.FC<{ label: string; side: 'you' | 'rival' }> = ({ label, side }) => (
+  <View pointerEvents="none" style={[styles.sideTag, side === 'you' ? styles.sideTagYou : styles.sideTagRival]}>
+    <Slant fill={side === 'you' ? '#FF6A2B' : '#3B8DFF'} />
+    <GText variant="hero" size={15} numberOfLines={1} style={{ color: '#FFFFFF', letterSpacing: 0.8, maxWidth: 220 }}>
+      {label.toUpperCase()}
+    </GText>
+  </View>
+);
+
 // ---------------------------------------------------------------------------
 // Draggable Actions Floating Widget
 // ---------------------------------------------------------------------------
@@ -1394,10 +1272,6 @@ interface DraggableWidgetProps {
   /** 1v1 duel: the opponent's character mirrors their real moves (off by default). */
   onToggleLiveMoves?: () => void;
   isLiveMoves?: boolean;
-  onTryAgain: () => void;
-  onToggleAutoRematch: () => void;
-  autoRematch: boolean;
-  onNextBattle: () => void;
   onSendFriendRequest: () => void;
   canAddFriend?: boolean;
 }
@@ -1413,10 +1287,6 @@ const DraggableActionsWidget: React.FC<DraggableWidgetProps> = ({
   isSelfCamVisible = false,
   onToggleLiveMoves,
   isLiveMoves = false,
-  onTryAgain,
-  onToggleAutoRematch,
-  autoRematch,
-  onNextBattle,
   onSendFriendRequest,
   canAddFriend = true,
 }) => {
@@ -1550,31 +1420,6 @@ const DraggableActionsWidget: React.FC<DraggableWidgetProps> = ({
             >
               <Smartphone size={16} color="#FFFFFF" />
             </TouchableOpacity>
-
-            {/* 5. Try Again / Rematch */}
-            <TouchableOpacity
-              style={styles.widgetActionBtn}
-              activeOpacity={0.75}
-              onPress={onTryAgain}
-            >
-              <RotateCcw size={16} color="#FFFFFF" />
-            </TouchableOpacity>
-
-            {/* 6. Addictive Auto-Rematch / Next Battle Toggle (Swords) - Only for PVP */}
-            {!isAiBattle && (
-              <TouchableOpacity
-                style={[
-                  styles.widgetActionBtn,
-                  styles.addictiveActionBtn,
-                  autoRematch && styles.addictiveActionBtnActive,
-                ]}
-                activeOpacity={0.75}
-                onPress={onToggleAutoRematch}
-              >
-                <Swords size={16} color={autoRematch ? '#FFFFFF' : '#94A3B8'} strokeWidth={2.5} />
-                {autoRematch && <View style={styles.addictiveActiveDot} />}
-              </TouchableOpacity>
-            )}
 
             {/* 7. Send Friend Request - Only for PVP */}
             {!isAiBattle && canAddFriend && (
@@ -1960,28 +1805,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: 2,
     borderBottomColor: 'rgba(255, 255, 255, 0.1)',
   },
-  opponentContainerFull: {
-    ...StyleSheet.absoluteFill,
-    zIndex: 1,
-    borderBottomWidth: 0,
-  },
-  selfCamWidget: {
-    position: 'absolute',
-    top: 140, // below the setup card and the scoreboard
-    right: 14,
-    width: 108,
-    height: 150,
-    flex: 0,
-    borderRadius: 14,
-    overflow: 'hidden',
-    borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.85)',
-  },
-  selfCamWidgetLandscape: {
-    top: 96,
-    width: 160,
-    height: 112,
-  },
   opponentContainerLandscape: {
     borderBottomWidth: 0,
     borderRightWidth: 2,
@@ -1994,6 +1817,39 @@ const styles = StyleSheet.create({
   yourContainer: {
     flex: 1,
     backgroundColor: '#000',
+  },
+  partition: {
+    position: 'absolute',
+    zIndex: 5,
+    backgroundColor: 'rgba(255, 255, 255, 0.85)',
+  },
+  partitionLandscape: {
+    top: 0,
+    bottom: 0,
+    left: '50%',
+    width: 3,
+    marginLeft: -1.5,
+  },
+  partitionPortrait: {
+    left: 0,
+    right: 0,
+    top: '50%',
+    height: 3,
+    marginTop: -1.5,
+  },
+  sideTag: {
+    position: 'absolute',
+    bottom: 14,
+    height: 30,
+    paddingHorizontal: 22,
+    justifyContent: 'center',
+    zIndex: 4,
+  },
+  sideTagYou: {
+    right: 14,
+  },
+  sideTagRival: {
+    left: 14,
   },
   syncLoadingOverlay: {
     position: 'absolute',
@@ -2354,24 +2210,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
     borderColor: 'rgba(255, 255, 255, 0.1)',
   },
-  addictiveActionBtn: {
-    position: 'relative',
-  },
-  addictiveActionBtnActive: {
-    backgroundColor: '#E25822',
-    borderColor: '#FF8A3D',
-  },
-  addictiveActiveDot: {
-    position: 'absolute',
-    top: 3,
-    right: 3,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#10B981',
-    borderWidth: 1,
-    borderColor: '#0B0D14',
-  },
   challengeActionBtn: {
     backgroundColor: '#E8D5C4',
   },
@@ -2554,6 +2392,31 @@ const styles = StyleSheet.create({
     shadowRadius: 20,
     elevation: 20,
   },
+  matchEndedScroll: {
+    width: '100%',
+    maxWidth: 400,
+    flexGrow: 0,
+  },
+  matchEndedScrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+  },
+  matchEndedCardLandscape: {
+    maxWidth: 820,
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    gap: 20,
+    padding: 18,
+  },
+  matchEndedCol: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  matchEndedColFull: {
+    width: '100%',
+    alignItems: 'center',
+  },
   matchEndedHeader: {
     alignItems: 'center',
     marginBottom: 16,
@@ -2605,53 +2468,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '900',
   },
-  autoRematchContainer: {
-    width: '100%',
-    marginVertical: 12,
-  },
-  autoRematchTogglePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderRadius: 16,
-    borderWidth: 1.5,
-    gap: 12,
-  },
-  autoRematchToggleActive: {
-    backgroundColor: '#E8D5C4',
-    borderColor: '#E8D5C4',
-  },
-  autoRematchToggleInactive: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-  },
-  autoRematchToggleTitle: {
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  autoRematchToggleTitleActive: {
-    color: '#11141A',
-  },
-  autoRematchToggleTitleInactive: {
-    color: '#CBD5E1',
-  },
-  autoRematchToggleSub: {
-    fontSize: 11,
-    color: '#64748B',
-    marginTop: 2,
-  },
-  countdownBadgeSmall: {
-    backgroundColor: '#11141A',
-    borderRadius: 12,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  countdownBadgeText: {
-    color: '#E8D5C4',
-    fontSize: 12,
-    fontWeight: '900',
-  },
   botAvatarCircle: {
     backgroundColor: '#1E293B',
     width: 36,
@@ -2691,6 +2507,10 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontStyle: 'italic',
     lineHeight: 16,
+  },
+  matchEndedEnergy: {
+    marginTop: 12,
+    width: '100%',
   },
   matchEndedActionsRow: {
     flexDirection: 'row',

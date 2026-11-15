@@ -4,7 +4,8 @@
 //   Members       two-column member cards, sortable, with kick / leave
 //   Applications  join settings (leader and officers) and the pending join requests
 import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { showAlert } from '../../../components/alert';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Building2,
@@ -428,7 +429,7 @@ const Applications: React.FC<ClanBaseProps & { pending: CommunityMember[]; c: Pa
     if (!res.success) {
       setPolicy(before.policy);
       setMinLevel(before.minLevel);
-      Alert.alert('Not saved', res.error || 'Could not save the clan settings.');
+      showAlert('Not saved', res.error || 'Could not save the clan settings.');
       return;
     }
     onChanged();

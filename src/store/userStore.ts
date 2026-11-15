@@ -22,6 +22,8 @@ const cancelProfileRetry = () => {
 export type MainTab = 'home' | 'explore' | 'workouts' | 'shop' | 'social' | 'profile';
 export type ShopFilter = 'all' | 'owned';
 export type HomeSubTab = 'lobby' | 'news';
+/** Tabs inside Profile that other screens can open directly. */
+export type ProfileTabRequest = 'profile' | 'history';
 /** Where a camera/match session was started from; sessions from the lobby return to the lobby. */
 export type SessionOrigin = 'lobby' | 'train' | 'detail' | 'other';
 
@@ -48,6 +50,11 @@ interface UserState {
   isGuest: boolean;
   lastMatchSummary: MatchSummaryStats | null;
   shopFilter: ShopFilter;
+  /** Profile opens on this tab once (set by openProfileTab, cleared by Profile). */
+  profileTabRequest: ProfileTabRequest | null;
+  /** Jump to Profile on a given tab (the match result's Match History button). */
+  openProfileTab: (tab: ProfileTabRequest) => void;
+  clearProfileTabRequest: () => void;
   setUser: (user: any | null) => void;
   setProfile: (profile: UserProfile | null) => void;
   /** The look saved on this device; stands in until the profile has loaded. */
@@ -84,6 +91,9 @@ export const useUserStore = create<UserState>((set, get) => ({
   isGuest: false,
   lastMatchSummary: null,
   shopFilter: 'all',
+  profileTabRequest: null,
+  openProfileTab: (tab) => set({ activeTab: 'profile', profileTabRequest: tab, selectedExerciseId: null }),
+  clearProfileTabRequest: () => set({ profileTabRequest: null }),
   guestTutorialDone: null,
   tutorialReplay: false,
   openTutorial: () => set({ tutorialReplay: true }),

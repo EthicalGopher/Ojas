@@ -10,6 +10,7 @@ import { computeCoinBalance } from '../../utils/gamification';
 import { GText } from './GText';
 import { Slant } from './Slant';
 import { StatChip } from './StatChip';
+import { EnergyChip } from './EnergyMeter';
 
 /**
  * Top bar of every screen opened from the lobby (game-menu style): back button and an angled title
@@ -54,6 +55,7 @@ export const GameTopBar: React.FC<{
       {right}
       {showCurrencies && (
         <>
+          <EnergyChip />
           <StatChip icon={Coins} tone="win" value={coins} accessibilityLabel={`${coins} coins`} />
           <StatChip icon={Flame} tone="accent" value={streak.current} pulse={streak.atRisk} accessibilityLabel={`${streak.current} day streak`} />
         </>

@@ -7,16 +7,17 @@ export interface LastPlay {
 }
 
 export const LAST_PLAY_KEY = 'ojas.lobby.lastPlay';
-export const DEFAULT_LAST_PLAY: LastPlay = { mode: 'ai_duel', exerciseId: '1' };
+export const DEFAULT_LAST_PLAY: LastPlay = { mode: 'quick_duel', exerciseId: '1' };
 /** AI duel supports squats only (same rule as ExerciseDetailScreen and HumanVsAIModal). */
 export const AI_DUEL_EXERCISES = ['1'];
-export const LOBBY_MODES: LobbyMode[] = ['ai_duel', 'quick_duel', 'battle_ground', 'solo'];
+/** The Start button only plays online: 1v1 and Battle Ground. AI duel and solo are in Utilities. */
+export const LOBBY_MODES: LobbyMode[] = ['quick_duel', 'battle_ground'];
 
 export function modeSupportsExercise(mode: LobbyMode, exerciseId: string): boolean {
   return mode !== 'ai_duel' || AI_DUEL_EXERCISES.includes(exerciseId);
 }
 
-/** Invalid JSON, unknown mode or unknown exercise fall back per field; an unsupported pair resets the exercise to '1'. */
+/** Invalid JSON, a mode the Start button no longer offers or an unknown exercise fall back per field; an unsupported pair resets the exercise to '1'. */
 export function parseLastPlay(raw: string | null, exerciseIds: string[]): LastPlay {
   let parsed: any = null;
   try {
@@ -38,7 +39,7 @@ export function modeNeedsAuth(mode: LobbyMode): boolean {
 export function modeLabel(mode: LobbyMode): string {
   switch (mode) {
     case 'quick_duel':
-      return 'Quick duel';
+      return '1v1 duel';
     case 'ai_duel':
       return 'AI duel';
     case 'battle_ground':

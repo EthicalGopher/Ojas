@@ -27,7 +27,7 @@ BUNDLETOOL   ?= bundletool
         keystore apk apk-debug aab aab-test install-apk run-apk logs clean clean-android \
         backend backend-install migrate tree-pose-engine tree-pose-test tree-pose-onnx \
         warrior2-engine warrior2-test warrior2-python-test warrior2-onnx pack-logic-test \
-        juice-test moment-word-test theme-test lobby-test profile-test arena fc1 arjun
+        juice-test moment-word-test theme-test lobby-test profile-test energy-test arena fc1 arjun
 
 help: ## Show this help
 	@echo "Ojas v$(VERSION) - available commands:"
@@ -191,7 +191,10 @@ lobby-test: ## Run the lobby logic tests (Node >= 22.18)
 profile-test: ## Run the profile read logic tests (Node >= 22.18)
 	node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON src/store/profileMerge.test.mjs
 
-check: typecheck pack-logic-test juice-test moment-word-test theme-test lobby-test profile-test ## Run all checks (typecheck + logic tests + expo-doctor)
+energy-test: ## Run the match energy logic tests (Node >= 22.18)
+	node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON src/utils/energyLogic.test.mjs
+
+check: typecheck pack-logic-test juice-test moment-word-test theme-test lobby-test profile-test energy-test ## Run all checks (typecheck + logic tests + expo-doctor)
 	-npx expo-doctor
 
 # ---------- Android release ----------

@@ -7,8 +7,8 @@ import {
   TouchableOpacity,
   View,
   ActivityIndicator,
-  Alert,
 } from 'react-native';
+import { showAlert } from './alert';
 import {
   Activity,
   Check,
@@ -90,7 +90,7 @@ export const HealthAssessmentModal: React.FC<HealthAssessmentModalProps> = ({
       if (onSaved) onSaved();
       onClose();
     } catch (err: any) {
-      Alert.alert('Health Assessment', 'Assessment saved successfully.');
+      showAlert('Health Assessment', 'Assessment saved successfully.');
       onClose();
     } finally {
       setIsSaving(false);

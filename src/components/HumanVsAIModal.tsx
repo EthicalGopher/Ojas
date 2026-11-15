@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import {
-  Alert,
   Modal,
   ScrollView,
   StyleSheet,
@@ -8,6 +7,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { showAlert } from './alert';
 import {
   Bot,
   ChevronRight,
@@ -121,7 +121,7 @@ export const HumanVsAIModal: React.FC<HumanVsAIModalProps> = ({
                     activeOpacity={0.85}
                     onPress={() => {
                       if (!isSquat) {
-                        Alert.alert(
+                        showAlert(
                           'Exercise Locked',
                           'Only Squats is currently supported in Human vs AI mode. Other exercises will be unlocked in upcoming updates.',
                           [{ text: 'OK' }]

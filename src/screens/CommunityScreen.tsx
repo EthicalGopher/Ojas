@@ -7,12 +7,12 @@ import {
   TextInput,
   TouchableOpacity,
   ActivityIndicator,
-  Alert,
   StatusBar,
   RefreshControl,
   Image,
   Modal,
 } from 'react-native';
+import { showAlert } from '../components/alert';
 import {
   Users,
   Search,
@@ -325,12 +325,12 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
   // Admin: Handle Create Tournament
   const handleAdminCreateTournament = async () => {
     if (!tournTitle.trim()) {
-      Alert.alert('Validation Error', 'Please enter a tournament title.');
+      showAlert('Validation Error', 'Please enter a tournament title.');
       return;
     }
 
     if (!isAdmin) {
-      Alert.alert('Access Denied', 'Only designated platform admins can create and host clan tournaments.');
+      showAlert('Access Denied', 'Only designated platform admins can create and host clan tournaments.');
       return;
     }
 
@@ -350,16 +350,16 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
       });
 
       if (res.success) {
-        Alert.alert('Tournament Created', `"${tournTitle}" is now live for clan leaders to register!`);
+        showAlert('Tournament Created', `"${tournTitle}" is now live for clan leaders to register!`);
         setShowCreateTournamentModal(false);
         setTournTitle('');
         setTournDesc('');
         loadData();
       } else {
-        Alert.alert('Creation Failed', res.error || 'Unable to create tournament.');
+        showAlert('Creation Failed', res.error || 'Unable to create tournament.');
       }
     } catch (e: any) {
-      Alert.alert('Error', e?.message || 'Something went wrong.');
+      showAlert('Error', e?.message || 'Something went wrong.');
     } finally {
       setIsSubmittingTournament(false);
     }
@@ -369,15 +369,15 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
   const handleLeaderRegisterCommunity = async () => {
     if (!selectedTournament) return;
     if (!userStatus.hasCommunity || !userStatus.community) {
-      Alert.alert('No Clan', 'You must lead a clan to register for tournaments.');
+      showAlert('No Clan', 'You must lead a clan to register for tournaments.');
       return;
     }
     if (userStatus.membership?.role !== 'leader') {
-      Alert.alert('Leader Action Only', 'Only the clan leader can register and select athletes.');
+      showAlert('Leader Action Only', 'Only the clan leader can register and select athletes.');
       return;
     }
     if (selectedAthleteIds.length === 0) {
-      Alert.alert('Select Athletes', 'Please select at least one athlete from your clan to represent you.');
+      showAlert('Select Athletes', 'Please select at least one athlete from your clan to represent you.');
       return;
     }
 
@@ -403,15 +403,15 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
       });
 
       if (res.success) {
-        Alert.alert('Clan Registered', `${userStatus.community.name} is now locked in the tournament bracket!`);
+        showAlert('Clan Registered', `${userStatus.community.name} is now locked in the tournament bracket!`);
         setShowNominateModal(false);
         setSelectedAthleteIds([]);
         loadData();
       } else {
-        Alert.alert('Registration Failed', res.error || 'Could not register community.');
+        showAlert('Registration Failed', res.error || 'Could not register community.');
       }
     } catch (e: any) {
-      Alert.alert('Error', e?.message || 'Something went wrong.');
+      showAlert('Error', e?.message || 'Something went wrong.');
     } finally {
       setIsSubmittingTournament(false);
     }
@@ -421,11 +421,11 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
   const handleAdminStartTournament = async () => {
     if (!selectedTournament) return;
     if (!isAdmin) {
-      Alert.alert('Admin Only', 'Only admins can start the tournament.');
+      showAlert('Admin Only', 'Only admins can start the tournament.');
       return;
     }
 
-    Alert.alert(
+    showAlert(
       'Start Clan Tournament',
       `Are you ready to lock registrations and generate the elimination bracket for "${selectedTournament.title}"?`,
       [
@@ -437,10 +437,10 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
             setIsLoadingTournamentData(true);
             const res = await startTournamentAndGenerateBracket(selectedTournament.id);
             if (res.success) {
-              Alert.alert('Tournament Started', 'The elimination battles have begun!');
+              showAlert('Tournament Started', 'The elimination battles have begun!');
               loadData();
             } else {
-              Alert.alert('Failed to Start', res.error || 'Could not start tournament.');
+              showAlert('Failed to Start', res.error || 'Could not start tournament.');
             }
             setIsLoadingTournamentData(false);
           },
@@ -462,10 +462,10 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
       isAdmin;
 
     if (!isParticipant) {
-      Alert.alert('Spectating Match', 'You are viewing this match between rival communities.');
+      showAlert('Spectating Match', 'You are viewing this match between rival communities.');
     }
 
-    Alert.alert(
+    showAlert(
       `Clan Match: ${match.round_name}`,
       `${match.community1_name || 'Clan 1'} VS ${match.community2_name || 'Clan 2'}\nExercise: ${selectedTournament?.exercise_name || 'Fitness'}`,
       [
@@ -479,7 +479,7 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
             if (onOpenMatchCamera) {
               onOpenMatchCamera(oppName, 'quickjoin', match.exercise_id);
             } else {
-              Alert.alert('Battle Ready', 'Match camera ready for live rep counting!');
+              showAlert('Battle Ready', 'Match camera ready for live rep counting!');
             }
           },
         },
@@ -498,17 +498,17 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
 
             if (res.success) {
               if (res.isGrandFinalWon) {
-                Alert.alert(
+                showAlert(
                   'TOURNAMENT CHAMPION CROWNED',
                   `${res.winnerCommunityName} has won the Grand Championship Final!`
                 );
               } else {
                 const winnerName = score1 >= score2 ? match.community1_name : match.community2_name;
-                Alert.alert('Match Completed', `${winnerName} won (${Math.max(score1, score2)} vs ${Math.min(score1, score2)} reps) and advanced to the next round!`);
+                showAlert('Match Completed', `${winnerName} won (${Math.max(score1, score2)} vs ${Math.min(score1, score2)} reps) and advanced to the next round!`);
               }
               loadData();
             } else {
-              Alert.alert('Error', res.error || 'Failed to record battle.');
+              showAlert('Error', res.error || 'Failed to record battle.');
             }
           },
         },
@@ -546,7 +546,7 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
     try {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permission.granted) {
-        Alert.alert('Permission Denied', 'Gallery access is needed to upload a clan logo.');
+        showAlert('Permission Denied', 'Gallery access is needed to upload a clan logo.');
         return;
       }
 
@@ -568,19 +568,19 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
         }
       }
     } catch (err: any) {
-      Alert.alert('Error', err?.message || 'Failed to select image.');
+      showAlert('Error', err?.message || 'Failed to select image.');
     }
   };
 
   // Handle Create Community
   const handleCreateCommunity = async () => {
     if (!newCommName.trim()) {
-      Alert.alert('Validation Error', 'Please enter a clan name.');
+      showAlert('Validation Error', 'Please enter a clan name.');
       return;
     }
 
     if (userStatus.hasCommunity) {
-      Alert.alert('Limit Reached', 'You are already a member of a clan. You must leave it before creating a new one.');
+      showAlert('Limit Reached', 'You are already a member of a clan. You must leave it before creating a new one.');
       return;
     }
 
@@ -605,7 +605,7 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
       );
 
       if (res.success) {
-        Alert.alert('Success', `"${newCommName}" created successfully.`);
+        showAlert('Success', `"${newCommName}" created successfully.`);
         setShowCreateModal(false);
         setNewCommName('');
         setNewCommDesc('');
@@ -613,10 +613,10 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
         setViewingCommunity(null);
         await loadData();
       } else {
-        Alert.alert('Creation Failed', res.error || 'Unable to create community.');
+        showAlert('Creation Failed', res.error || 'Unable to create community.');
       }
     } catch (err: any) {
-      Alert.alert('Error', err?.message || 'Something went wrong.');
+      showAlert('Error', err?.message || 'Something went wrong.');
     } finally {
       setIsSubmittingCreate(false);
     }
@@ -626,7 +626,7 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
   const handleSaveCommunityDetails = async () => {
     if (!viewingCommunity) return;
     if (!editCommName.trim()) {
-      Alert.alert('Validation Error', 'Clan name cannot be empty.');
+      showAlert('Validation Error', 'Clan name cannot be empty.');
       return;
     }
 
@@ -657,16 +657,16 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
         .single();
 
       if (error) {
-        Alert.alert('Error', error.message || 'Failed to update clan details.');
+        showAlert('Error', error.message || 'Failed to update clan details.');
         return;
       }
 
       setViewingCommunity(data as Community);
       setShowEditModal(false);
-      Alert.alert('Success', 'Clan details updated successfully.');
+      showAlert('Success', 'Clan details updated successfully.');
       await loadData();
     } catch (err: any) {
-      Alert.alert('Error', err?.message || 'Failed to save changes.');
+      showAlert('Error', err?.message || 'Failed to save changes.');
     } finally {
       setIsSubmittingEdit(false);
     }
@@ -675,11 +675,11 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
   // Handle Request to Join
   const handleJoinRequest = async (community: Community) => {
     if (userStatus.hasCommunity) {
-      Alert.alert('Already in Clan', 'You are already a member of a clan. You can only belong to one clan at a time.');
+      showAlert('Already in Clan', 'You are already a member of a clan. You can only belong to one clan at a time.');
       return;
     }
 
-    Alert.alert(
+    showAlert(
       'Join Proposal',
       community.join_policy === 'open'
         ? `Join "${community.name}"?`
@@ -692,10 +692,10 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
           onPress: async () => {
             const res = await requestToJoinCommunity(community.id, resolvedUserId);
             if (res.success) {
-              Alert.alert(res.joined ? 'Joined' : 'Request Sent', res.message || 'Your join request has been sent to the leader.');
+              showAlert(res.joined ? 'Joined' : 'Request Sent', res.message || 'Your join request has been sent to the leader.');
               loadData();
             } else {
-              Alert.alert('Request Failed', res.error || 'Could not send join request.');
+              showAlert('Request Failed', res.error || 'Could not send join request.');
             }
           },
         },
@@ -705,7 +705,7 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
 
   // Handle Cancel Join Request
   const handleCancelJoinRequest = async (communityId: string) => {
-    Alert.alert('Cancel Request', 'Are you sure you want to withdraw your join proposal?', [
+    showAlert('Cancel Request', 'Are you sure you want to withdraw your join proposal?', [
       { text: 'No', style: 'cancel' },
       {
         text: 'Withdraw',
@@ -713,10 +713,10 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
         onPress: async () => {
           const res = await cancelJoinRequest(communityId, resolvedUserId);
           if (res.success) {
-            Alert.alert('Withdrawn', 'Join request cancelled.');
+            showAlert('Withdrawn', 'Join request cancelled.');
             loadData();
           } else {
-            Alert.alert('Error', res.error || 'Could not cancel request.');
+            showAlert('Error', res.error || 'Could not cancel request.');
           }
         },
       },
@@ -726,7 +726,7 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
   // Handle Invite User
   const handleInviteUser = async () => {
     if (!inviteUsername.trim()) {
-      Alert.alert('Validation Error', 'Please enter a username to invite.');
+      showAlert('Validation Error', 'Please enter a username to invite.');
       return;
     }
 
@@ -737,15 +737,15 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
     try {
       const res = await inviteUserByUsername(targetCommId, resolvedUserId, inviteUsername.trim());
       if (res.success) {
-        Alert.alert('Invited', res.message || `Invitation sent to @${inviteUsername.trim()}`);
+        showAlert('Invited', res.message || `Invitation sent to @${inviteUsername.trim()}`);
         setInviteUsername('');
         setShowInviteModal(false);
         loadData();
       } else {
-        Alert.alert('Invite Failed', res.error || 'Could not invite user.');
+        showAlert('Invite Failed', res.error || 'Could not invite user.');
       }
     } catch (err: any) {
-      Alert.alert('Error', err?.message || 'Failed to send invite.');
+      showAlert('Error', err?.message || 'Failed to send invite.');
     } finally {
       setIsSubmittingInvite(false);
     }
@@ -757,7 +757,7 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
     if (!targetCommId) return;
 
     const actionText = decision === 'accept' ? 'Accept' : 'Reject';
-    Alert.alert(
+    showAlert(
       `${actionText} Request`,
       `Are you sure you want to ${decision} the join request from ${targetName}?`,
       [
@@ -768,10 +768,10 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
           onPress: async () => {
             const res = await reviewJoinProposal(targetCommId, resolvedUserId, targetUserId, decision);
             if (res.success) {
-              Alert.alert('Updated', res.message || `Proposal ${decision}ed.`);
+              showAlert('Updated', res.message || `Proposal ${decision}ed.`);
               loadData();
             } else {
-              Alert.alert('Error', res.error || `Failed to ${decision} proposal.`);
+              showAlert('Error', res.error || `Failed to ${decision} proposal.`);
             }
           },
         },
@@ -784,7 +784,7 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
     if (!userStatus.community) return;
 
     const isUserLeader = userStatus.membership?.role === 'leader';
-    Alert.alert(
+    showAlert(
       'Leave Clan',
       isUserLeader
         ? 'As the Leader, leaving will automatically transfer leadership to the next oldest member (or close the clan if you are the last member). Are you sure?'
@@ -797,12 +797,12 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
           onPress: async () => {
             const res = await removeMember(userStatus.community!.id, resolvedUserId, resolvedUserId);
             if (res.success) {
-              Alert.alert('Left Clan', 'You have left the clan.');
+              showAlert('Left Clan', 'You have left the clan.');
               setViewingCommunity(null);
               setActiveTab('explore');
               loadData();
             } else {
-              Alert.alert('Error', res.error || 'Failed to leave community.');
+              showAlert('Error', res.error || 'Failed to leave community.');
             }
           },
         },
@@ -815,7 +815,7 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
     if (!viewingCommunity) return;
 
     const name = member.profile?.full_name || member.profile?.username || 'this member';
-    Alert.alert(
+    showAlert(
       'Kick Member',
       `Are you sure you want to kick ${name} from the clan?`,
       [
@@ -826,10 +826,10 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
           onPress: async () => {
             const res = await removeMember(viewingCommunity.id, resolvedUserId, member.user_id);
             if (res.success) {
-              Alert.alert('Member Removed', `${name} has been removed.`);
+              showAlert('Member Removed', `${name} has been removed.`);
               loadData();
             } else {
-              Alert.alert('Error', res.error || 'Failed to remove member.');
+              showAlert('Error', res.error || 'Failed to remove member.');
             }
           },
         },
@@ -894,7 +894,7 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
             style={styles.createHeaderBtn}
             onPress={() => {
               if (userStatus.hasCommunity) {
-                Alert.alert('Already in Clan', 'You are already in a clan. Leave your current clan first before creating a new one.');
+                showAlert('Already in Clan', 'You are already in a clan. Leave your current clan first before creating a new one.');
               } else {
                 setShowCreateModal(true);
               }
@@ -1291,7 +1291,7 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({ currentUser, o
                                     ]}
                                     onPress={() => {
                                       if (selectedTournament.has_registered) {
-                                        Alert.alert('Registered', 'Your clan is already registered for this tournament!');
+                                        showAlert('Registered', 'Your clan is already registered for this tournament!');
                                       } else {
                                         setSelectedAthleteIds(
                                           activeMembers.slice(0, selectedTournament.athletes_per_match || 1).map((m) => m.user_id)

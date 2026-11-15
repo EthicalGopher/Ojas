@@ -15,3 +15,4 @@ export { fitWordSize, estimateWordWidth } from './momentWordLayout';
 export { useReducedMotion, primeReducedMotion } from './motion';
 export { Slant } from './Slant';
 export { GameTopBar } from './GameTopBar';
+export { EnergyBars, EnergyChip, EnergyPanel, requireEnergy, showEnergyInfo } from './EnergyMeter';

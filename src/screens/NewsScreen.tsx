@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   KeyboardAvoidingView,
   Modal,
@@ -15,6 +14,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { showAlert } from '../components/alert';
 import {
   AlertTriangle,
   Calendar,
@@ -97,7 +97,7 @@ export const NewsScreen: React.FC = () => {
   const handlePublish = async () => {
     if (!user?.id) return;
     if (!draft.title.trim() || !draft.body.trim()) {
-      Alert.alert('Missing details', 'Add a headline and a message before publishing.');
+      showAlert('Missing details', 'Add a headline and a message before publishing.');
       return;
     }
     setPublishing(true);
@@ -107,7 +107,7 @@ export const NewsScreen: React.FC = () => {
       setComposerOpen(false);
       refresh();
     } catch (e: any) {
-      Alert.alert('Could not publish', e?.message || 'Please try again.');
+      showAlert('Could not publish', e?.message || 'Please try again.');
     } finally {
       setPublishing(false);
     }
@@ -118,12 +118,12 @@ export const NewsScreen: React.FC = () => {
       await updateNews(item.id, { is_pinned: !item.is_pinned });
       refresh();
     } catch (e: any) {
-      Alert.alert('Could not update', e?.message || 'Please try again.');
+      showAlert('Could not update', e?.message || 'Please try again.');
     }
   };
 
   const handleDelete = (item: NewsItem) => {
-    Alert.alert('Delete this post?', `"${item.title}" will be removed for everyone.`, [
+    showAlert('Delete this post?', `"${item.title}" will be removed for everyone.`, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
@@ -133,7 +133,7 @@ export const NewsScreen: React.FC = () => {
             await deleteNews(item.id);
             refresh();
           } catch (e: any) {
-            Alert.alert('Could not delete', e?.message || 'Please try again.');
+            showAlert('Could not delete', e?.message || 'Please try again.');
           }
         },
       },

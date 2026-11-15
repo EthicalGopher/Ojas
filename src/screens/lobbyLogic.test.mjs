@@ -1,6 +1,6 @@
 // Run with: node src/screens/lobbyLogic.test.mjs   (Node >= 22.18)
 import assert from 'node:assert/strict';
-import { DEFAULT_LAST_PLAY, modeNeedsAuth, modeSupportsExercise, parseLastPlay, playLabel } from './lobbyLogic.ts';
+import { DEFAULT_LAST_PLAY, LOBBY_MODES, modeLabel, modeNeedsAuth, modeSupportsExercise, parseLastPlay, playLabel } from './lobbyLogic.ts';
 
 let passed = 0;
 function test(name, fn) {
@@ -17,16 +17,23 @@ const ids = ['1', '2', '9', '10'];
 test('parseLastPlay', () => {
   assert.deepEqual(parseLastPlay(null, ids), DEFAULT_LAST_PLAY);
   assert.deepEqual(parseLastPlay('{bad json', ids), DEFAULT_LAST_PLAY);
-  assert.deepEqual(parseLastPlay('{"mode":"nope","exerciseId":"2"}', ids), { mode: 'ai_duel', exerciseId: '1' });
-  assert.deepEqual(parseLastPlay('{"mode":"solo","exerciseId":"99"}', ids), { mode: 'solo', exerciseId: '1' });
-  assert.deepEqual(parseLastPlay('{"mode":"ai_duel","exerciseId":"9"}', ids), { mode: 'ai_duel', exerciseId: '1' });
+  assert.deepEqual(parseLastPlay('{"mode":"nope","exerciseId":"2"}', ids), { mode: 'quick_duel', exerciseId: '2' });
+  // AI duel and solo moved to Utilities: a saved choice falls back to the 1v1, keeping the exercise
+  assert.deepEqual(parseLastPlay('{"mode":"solo","exerciseId":"99"}', ids), { mode: 'quick_duel', exerciseId: '1' });
+  assert.deepEqual(parseLastPlay('{"mode":"ai_duel","exerciseId":"9"}', ids), { mode: 'quick_duel', exerciseId: '9' });
   assert.deepEqual(parseLastPlay('{"mode":"quick_duel","exerciseId":"10"}', ids), { mode: 'quick_duel', exerciseId: '10' });
+  assert.deepEqual(parseLastPlay('{"mode":"battle_ground","exerciseId":"2"}', ids), { mode: 'battle_ground', exerciseId: '2' });
 });
 
 test('modeSupportsExercise', () => {
   assert.equal(modeSupportsExercise('ai_duel', '1'), true);
   assert.equal(modeSupportsExercise('ai_duel', '9'), false);
   assert.equal(modeSupportsExercise('quick_duel', '9'), true);
+});
+
+test('Start offers only 1v1 and Battle Ground', () => {
+  assert.deepEqual(LOBBY_MODES, ['quick_duel', 'battle_ground']);
+  assert.equal(modeLabel('quick_duel'), '1v1 duel');
 });
 
 test('modeNeedsAuth and playLabel', () => {

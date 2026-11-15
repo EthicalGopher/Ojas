@@ -2,7 +2,8 @@
 // stage, then READY. Shown once after sign-up, and from Profile > Customize. Bodies and faces are
 // free, so equipping is enough.
 import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, Image, Modal, Pressable, StatusBar, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, FlatList, Image, Modal, Pressable, StatusBar, StyleSheet, View } from 'react-native';
+import { showAlert } from '../../../components/alert';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { Check, Smile, User, X } from 'lucide-react-native';
@@ -109,7 +110,7 @@ export const CharacterCreator: React.FC = () => {
       for (const run of steps) {
         const r = await run();
         if (!r.ok) {
-          Alert.alert('Could not save your look', r.error || 'Please try again.');
+          showAlert('Could not save your look', r.error || 'Please try again.');
           return;
         }
       }

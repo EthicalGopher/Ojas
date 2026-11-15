@@ -7,13 +7,13 @@ import {
   TextInput,
   TouchableOpacity,
   ActivityIndicator,
-  Alert,
   StatusBar,
   RefreshControl,
   Switch,
   Modal,
   useWindowDimensions,
 } from 'react-native';
+import { showAlert } from '../components/alert';
 import {
   Activity,
   AtSign,
@@ -25,6 +25,7 @@ import {
   Dumbbell,
   Edit3,
   Flame,
+  History,
   Info,
   Lock,
   LogOut,
@@ -58,7 +59,6 @@ import {
 import { ProgressRing } from '../components/ui/ProgressRing';
 import { useGameStats } from '../hooks/useGameStats';
 import { useCharacterCreator } from '../features/avatar/components/CharacterCreator';
-import { HeroCard } from '../features/avatar/components/HeroCard';
 import { GameButton, GameTopBar, GText, MeterBar, NamePlate, Panel, PillOption, ScreenBackground, SectionHeader } from '../components/game';
 import { GradientFill as ArenaGradient } from '../components/game/Gradient';
 import { useJuiceSettings } from '../juice/juiceSettingsStore';
@@ -94,22 +94,18 @@ import {
 import { generateRandomUsername } from '../utils/usernameGenerator';
 import { supabase } from '../utils/supabase';
 import { useUserStore } from '../store/userStore';
-import { AvatarViewer3D } from '../features/avatar/components/AvatarViewer3D';
 import { CoinDot } from '../features/avatar/components/AvatarShopScreen';
 import { GradientFill } from '../features/squad/components/SquadUI';
 import {
   AvatarModel,
   BUNDLED_AVATARS,
   fetchAvatarCatalog,
-  findAvatar,
-  getEquippedAvatarId,
-  getLoadout,
   isAvatarOwned,
-  loadoutItems,
 } from '../utils/avatarShopService';
 import { areRemindersEnabled, setRemindersEnabled } from '../utils/streakReminders';
 
 import { ThemedStatusBar } from '../components/ThemedStatusBar';
+import { MatchHistoryList } from '../features/history/MatchHistoryList';
 import CalorieIcon from '../../assets/icons/calorie.svg';
 import { RankEmblem, rankTierFromTitle, tierNameFromTitle } from '../components/RankEmblem';
 import { AchievementBadge, MedalMark, MedalMetal } from '../components/AchievementBadge';
@@ -119,7 +115,7 @@ interface ProfileScreenProps {
   onLogout: () => void;
 }
 
-export type ProfileTab = 'profile' | 'friends' | 'requests' | 'add_friend';
+export type ProfileTab = 'profile' | 'history' | 'friends' | 'requests' | 'add_friend';
 
 export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   currentUser,
@@ -165,11 +161,17 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const [avatarCatalog, setAvatarCatalog] = useState<AvatarModel[]>(BUNDLED_AVATARS);
   const openShop = useUserStore((s) => s.openShop);
   const openTutorial = useUserStore((s) => s.openTutorial);
+  // Another screen (the match result's Match History button) asked for a tab.
+  const profileTabRequest = useUserStore((s) => s.profileTabRequest);
+  const [historyRefresh, setHistoryRefresh] = useState(0);
+  useEffect(() => {
+    if (!profileTabRequest) return;
+    setActiveTab(profileTabRequest);
+    useUserStore.getState().clearProfileTabRequest();
+  }, [profileTabRequest]);
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const isShort = windowHeight < 400;
   const isNarrow = windowWidth < 700;
-  const equippedAvatar = findAvatar(avatarCatalog, getEquippedAvatarId(storeProfile));
-  const equippedItems = loadoutItems(avatarCatalog, getLoadout(storeProfile, equippedAvatar.id), equippedAvatar);
   const ownedAvatarCount = avatarCatalog.filter((m) => isAvatarOwned(storeProfile, m)).length;
 
   useEffect(() => {
@@ -185,7 +187,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
     const granted = await setRemindersEnabled(on, streak).catch(() => false);
     if (on && !granted) {
       setRemindersOn(false);
-      Alert.alert('Notifications are off', 'Allow notifications for Ojas in your phone settings to get streak reminders.');
+      showAlert('Notifications are off', 'Allow notifications for Ojas in your phone settings to get streak reminders.');
     }
   };
 
@@ -242,6 +244,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
   const handleRefresh = async () => {
     setRefreshing(true);
+    setHistoryRefresh((n) => n + 1);
     try {
       await Promise.all([loadProfileData(), loadFriendsData()]);
     } finally {
@@ -265,7 +268,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
       }
 
       if (!ImagePickerModule || !ImagePickerModule.launchImageLibraryAsync) {
-        Alert.alert(
+        showAlert(
           'Rebuild Required',
           'A new native library (expo-image-picker) was added. Please rebuild your app binary (e.g. `npx expo run:android` or restart your development build).'
         );
@@ -274,7 +277,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
       const { status } = await ImagePickerModule.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permission Denied', 'Camera roll access is needed to upload a profile photo.');
+        showAlert('Permission Denied', 'Camera roll access is needed to upload a profile photo.');
         return;
       }
 
@@ -304,13 +307,13 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
         setAvatarUrl(uploadRes.url);
         setProfile((prev) => (prev ? { ...prev, avatar_url: uploadRes.url } : null));
         useUserStore.getState().refreshProfile();
-        Alert.alert('Photo Updated', 'Your new profile picture has been saved successfully.');
+        showAlert('Photo Updated', 'Your new profile picture has been saved successfully.');
       } else {
-        Alert.alert('Upload Failed', uploadRes.error || 'Could not upload photo to storage.');
+        showAlert('Upload Failed', uploadRes.error || 'Could not upload photo to storage.');
       }
     } catch (e: any) {
       console.error('Photo picker error:', e);
-      Alert.alert('Error', e?.message || 'Failed to select and upload photo.');
+      showAlert('Error', e?.message || 'Failed to select and upload photo.');
     } finally {
       setIsUploadingPhoto(false);
     }
@@ -337,7 +340,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const handleSaveProfile = async () => {
     if (!currentUser?.id) return;
     if (!username.trim()) {
-      Alert.alert('Invalid Username', 'Username cannot be empty.');
+      showAlert('Invalid Username', 'Username cannot be empty.');
       return;
     }
 
@@ -364,12 +367,12 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
         setProfile((prev) => (prev ? { ...prev, ...result.data } : null));
         useUserStore.getState().refreshProfile();
         setIsEditing(false);
-        Alert.alert('Success', 'Your profile has been updated!');
+        showAlert('Success', 'Your profile has been updated!');
       } else {
-        Alert.alert('Update Failed', result.error || 'Please try again.');
+        showAlert('Update Failed', result.error || 'Please try again.');
       }
     } catch (e: any) {
-      Alert.alert('Error', e.message || 'Could not save profile changes.');
+      showAlert('Error', e.message || 'Could not save profile changes.');
     } finally {
       setIsSaving(false);
     }
@@ -377,7 +380,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
   const handleSendFriendRequest = async () => {
     if (!searchUsername.trim()) {
-      Alert.alert('Missing Username', 'Please type the username of the athlete you want to add.');
+      showAlert('Missing Username', 'Please type the username of the athlete you want to add.');
       return;
     }
     if (!currentUser?.id) return;
@@ -386,14 +389,14 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
     try {
       const result = await sendFriendRequest(currentUser.id, searchUsername.trim());
       if (result.success) {
-        Alert.alert('Request Sent', result.message || 'Friend request sent!');
+        showAlert('Request Sent', result.message || 'Friend request sent!');
         setSearchUsername('');
         await loadFriendsData();
       } else {
-        Alert.alert('Request Failed', result.error || 'Could not send friend request.');
+        showAlert('Request Failed', result.error || 'Could not send friend request.');
       }
     } catch (e: any) {
-      Alert.alert('Error', e?.message || 'Something went wrong.');
+      showAlert('Error', e?.message || 'Something went wrong.');
     } finally {
       setIsSendingRequest(false);
     }
@@ -406,7 +409,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
       if (ok) {
         await loadFriendsData();
       } else {
-        Alert.alert('Error', 'Failed to accept friend request.');
+        showAlert('Error', 'Failed to accept friend request.');
       }
     } finally {
       setActionLoadingId(null);
@@ -415,7 +418,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
   const handleDeleteOrReject = async (item: FriendshipItem, isRemoveFriend: boolean = false) => {
     if (isRemoveFriend) {
-      Alert.alert(
+      showAlert(
         'Remove Friend',
         `Are you sure you want to remove @${item.friend.username} from your friends?`,
         [
@@ -473,6 +476,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
   const PROFILE_TABS: { key: ProfileTab; label: string; Icon: IconType; badge?: number }[] = [
     { key: 'profile', label: 'Profile', Icon: User },
+    { key: 'history', label: 'History', Icon: History },
     { key: 'friends', label: `Friends`, Icon: Users },
     { key: 'requests', label: 'Requests', Icon: Bell, badge: totalRequests },
     { key: 'add_friend', label: 'Add', Icon: UserPlus },
@@ -565,70 +569,39 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
       />
       <View style={[styles.split, { flex: 1 }]}>
 
-      {/* HERO STAGE (landscape game profile): character, level, rank, XP and shop actions */}
+      {/* PLAYER CARD (landscape game profile): photo, rank, name, XP and shop actions; no character */}
       <View style={styles.heroSide}>
         <Panel tone="raised" padding={0} radius={26} style={styles.heroStage}>
           <ArenaGradient from={colors.bgTop} to={colors.surfaceHi} direction="vertical" radius={26} />
-          {isShort ? (
-            // a short phone has no room for the 3D hero between the plate and the buttons: their card instead
-            <View style={styles.heroShort}>
-              <View style={styles.heroShortRow}>
-                <HeroCard hero={equippedAvatar} width={isNarrow ? 72 : 84} onPress={() => useCharacterCreator.getState().show()} />
-                <View style={{ flex: 1, minWidth: 0, gap: 8 }}>
-                  <View style={[styles.heroTop, { padding: 0, flexWrap: 'wrap', gap: 6 }]}>
-            <TouchableOpacity activeOpacity={0.85} onPress={handlePickAndUploadPhoto} disabled={isUploadingPhoto} accessibilityLabel="Change profile photo">
-              <ProgressRing size={54} strokeWidth={3} progress={level.progress} color={colors.accentFrom} trackColor={colors.surfaceSunken}>
-                <Avatar username={username || currentUser?.email || 'athlete'} size={46} config={avatarConfig} avatarUrl={avatarUrl} />
-              </ProgressRing>
-              <View style={styles.cameraBadge}>
-                {isUploadingPhoto ? <ActivityIndicator size="small" color={colors.onAccent} /> : <CameraIcon size={11} color={colors.onAccent} />}
-              </View>
-            </TouchableOpacity>
-            <View style={styles.rankBadge}>
-              <RankEmblem tier={rankTierFromTitle(level.title)} size={26} />
-              <GText variant="label">{tierNameFromTitle(level.title)}</GText>
-            </View>
-                  </View>
-                  <NamePlate name={fullName || username || 'Ojas Athlete'} tag={`@${username || 'athlete'} · Lv ${level.level} ${level.title}`} side="you" maxWidth={260} />
+          {/* No character here: the photo, rank, name and level only */}
+          <View style={[styles.playerCard, isShort && { gap: 6, padding: 10 }]}>
+            <View style={styles.heroTop}>
+              <TouchableOpacity activeOpacity={0.85} onPress={handlePickAndUploadPhoto} disabled={isUploadingPhoto} accessibilityLabel="Change profile photo">
+                <ProgressRing size={isShort ? 64 : 96} strokeWidth={isShort ? 3 : 4} progress={level.progress} color={colors.accentFrom} trackColor={colors.surfaceSunken}>
+                  <Avatar username={username || currentUser?.email || 'athlete'} size={isShort ? 54 : 84} config={avatarConfig} avatarUrl={avatarUrl} />
+                </ProgressRing>
+                <View style={styles.cameraBadge}>
+                  {isUploadingPhoto ? <ActivityIndicator size="small" color={colors.onAccent} /> : <CameraIcon size={11} color={colors.onAccent} />}
                 </View>
-              </View>
-              <MeterBar value={level.progress} height={6} />
-              <View style={[styles.heroActions, { marginTop: 0 }]}>
-                <GameButton label={isNarrow ? 'Avatar' : 'Customize'} variant="secondary" size="md" icon={PersonStanding} onPress={() => useCharacterCreator.getState().show()} style={{ flex: 1, minWidth: 0 }} />
-              <GameButton label={isNarrow ? 'Shop' : 'Style shop'} size="md" icon={ShoppingBag} onPress={() => openShop('all')} style={{ flex: 1, minWidth: 0 }} />
+              </TouchableOpacity>
+              <View style={styles.rankBadge}>
+                <RankEmblem tier={rankTierFromTitle(level.title)} size={26} />
+                <GText variant="label">{tierNameFromTitle(level.title)}</GText>
               </View>
             </View>
-          ) : (
-            <>
-          <AvatarViewer3D model={equippedAvatar} items={equippedItems} style={styles.heroViewer} interactive={false} />
-          <View style={styles.heroTop}>
-            <TouchableOpacity activeOpacity={0.85} onPress={handlePickAndUploadPhoto} disabled={isUploadingPhoto} accessibilityLabel="Change profile photo">
-              <ProgressRing size={54} strokeWidth={3} progress={level.progress} color={colors.accentFrom} trackColor={colors.surfaceSunken}>
-                <Avatar username={username || currentUser?.email || 'athlete'} size={46} config={avatarConfig} avatarUrl={avatarUrl} />
-              </ProgressRing>
-              <View style={styles.cameraBadge}>
-                {isUploadingPhoto ? <ActivityIndicator size="small" color={colors.onAccent} /> : <CameraIcon size={11} color={colors.onAccent} />}
-              </View>
-            </TouchableOpacity>
-            <View style={styles.rankBadge}>
-              <RankEmblem tier={rankTierFromTitle(level.title)} size={26} />
-              <GText variant="label">{tierNameFromTitle(level.title)}</GText>
-            </View>
-          </View>
-          <View style={styles.heroBottom}>
             <NamePlate name={fullName || username || 'Ojas Athlete'} tag={`@${username || 'athlete'} · Lv ${level.level} ${level.title}`} side="you" maxWidth={260} />
-            <View style={styles.heroXpRow}>
-              <GText variant="caption" tone="muted">{level.xpIntoLevel} / {level.xpForNextLevel} XP</GText>
-              <GText variant="caption" tone="muted">Lv {level.level + 1} next</GText>
+            <View style={{ gap: 6 }}>
+              <View style={styles.heroXpRow}>
+                <GText variant="caption" tone="muted">{level.xpIntoLevel} / {level.xpForNextLevel} XP</GText>
+                <GText variant="caption" tone="muted">Lv {level.level + 1} next</GText>
+              </View>
+              <MeterBar value={level.progress} height={isShort ? 6 : 8} />
             </View>
-            <MeterBar value={level.progress} height={8} />
-            <View style={styles.heroActions}>
+            <View style={[styles.heroActions, { marginTop: 0 }]}>
               <GameButton label={isNarrow ? 'Avatar' : 'Customize'} variant="secondary" size="md" icon={PersonStanding} onPress={() => useCharacterCreator.getState().show()} style={{ flex: 1, minWidth: 0 }} />
               <GameButton label={isNarrow ? 'Shop' : 'Style shop'} size="md" icon={ShoppingBag} onPress={() => openShop('all')} style={{ flex: 1, minWidth: 0 }} />
             </View>
           </View>
-            </>
-          )}
         </Panel>
       </View>
 
@@ -1027,6 +1000,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
               ))
             )}
           </View>
+        ) : activeTab === 'history' ? (
+          <MatchHistoryList userId={currentUser?.id} refreshKey={historyRefresh} />
         ) : activeTab === 'requests' ? (
           <View>
             <Text style={styles.listTitle}>INCOMING ({incomingRequests.length})</Text>
@@ -1180,12 +1155,9 @@ const useStyles = makeStyles((colors: ThemeColors) =>
   split: { flexDirection: 'row' },
   heroSide: { width: '36%', padding: 12, paddingRight: 0 },
   heroStage: { flex: 1, overflow: 'hidden' },
-  heroShort: { flex: 1, padding: 10, gap: 8, justifyContent: 'space-between' },
-  heroShortRow: { flexDirection: 'row', gap: 10 },
-  heroViewer: { position: 'absolute', top: 40, left: 0, right: 0, bottom: 150 },
-  heroTop: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12 },
+  playerCard: { flex: 1, padding: 16, gap: 14, justifyContent: 'center' },
+  heroTop: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   rankBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, height: 32, borderRadius: 16, backgroundColor: colors.raised, borderWidth: 1, borderColor: colors.edge },
-  heroBottom: { position: 'absolute', left: 12, right: 12, bottom: 12, gap: 6 },
   heroXpRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 },
   heroActions: { flexDirection: 'row', gap: 8, marginTop: 6 },
   statRow: { flexDirection: 'row', gap: 10, marginBottom: 12 },

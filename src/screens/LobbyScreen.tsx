@@ -5,9 +5,9 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Image, Modal, Pressable, ScrollView, StatusBar, StyleSheet, useWindowDimensions, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Bell, Bot, Check, ChevronDown, Clock, Coins, Dumbbell, Flame, Lock, PersonStanding, Settings, Shirt, ShoppingBag, Swords, Trophy, Users, X } from 'lucide-react-native';
+import { Bell, Bot, Check, ChevronDown, ChevronRight, Clock, Coins, Dumbbell, Flame, GraduationCap, LayoutGrid, Lock, PersonStanding, Settings, Shirt, ShoppingBag, Swords, Trophy, Users, X, Zap } from 'lucide-react-native';
 import Svg, { Circle, Defs, Ellipse, LinearGradient, Polygon, RadialGradient, Stop } from 'react-native-svg';
-import { GText, MeterBar, Panel, StatChip } from '../components/game';
+import { EnergyChip, GText, MeterBar, Panel, StatChip } from '../components/game';
 import { Slant } from '../components/game/Slant';
 import { GradientFill } from '../components/game/Gradient';
 import { ExerciseIcon } from '../components/ExerciseIcon';
@@ -82,6 +82,7 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({ isGuest, onPlay, onOpe
   const [hint, setHint] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [postureOpen, setPostureOpen] = useState(false);
+  const [utilitiesOpen, setUtilitiesOpen] = useState(false);
   const [resetIn, setResetIn] = useState(timeToMidnight());
   useEffect(() => {
     const t = setInterval(() => setResetIn(timeToMidnight()), 60000);
@@ -187,6 +188,7 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({ isGuest, onPlay, onOpe
 
       {/* Top-right: currencies and icon buttons */}
       <View style={[styles.topRight, { right, top: 10 }]}>
+        <EnergyChip />
         <StatChip icon={Coins} tone="win" value={coins} accessibilityLabel={`${coins} coins`} />
         <StatChip icon={Flame} tone="accent" value={streak.current} pulse={streak.atRisk} accessibilityLabel={`${streak.current} day streak`} />
         <StatChip icon={Users} tone="success" dot value={online} accessibilityLabel={`${online} players online`} />
@@ -260,7 +262,7 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({ isGuest, onPlay, onOpe
           [
             { to: 'workouts', label: 'Train', icon: Dumbbell },
             { to: 'explore', label: 'Clan', icon: Users },
-            { to: 'posture', label: 'Posture', icon: PersonStanding },
+            { to: 'utilities', label: 'Utilities', icon: LayoutGrid },
           ] as const
         ).map(({ to, label, icon: Icon }, i) => (
           <React.Fragment key={to}>
@@ -270,8 +272,8 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({ isGuest, onPlay, onOpe
               style={styles.barItemInner}
               onPress={() => {
                 juice.play('toggle');
-                // Posture opens the camera body-posture scan over the lobby; the others are screens.
-                if (to === 'posture') setPostureOpen(true);
+                // Utilities opens the tools sheet over the lobby; the others are screens.
+                if (to === 'utilities') setUtilitiesOpen(true);
                 else onNavigate(to);
               }}
               accessibilityRole="button"
@@ -304,6 +306,13 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({ isGuest, onPlay, onOpe
             <GText variant="hero" size={30} tone="onGradient" numberOfLines={1} adjustsFontSizeToFit maxFontSizeMultiplier={1.1}>
               {playLabel(play.mode)}
             </GText>
+            {/* matches cost one energy bar; solo training is free */}
+            {play.mode !== 'solo' && (
+              <View style={styles.energyCost} accessibilityLabel="Costs 1 energy">
+                <Zap size={12} color="#FFFFFF" fill="#FFFFFF" />
+                <GText variant="label" size={12} style={{ color: '#FFFFFF' }}>1</GText>
+              </View>
+            )}
           </View>
         </Pressable>
       </TourTarget>
@@ -317,6 +326,24 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({ isGuest, onPlay, onOpe
         onChange={(next, message) => {
           if (message) setHint(message);
           savePlay(next);
+        }}
+      />
+      <UtilitiesSheet
+        visible={utilitiesOpen}
+        exercises={exercises}
+        initialExerciseId={play.exerciseId}
+        onClose={() => setUtilitiesOpen(false)}
+        onPosture={() => {
+          setUtilitiesOpen(false);
+          setPostureOpen(true);
+        }}
+        onAiDuel={(ex) => {
+          setUtilitiesOpen(false);
+          onPlay('ai_duel', ex);
+        }}
+        onCamera={(ex, tutor) => {
+          setUtilitiesOpen(false);
+          onOpenCamera(ex.id, ex.name, tutor, 'lobby');
         }}
       />
       {postureOpen && <DeformityScannerModal visible onClose={() => setPostureOpen(false)} />}
@@ -400,6 +427,102 @@ const QuickButton: React.FC<{ compact?: boolean; icon: React.ComponentType<{ siz
     <GText variant="label" style={onDark ? styles.onDark : undefined}>{label}</GText>
   </Pressable>
 );
+
+type UtilityIcon = React.ComponentType<{ size?: number; color?: string }>;
+
+/** Utilities: the tools that are not a lobby match (posture check, Human vs AI, AI Tutor, solo). */
+const UtilitiesSheet: React.FC<{
+  visible: boolean;
+  exercises: ExerciseItem[];
+  initialExerciseId: string;
+  onClose: () => void;
+  onPosture: () => void;
+  onAiDuel: (exercise: ExerciseItem) => void;
+  onCamera: (exercise: ExerciseItem, tutor: boolean) => void;
+}> = ({ visible, exercises, initialExerciseId, onClose, onPosture, onAiDuel, onCamera }) => {
+  const c = useColors();
+  const { height } = useWindowDimensions();
+  const [exerciseId, setExerciseId] = useState(initialExerciseId);
+  useEffect(() => {
+    if (visible) setExerciseId(initialExerciseId);
+  }, [visible, initialExerciseId]);
+  const exercise = exercises.find((e) => e.id === exerciseId) ?? exercises[0];
+  if (!exercise) return null;
+  // Human vs AI supports squats only; the duel screen explains the rest.
+  const aiExercise = modeSupportsExercise('ai_duel', exercise.id) ? exercise : exercises.find((e) => e.id === '1') ?? exercise;
+
+  const tools: { key: string; icon: UtilityIcon; title: string; sub: string; cost?: boolean; onPress: () => void }[] = [
+    { key: 'posture', icon: PersonStanding, title: 'Posture check', sub: 'Knees, legs, shoulders and back', onPress: onPosture },
+    { key: 'ai', icon: Bot, title: 'Human vs AI', sub: 'Duel a 3D AI rival', cost: true, onPress: () => onAiDuel(aiExercise) },
+    { key: 'tutor', icon: GraduationCap, title: 'AI Tutor', sub: `Form coaching · ${exercise.name}`, onPress: () => onCamera(exercise, true) },
+    { key: 'solo', icon: Dumbbell, title: 'Solo workout', sub: `Free reps · ${exercise.name}`, onPress: () => onCamera(exercise, false) },
+  ];
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" supportedOrientations={['landscape', 'portrait']} onRequestClose={onClose}>
+      <Pressable style={[StyleSheet.absoluteFill, { backgroundColor: c.scrim }]} onPress={onClose} />
+      <View style={styles.sheetWrap} pointerEvents="box-none">
+        <Panel tone="raised" radius={24} padding={16} style={[styles.sheet, { maxHeight: height - 40 }]}>
+          <View style={styles.sheetHeader}>
+            <LayoutGrid size={20} color={c.accent} />
+            <GText variant="title" style={{ flex: 1, marginLeft: 8 }}>Utilities</GText>
+            <Pressable onPress={onClose} accessibilityLabel="Close" hitSlop={10}>
+              <X size={20} color={c.text} />
+            </Pressable>
+          </View>
+          <View style={styles.utilGrid}>
+            {tools.map(({ key, icon: Icon, title, sub, cost, onPress }) => (
+              <Pressable
+                key={key}
+                onPress={() => {
+                  juice.play('tap');
+                  onPress();
+                }}
+                accessibilityRole="button"
+                accessibilityLabel={`${title}: ${sub}${cost ? ', costs 1 energy' : ''}`}
+                style={({ pressed }) => [styles.utilTile, { backgroundColor: c.surfaceHi, borderColor: c.edge }, pressed && { transform: [{ scale: 0.97 }] }]}
+              >
+                <View style={[styles.utilIcon, { backgroundColor: c.raised, borderColor: c.edge }]}>
+                  <Icon size={24} color={c.accent} />
+                </View>
+                <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+                  <GText variant="bodyStrong" numberOfLines={1}>{title}</GText>
+                  <GText variant="caption" tone="muted" numberOfLines={1}>{sub}</GText>
+                </View>
+                {cost && (
+                  <View style={styles.utilCost}>
+                    <Zap size={11} color="#FFFFFF" fill="#FFFFFF" />
+                    <GText variant="label" size={11} style={{ color: '#FFFFFF' }}>1</GText>
+                  </View>
+                )}
+                <ChevronRight size={18} color={c.textMuted} />
+              </Pressable>
+            ))}
+          </View>
+          {/* exercise for the AI Tutor and the solo workout */}
+          <GText variant="label" tone="muted" style={{ marginTop: 12, marginBottom: 6 }}>EXERCISE FOR AI TUTOR AND SOLO</GText>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+            {exercises.map((ex) => {
+              const selected = ex.id === exercise.id;
+              return (
+                <Pressable
+                  key={ex.id}
+                  onPress={() => setExerciseId(ex.id)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected }}
+                  style={[styles.utilChip, { borderColor: selected ? c.accentFrom : c.edge, backgroundColor: selected ? c.surfaceHi : 'transparent' }]}
+                >
+                  <ExerciseIcon imageUrl={ex.image_url} icon={ex.icon} size={22} />
+                  <GText variant="label">{ex.name}</GText>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        </Panel>
+      </View>
+    </Modal>
+  );
+};
 
 const ModePickerSheet: React.FC<{
   visible: boolean;
@@ -508,6 +631,7 @@ const styles = StyleSheet.create({
   modeCard: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   playButton: { height: 64 },
   playFace: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  energyCost: { position: 'absolute', top: 6, right: 22, flexDirection: 'row', alignItems: 'center', gap: 2, paddingHorizontal: 6, height: 18, borderRadius: 9, backgroundColor: 'rgba(14,165,233,0.95)' },
   sheetWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20 },
   sheet: { width: '100%', maxWidth: 720 },
   sheetHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
@@ -515,5 +639,10 @@ const styles = StyleSheet.create({
   sheetModes: { width: 220, gap: 8 },
   modeRow: { height: 48, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, borderRadius: 14, borderWidth: 1.5 },
   sheetExercises: { flex: 1 },
+  utilGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  utilTile: { width: '48.6%', flexGrow: 1, minHeight: 66, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 16, borderWidth: 1 },
+  utilIcon: { width: 44, height: 44, borderRadius: 14, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  utilCost: { flexDirection: 'row', alignItems: 'center', gap: 2, paddingHorizontal: 6, height: 18, borderRadius: 9, backgroundColor: 'rgba(14,165,233,0.95)' },
+  utilChip: { height: 38, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, borderRadius: 19, borderWidth: 1.5 },
   exerciseRow: { height: 48, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 10, borderBottomWidth: 1, borderRadius: 10 },
 });
