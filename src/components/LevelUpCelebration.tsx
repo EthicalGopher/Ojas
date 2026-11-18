@@ -44,7 +44,7 @@ export const LevelUpCelebration: React.FC = () => {
     <Modal visible transparent animationType="fade" onRequestClose={() => setShownLevel(null)}>
       <View style={styles.overlay}>
         <Animated.View style={[styles.card, { transform: [{ scale }] }]}>
-          <RankEmblem tier={rankTierFromTitle(level.title)} size={96} />
+          <RankEmblem tier={rankTierFromTitle(level.title)} size={96} shine />
           <Text style={styles.eyebrow}>LEVEL UP</Text>
           <View style={styles.levelCircle}>
             <Text style={styles.levelNumber}>{shownLevel}</Text>

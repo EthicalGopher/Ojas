@@ -11,6 +11,10 @@ import { EnergyChip, GText, MeterBar, Panel, StatChip } from '../components/game
 import { Slant } from '../components/game/Slant';
 import { GradientFill } from '../components/game/Gradient';
 import { ExerciseIcon } from '../components/ExerciseIcon';
+import { PLAYER_RANKS, RankEmblem } from '../components/RankEmblem';
+import { useAchievements } from '../features/ranks/useAchievements';
+import { RankScreen } from '../features/ranks/RankScreen';
+import { useExerciseRanks } from '../features/ranks/useExerciseRanks';
 import { AvatarViewer3D } from '../features/avatar/components/AvatarViewer3D';
 import { HERO_BACKDROPS, LoopVideo, STORY_VIDEOS, coverSpot } from '../features/avatar/components/HeroScreen';
 import { useCharacterCreator } from '../features/avatar/components/CharacterCreator';
@@ -110,6 +114,12 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({ isGuest, onPlay, onOpe
   };
 
   const exercise = exercises.find((e) => e.id === play.exerciseId) ?? exercises[0];
+
+  // One rank per exercise (match points); the medal beside the play button is the selected exercise's.
+  const ranks = useExerciseRanks(user?.id, exerciseIds);
+  const rankTier = ranks.rankOf(exercise?.id ?? '1').tier;
+  const [rankOpen, setRankOpen] = useState(false);
+  const achievements = useAchievements(user?.id, rankOpen);
   const name = profile?.username || profile?.full_name || user?.user_metadata?.username || (isGuest ? 'Guest' : 'Athlete');
   const coins = computeCoinBalance(profile);
   const left = Math.max(insets.left, 12);
@@ -119,6 +129,10 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({ isGuest, onPlay, onOpe
   // smaller phones in landscape: everything has to fit between the top row and the bottom bar
   const short = height < 400;
   const questsDone = challenges.filter((q) => q.isCompleted).length;
+  // bottom-right row: [menu bar] [rank medal] [play button]
+  const playWidth = width * 0.28;
+  const medalSize = short ? 62 : 78;
+  const medalRight = right + playWidth + 4;
 
   const handlePlay = () => {
     if (!exercise) return;
@@ -256,7 +270,7 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({ isGuest, onPlay, onOpe
       )}
 
       {/* Bottom: angled menu bar */}
-      <View style={[styles.bottomBar, { left: left - 4, right: width * 0.3, bottom: Math.max(insets.bottom, 8) }, short && { height: 46 }]}>
+      <View style={[styles.bottomBar, { left: left - 4, right: medalRight + medalSize + 2, bottom: Math.max(insets.bottom, 8) }, short && { height: 46 }]}>
         <Slant fill={c.raised} stroke={c.edge} />
         {(
           [
@@ -287,8 +301,21 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({ isGuest, onPlay, onOpe
         ))}
       </View>
 
+      {/* Rank medal for the selected exercise, between the menu bar and the play button */}
+      <Pressable
+        onPress={() => {
+          ranks.reload();
+          setRankOpen(true);
+        }}
+        accessibilityRole="button"
+        accessibilityLabel={`${exercise?.name ?? ''} rank ${PLAYER_RANKS[rankTier]}. Open ranked`}
+        style={[styles.rankMedal, { right: medalRight, bottom: Math.max(insets.bottom, 8) + (short ? 54 : 64) / 2 - medalSize / 2 }]}
+      >
+        <RankEmblem tier={rankTier} size={medalSize} shine />
+      </Pressable>
+
       {/* Bottom-right: mode/exercise selector + angled play button */}
-      <TourTarget id="lobby-play" style={[styles.playArea, { right, bottom: Math.max(insets.bottom, 8), width: width * 0.28 }]}>
+      <TourTarget id="lobby-play" style={[styles.playArea, { right, bottom: Math.max(insets.bottom, 8), width: playWidth }]}>
         {hint && <GText variant="caption" tone="muted" style={styles.hint}>{hint}</GText>}
         <Pressable onPress={() => setPickerOpen(true)} accessibilityRole="button" accessibilityLabel={`Mode ${modeLabel(play.mode)}, exercise ${exercise?.name}. Change`}>
           <Panel tone="raised" radius={16} padding={8} style={styles.modeCard}>
@@ -316,6 +343,22 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({ isGuest, onPlay, onOpe
           </View>
         </Pressable>
       </TourTarget>
+
+      <RankScreen
+        visible={rankOpen}
+        exercises={exercises}
+        exerciseId={exercise?.id ?? '1'}
+        rankOf={ranks.rankOf}
+        best={ranks.best}
+        achievements={achievements}
+        startLabel={playLabel(play.mode)}
+        onSelect={(id) => savePlay({ ...play, exerciseId: id })}
+        onStart={() => {
+          setRankOpen(false);
+          handlePlay();
+        }}
+        onClose={() => setRankOpen(false)}
+      />
 
       <ModePickerSheet
         visible={pickerOpen}
@@ -627,6 +670,7 @@ const styles = StyleSheet.create({
   barItem: { flex: 1, height: 52 },
   divider: { width: 2, height: 24, borderRadius: 1, transform: [{ rotate: '12deg' }] },
   playArea: { position: 'absolute', gap: 6 },
+  rankMedal: { position: 'absolute' },
   hint: { textAlign: 'right' },
   modeCard: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   playButton: { height: 64 },

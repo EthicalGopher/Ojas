@@ -205,6 +205,27 @@ export async function fetchUserExerciseStats(
   }
 }
 
+/** All of a user's per-exercise stats rows, keyed by exercise id (exercises never played are absent). */
+export async function fetchAllUserExerciseStats(userId: string): Promise<Record<string, UserExerciseStats>> {
+  if (!userId) return {};
+  const { data, error } = await supabase.from('user_exercise_stats').select('*').eq('user_id', userId);
+  if (error || !data) return {};
+  const out: Record<string, UserExerciseStats> = {};
+  for (const r of data as any[]) {
+    out[String(r.exercise_id)] = {
+      user_id: r.user_id,
+      exercise_id: String(r.exercise_id),
+      points: r.points ?? 0,
+      matches_played: r.matches_played ?? 0,
+      matches_won: r.matches_won ?? 0,
+      matches_drawn: r.matches_drawn ?? 0,
+      matches_lost: r.matches_lost ?? 0,
+      reps_completed: r.reps_completed ?? 0,
+    };
+  }
+  return out;
+}
+
 /**
  * Records match outcome for a specific exercise game.
  * Rules: Win: +10 pts, Draw: +5 pts, Defeat: -10 pts.

@@ -1,7 +1,7 @@
 // Custom vector rank emblems. Players get shields, squads get fortress crests.
 // Both escalate with tier: more chevrons/towers, then gem + wings/laurels, crown, and a flame halo at the top tier.
-import React, { useId } from 'react';
-import { View } from 'react-native';
+import React, { useEffect, useId, useMemo, useRef } from 'react';
+import { Animated, Easing, Image, View } from 'react-native';
 import Svg, { Circle, Defs, Ellipse, G, LinearGradient, Path, Polygon, RadialGradient, Stop } from 'react-native-svg';
 
 export type RankTier = 1 | 2 | 3 | 4 | 5 | 6;
@@ -167,7 +167,72 @@ const wing = (big: boolean) =>
     : 'M21 34 L8 33 L13 40 L6 45 L14 49 L10 55 L21 56 Z';
 const mirror = (d: string) => d.replace(/(-?\d+(?:\.\d+)?) (-?\d+(?:\.\d+)?)/g, (_, x, y) => `${100 - Number(x)} ${y}`);
 
-export const RankEmblem: React.FC<{ tier: RankTier; size?: number }> = ({ tier, size = 40 }) => {
+// ---------- Painted medals (replace the vector shield per tier as art arrives) ----------
+
+const ROOKIE_STILL = require('../../assets/ranks/rookie.png');
+// 43 frames of 200 px in a 7x7 grid: frame 0 = still, 1..42 = the light sweep (30 fps).
+// Built by scripts/ranks/medal_sprite.py from the same art as the shine video.
+const ROOKIE_SHEET = require('../../assets/ranks/rookie_shine_sheet.webp');
+const SHEET = { cols: 7, rows: 7, sweepFrames: 42, fps: 30, cycleMs: 3000 };
+/** The round medal looks bigger than the shield at the same box; this keeps them about equal. */
+const MEDAL_SCALE = 0.86;
+
+/** Steps through the sprite sheet: one sweep, then the still until the 3 s cycle ends. */
+const MedalShine: React.FC<{ size: number }> = ({ size }) => {
+  const t = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.timing(t, { toValue: SHEET.cycleMs, duration: SHEET.cycleMs, easing: Easing.linear, useNativeDriver: true }),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [t]);
+
+  const { x, y } = useMemo(() => {
+    const frameMs = 1000 / SHEET.fps;
+    const input: number[] = [];
+    const xs: number[] = [];
+    const ys: number[] = [];
+    const hold = (from: number, to: number, frame: number) => {
+      input.push(from, to);
+      const col = frame % SHEET.cols;
+      const row = Math.floor(frame / SHEET.cols);
+      xs.push(-col * size, -col * size);
+      ys.push(-row * size, -row * size);
+    };
+    for (let f = 1; f <= SHEET.sweepFrames; f++) hold((f - 1) * frameMs, f * frameMs - 0.01, f);
+    hold(SHEET.sweepFrames * frameMs, SHEET.cycleMs, 0);
+    return {
+      x: t.interpolate({ inputRange: input, outputRange: xs }),
+      y: t.interpolate({ inputRange: input, outputRange: ys }),
+    };
+  }, [t, size]);
+
+  return (
+    <Animated.Image
+      source={ROOKIE_SHEET}
+      fadeDuration={0}
+      style={{ width: size * SHEET.cols, height: size * SHEET.rows, transform: [{ translateX: x }, { translateY: y }] }}
+    />
+  );
+};
+
+const RookieMedal: React.FC<{ size: number; shine: boolean }> = ({ size, shine }) => {
+  const d = Math.round(size * MEDAL_SCALE);
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+      <View style={{ width: d, height: d, borderRadius: d / 2, overflow: 'hidden' }}>
+        {shine ? <MedalShine size={d} /> : <Image source={ROOKIE_STILL} style={{ width: d, height: d }} fadeDuration={0} />}
+      </View>
+    </View>
+  );
+};
+
+/** `shine` plays the medal's light sweep (use on big, single emblems only, not in lists). */
+export const RankEmblem: React.FC<{ tier: RankTier; size?: number; shine?: boolean }> = ({ tier, size = 40, shine = false }) =>
+  tier === 1 ? <RookieMedal size={size} shine={shine} /> : <ShieldEmblem tier={tier} size={size} />;
+
+const ShieldEmblem: React.FC<{ tier: RankTier; size: number }> = ({ tier, size }) => {
   const ids = useIds();
   const pal = TIER_PALETTES[tier];
   const metal = `url(#${ids.metal})`;

@@ -107,8 +107,7 @@ import { areRemindersEnabled, setRemindersEnabled } from '../utils/streakReminde
 import { ThemedStatusBar } from '../components/ThemedStatusBar';
 import { MatchHistoryList } from '../features/history/MatchHistoryList';
 import CalorieIcon from '../../assets/icons/calorie.svg';
-import { RankEmblem, rankTierFromTitle, tierNameFromTitle } from '../components/RankEmblem';
-import { AchievementBadge, MedalMark, MedalMetal } from '../components/AchievementBadge';
+import { ProfileRanksCard } from '../features/ranks/ProfileRanksCard';
 interface ProfileScreenProps {
   currentUser: any;
   onBack: () => void;
@@ -463,17 +462,6 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const totalCalories = Math.round(profile?.total_calories || 0);
   const activeConditions = HEALTH_CONDITIONS.filter((c) => healthConditions[c.key]);
 
-  // Each medal tracks real progress toward its goal; locked ones show how close you are.
-  const ACHIEVEMENTS: { key: string; title: string; metal: MedalMetal; mark: MedalMark; have: number; need: number; unit: string }[] = [
-    { key: 'first', title: 'First Rep', metal: 'bronze', mark: { kind: 'text', value: '1' }, have: level.totalXp > 0 ? 1 : 0, need: 1, unit: 'workout' },
-    { key: 'streak3', title: 'On Fire', metal: 'bronze', mark: { kind: 'flame', value: '3' }, have: streak.best, need: 3, unit: 'days' },
-    { key: 'streak7', title: 'Unstoppable', metal: 'gold', mark: { kind: 'flame', value: '7' }, have: streak.best, need: 7, unit: 'days' },
-    { key: 'social', title: 'Squad Up', metal: 'silver', mark: { kind: 'duo' }, have: friends.length, need: 1, unit: 'friend' },
-    { key: 'level5', title: 'Rising Star', metal: 'silver', mark: { kind: 'star' }, have: level.level, need: 5, unit: 'level' },
-    { key: 'kcal', title: 'Furnace', metal: 'gold', mark: { kind: 'text', value: '1K' }, have: Math.round(totalCalories), need: 1000, unit: 'kcal' },
-  ];
-  const unlockedCount = ACHIEVEMENTS.filter((a) => a.have >= a.need).length;
-
   const PROFILE_TABS: { key: ProfileTab; label: string; Icon: IconType; badge?: number }[] = [
     { key: 'profile', label: 'Profile', Icon: User },
     { key: 'history', label: 'History', Icon: History },
@@ -584,10 +572,6 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                   {isUploadingPhoto ? <ActivityIndicator size="small" color={colors.onAccent} /> : <CameraIcon size={11} color={colors.onAccent} />}
                 </View>
               </TouchableOpacity>
-              <View style={styles.rankBadge}>
-                <RankEmblem tier={rankTierFromTitle(level.title)} size={26} />
-                <GText variant="label">{tierNameFromTitle(level.title)}</GText>
-              </View>
             </View>
             <NamePlate name={fullName || username || 'Ojas Athlete'} tag={`@${username || 'athlete'} · Lv ${level.level} ${level.title}`} side="you" maxWidth={260} />
             <View style={{ gap: 6 }}>
@@ -648,41 +632,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
         {activeTab === 'profile' ? (
           <>
-            {/* ACHIEVEMENTS */}
-            <View style={styles.sectionCard}>
-              <View style={styles.sectionHeaderRow}>
-                <View style={styles.sectionTitleRow}>
-                  <View style={styles.sectionAccent} />
-                  <Text style={styles.sectionHeader}>Achievements</Text>
-                </View>
-                <Text style={styles.sectionMeta}>{unlockedCount}/{ACHIEVEMENTS.length} unlocked</Text>
-              </View>
-              <View style={styles.achievementGrid}>
-                {ACHIEVEMENTS.map(({ key, title, metal, mark, have, need, unit }) => {
-                  const unlocked = have >= need;
-                  return (
-                    <View key={key} style={[styles.achievement, unlocked && styles.achievementUnlocked]}>
-                      <AchievementBadge metal={metal} mark={mark} unlocked={unlocked} size={58} />
-                      <Text style={[styles.achievementTitle, !unlocked && { color: colors.textMuted }]} numberOfLines={1}>
-                        {title}
-                      </Text>
-                      {unlocked ? (
-                        <Text style={styles.achievementDone}>EARNED</Text>
-                      ) : (
-                        <>
-                          <View style={styles.achievementTrack}>
-                            <View style={[styles.achievementFill, { width: `${Math.max(4, (Math.min(have, need) / need) * 100)}%` }]} />
-                          </View>
-                          <Text style={styles.achievementHint} numberOfLines={1}>
-                            {Math.min(have, need).toLocaleString()} / {need.toLocaleString()} {unit}
-                          </Text>
-                        </>
-                      )}
-                    </View>
-                  );
-                })}
-              </View>
-            </View>
+            {/* RANKS: only the current and best medals */}
+            <ProfileRanksCard userId={currentUser?.id} />
 
             {/* DETAILS */}
             <View style={styles.sectionCard}>
@@ -1157,7 +1108,6 @@ const useStyles = makeStyles((colors: ThemeColors) =>
   heroStage: { flex: 1, overflow: 'hidden' },
   playerCard: { flex: 1, padding: 16, gap: 14, justifyContent: 'center' },
   heroTop: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  rankBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, height: 32, borderRadius: 16, backgroundColor: colors.raised, borderWidth: 1, borderColor: colors.edge },
   heroXpRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 },
   heroActions: { flexDirection: 'row', gap: 8, marginTop: 6 },
   statRow: { flexDirection: 'row', gap: 10, marginBottom: 12 },
@@ -1256,15 +1206,6 @@ const useStyles = makeStyles((colors: ThemeColors) =>
   sectionAccent: { width: 4, height: 18, borderRadius: 2, backgroundColor: colors.accentFrom },
   sectionMeta: { color: colors.textMuted, fontSize: 11, fontWeight: '800' },
 
-  // Achievements
-  achievementGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 16 },
-  achievement: { width: '30%', flexGrow: 1, alignItems: 'center', paddingVertical: 12, paddingHorizontal: 8, borderRadius: radius.lg, backgroundColor: colors.surfaceHi, borderWidth: 1, borderColor: 'transparent' },
-  achievementUnlocked: { backgroundColor: 'rgba(245, 169, 11, 0.08)', borderColor: 'rgba(245, 169, 11, 0.35)' },
-  achievementTitle: { color: colors.text, fontSize: 12, fontWeight: '900', marginTop: 6 },
-  achievementHint: { color: colors.textMuted, fontSize: 9.5, fontWeight: '800', marginTop: 4 },
-  achievementDone: { color: colors.success, fontSize: 9.5, fontWeight: '900', letterSpacing: 1, marginTop: 4 },
-  achievementTrack: { alignSelf: 'stretch', height: 4, borderRadius: 2, marginTop: 7, marginHorizontal: 6, backgroundColor: colors.surface, overflow: 'hidden' },
-  achievementFill: { height: '100%', borderRadius: 2, backgroundColor: colors.accent },
 
   // Details
   detailRow: { flexDirection: 'row', paddingVertical: 13, borderTopWidth: 1, borderTopColor: colors.border },

@@ -508,7 +508,7 @@ export const ExerciseDetailScreen: React.FC<ExerciseDetailScreenProps> = ({
                       <Text style={styles.heroPointsNum}>{exercisePoints.toLocaleString()}</Text> rank pts
                     </Text>
                   </View>
-                  <RankEmblem tier={tier} size={78} />
+                  <RankEmblem tier={tier} size={78} shine />
                 </View>
                 <View style={styles.progressLabelRow}>
                   <Text style={styles.progressLabel}>{levelInfo.progressPercent}%</Text>
