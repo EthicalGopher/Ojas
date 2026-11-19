@@ -35,6 +35,8 @@ EXTRA = parse_extra(argv[3:])  # Mixamo clips: name=clip.fbx[,inplace][,xN] (ret
 PREFIX = 'ludovisions_FC1_'
 # FC1_HERO=1 builds the default hero (hero_shape.py) on this body and rig instead of Meera.
 HERO = os.environ.get('FC1_HERO') == '1'
+# FC1_BRAWLER=1 builds the brawler (brawler_shape.py): her own hair, street clothes, armour and painted look.
+BRAWLER = os.environ.get('FC1_BRAWLER') == '1'
 
 # Hair layers by material: fly-aways and near-invisible wisps are dropped, big card layers decimated.
 HAIR_DROP = {'mat_01', 'mat_20', 'mat_04', 'mat_16'}
@@ -78,6 +80,9 @@ for o in list(fc1_objects):
 meshes = [o for o in bpy.data.objects if o.type == 'MESH']
 
 for o in meshes:
+    if BRAWLER and o.data.shape_keys:   # her scowl, frozen in from the face's own shapes
+        import brawler_shape
+        brawler_shape.apply_expression(o)
     if o.data.shape_keys:
         o.shape_key_clear()
     # CC vertex colours are authoring data; three.js would multiply them into the textures.
@@ -121,6 +126,9 @@ def decimate(o, ratio):
 if HERO:
     import hero_shape
     meshes = hero_shape.strip(meshes, short)
+if BRAWLER:
+    import brawler_shape
+    meshes = brawler_shape.strip(meshes, short)
 
 for o in meshes:
     names = {m.name for m in o.data.materials if m}
@@ -571,6 +579,14 @@ if HERO:
     hero_shape.finish_materials([o for o in bpy.data.objects if o.type == 'MESH'], short)
     hero_body.dress_skin(body, head, short, os.path.join(base, 'male_body_hi.ply'),
                          os.path.join(base, 'maps'))  # the maps for inspection; the GLB embeds them
+elif BRAWLER:
+    brawler_shape.dress(fc1_body, fc1_body.parent, short,
+                        {'body_shell': body_shell, 'smoothed_body': smoothed_body, 'edge_segments': edge_segments,
+                         'edge_z': edge_z, 'cull': cull_covered_skin}, meshes)
+    if os.environ.get('BRAWLER_BLEND'):  # the dressed figure before the clips, for quick look renders
+        bpy.ops.wm.save_as_mainfile(filepath=os.environ['BRAWLER_BLEND'], copy=True)
+        if os.environ.get('BRAWLER_STOP'):
+            sys.exit(0)
 else:
     cull_covered_skin(fc1_body, make_sportswear(fc1_body))
 

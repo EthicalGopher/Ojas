@@ -23,6 +23,8 @@ export interface ShopItemConfig {
   hide?: string[];
   /** Linear RGB multipliers on the character's materials, e.g. a face item matching the skin tone. */
   tint?: Record<string, [number, number, number]>;
+  /** The painted look (a character's look item carries it): see look.paint. */
+  paint?: NonNullable<ShopItemConfig['look']>['paint'];
   bone?: string;
   position?: [number, number, number];
   rotation?: [number, number, number];
@@ -40,7 +42,17 @@ export interface ShopItemConfig {
   card?: string;
   cardColors?: [string, string];
   /** Characters only: the body's own look (skin tint, dyes), applied before any worn items. */
-  look?: { tint?: Record<string, [number, number, number]>; dye?: Record<string, string> };
+  look?: {
+    tint?: Record<string, [number, number, number]>;
+    dye?: Record<string, string>;
+    /** The painted animated-film look in the 3D viewer (avatarViewerHtml applyPaint): colours are linear,
+     * glowBone / glowTo place a point light between two bones (the glowing parts' light spill). */
+    paint?: {
+      shadow?: [number, number, number]; lit?: [number, number, number];
+      rimA?: [number, number, number]; rimB?: [number, number, number]; rims?: number; outline?: number;
+      glowColor?: string; glowIntensity?: number; glowBone?: string; glowTo?: string;
+    };
+  };
   /** Characters only: shown under the player's own username instead of `name` (the default hero). */
   nameFromUsername?: boolean;
 }
@@ -106,7 +118,7 @@ const isRocketbox = (character: AvatarModel) => ROCKETBOX_BODIES.includes(charac
 /** Removed from the shop, even while an older server still lists them. */
 // face_m_18: its head model has no back of the skull (a face mask only), so it looked bald and
 // hollow from behind. Hidden until the face is rebuilt. The char_* roster was retired: the shop
-// keeps only Meera and Arjun.
+// keeps only Meera and Arjun (and Veera, added later).
 const RETIRED_IDS = [
   'starter_aiko', 'face_m_18',
   'char_kavya', 'char_zoya', 'char_ishani', 'char_aarohi', 'char_naina', 'char_tara', 'char_elena', 'char_sana', 'char_rani',
@@ -275,6 +287,57 @@ export const BUNDLED_AVATARS: AvatarModel[] = [
     is_default: false,
     sort_order: 0,
   },
+  // Veera: the brawler (scripts/blender/brawler_shape.py, FC1_BRAWLER=1 build_fc1.py) on FC1's body and rig, in
+  // a hand-painted look, from the concept in assets/concepts/brawler_concept_full.jpg. Her film: HeroScreen
+  // STORY_VIDEOS hero_veera.
+  {
+    id: 'hero_veera',
+    name: 'Veera',
+    description: 'The undercity brawler. Recruit her with coins.',
+    rarity: 'legendary',
+    price_coins: 1200,
+    category: 'character',
+    character_id: null,
+    model_url: 'local://avatars/brawler.glb',
+    model_format: 'glb',
+    config: {
+      // the painted film look in the 3D viewer, her iron arm's teal glow lighting what is near it
+      look: { paint: { glowBone: 'CC_L_Forearm', glowTo: 'CC_L_Hand', glowColor: '#36F1CD', glowIntensity: 2.6 } },
+      card: 'local://avatars/brawler_card.png',
+      hero: {
+        title: 'The Undercity Brawler',
+        role: 'Brawler',
+        specialty: 'Power / Grit',
+        world: 'track',
+        lobbyMoves: ['hero_move1'],
+        stats: [
+          { label: 'Speed', value: 0.66 },
+          { label: 'Stamina', value: 0.86 },
+          { label: 'Power', value: 0.95 },
+          { label: 'Agility', value: 0.7 },
+        ],
+        movie: [
+          { cam: 'wide', dur: 4, caption: 'Down in the undercity, the factories never sleep.' },
+          { cam: 'face', dur: 3.6, caption: 'Veera lost her arm to a machine on the night shift.' },
+          { cam: 'low', dur: 4, clip: 'hero_move1', caption: 'She built a new one from scrap, and a fist hard enough to use it.' },
+          { cam: 'orbit', dur: 4.6, clip: 'hero_move1', burst: true, caption: 'Now every fight she wins, she wins for the street.' },
+          { cam: 'hero', dur: 5.4, clip: 'hero_move2', burst: true, caption: '' },
+        ],
+        story:
+          'Veera lost her left arm to a press on the night shift in the undercity factories. She built a new one from scrap iron and chemtech, and trained a body strong enough to carry it. Now she fights in the street rings, and every win goes back to the street.',
+        moves: [
+          { clip: 'hero_move1', name: 'Iron Flex', text: 'The scrap arm hums, the vials flare: power on show.', icon: 'zap' },
+          { clip: 'hero_move2', name: 'Street Champion', text: 'Another ring won, fists up for the crowd.', icon: 'flag' },
+          { clip: 'squat', name: 'Iron Combo', text: 'Jab, cross, then a heavy hook with the iron fist.', icon: 'zap' },
+        ],
+        effect: { name: 'Chemtech Glow', color: '#36F1CD', text: 'Her ring glows chemtech teal, and sparks fly with every move.' },
+      },
+      cardColors: ['#36F1CD', '#2A1C14'],
+    },
+    thumbnail_url: 'local://avatars/brawler.png',
+    is_default: false,
+    sort_order: 1,
+  },
   ...OUTFIT_ITEMS.map(([id, name, description, rarity, price, characterId, config, thumbnail, sort]) => ({
     ...item(id, name, description, rarity, price, 'kit', characterId, config, sort),
     thumbnail_url: thumbnail,
@@ -435,7 +498,7 @@ export function loadoutItems(catalog: AvatarModel[], loadout: Loadout, character
 }
 
 const lookItem = (id: string, look: BodyLook): AvatarModel =>
-  item(`look_${id}`, 'Look', '', 'common', 0, 'kit', null, { tint: look.tint, dye: look.dye }, -100);
+  item(`look_${id}`, 'Look', '', 'common', 0, 'kit', null, { tint: look.tint, dye: look.dye, paint: look.paint }, -100);
 
 /** The character's own look (skin tone, dyes) as a loadout item, applied before anything worn. */
 export function baseLookItems(character: AvatarModel): AvatarModel[] {
@@ -503,6 +566,7 @@ export function lookOf(catalog: AvatarModel[], profile: Pick<UserProfile, 'equip
  * (Meera, the AI rival, simulated rivals) is worn on the base body, which is Meera's. */
 export function characterStandArt(model: AvatarModel): string {
   if (model.model_url === HERO_BODY_URL) return resolveModelUrl('local://avatars/hero_stand.png');
+  if (/brawler/.test(model.model_url)) return resolveModelUrl('local://avatars/brawler_stand.png');
   return resolveModelUrl(/arjun/.test(model.model_url) ? 'local://avatars/arjun_stand.png' : 'local://avatars/meera_stand.png');
 }
 
@@ -510,6 +574,8 @@ export function characterStandArt(model: AvatarModel): string {
  * sprinting), avatars/<hero>_vs.jpg. Same body rule as characterStandArt. */
 export function characterVsScene(model: AvatarModel): string {
   if (model.model_url === HERO_BODY_URL) return resolveModelUrl('local://avatars/hero_vs.jpg');
+  // Veera: her painted render (scripts/blender/render_arcane.py)
+  if (/brawler/.test(model.model_url)) return resolveModelUrl('local://avatars/brawler_vs.jpg');
   return resolveModelUrl(/arjun/.test(model.model_url) ? 'local://avatars/arjun_vs.jpg' : 'local://avatars/meera_vs.jpg');
 }
 
@@ -522,7 +588,7 @@ export function lookForName(_catalog: AvatarModel[], name: string) {
   let h = 2166136261;
   for (let i = 0; i < name.length; i++) h = Math.imul(h ^ name.charCodeAt(i), 16777619) >>> 0;
   const heroes = BUNDLED_AVATARS.filter((b) => b.category === 'character' && b.thumbnail_url && b.id !== DEFAULT_AVATAR_ID);
-  const meera = heroes.find((b) => !/arjun/.test(b.model_url));
+  const meera = heroes.find((b) => !/arjun|brawler/.test(b.model_url));
   const arjun = heroes.find((b) => /arjun/.test(b.model_url));
   // Simulated rivals are named from simulatedOpponent.ts FIRST_NAMES: match the hero to the name
   // (men's names first, since "ishaan" contains "isha"); neutral names fall back to the hash.

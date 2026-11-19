@@ -13,13 +13,14 @@ Writes assets/video/<hero>_plate.jpg and prints where the painted hero stood, as
 """
 import json
 import os
+import sys
 
 import cv2
 import mediapipe as mp
 import numpy as np
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'assets', 'video')
-HEROES = ['arjun', 'meera']
+HEROES = sys.argv[1:] or ['arjun', 'meera', 'veera']   # or just the ones named: python scripts/hero_plates.py veera
 
 
 def person_mask(img):
@@ -47,6 +48,10 @@ def fill(img, mask):
     return np.clip(img * (1 - soft) + up * soft, 0, 255).astype(np.uint8)
 
 
+# Parts of a hero the person segmentation misses, as boxes in fractions of the frame (x0, y0, x1, y1): Veera's
+# iron arm and the teal glow rising off it.
+EXTRA = {'veera': [(0.125, 0.15, 0.37, 0.62)]}
+
 out = {}
 for hero in HEROES:
     img = cv2.imread(os.path.join(ROOT, f'{hero}_still.jpg'))
@@ -56,6 +61,8 @@ for hero in HEROES:
     top, bottom = ys.min(), ys.max()
     feet = xs[ys > bottom - (bottom - top) * 0.06]
     grown = cv2.dilate(m, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (41, 41)))
+    for x0, y0, x1, y1 in EXTRA.get(hero, []):
+        grown[int(y0 * h):int(y1 * h), int(x0 * w):int(x1 * w)] = 1
     plate = fill(img, grown)
     cv2.imwrite(os.path.join(ROOT, f'{hero}_plate.jpg'), plate, [cv2.IMWRITE_JPEG_QUALITY, 90])
     if os.environ.get('PLATE_MASKS'):  # a directory to save the masks in, for checking

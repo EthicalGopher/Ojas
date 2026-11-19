@@ -111,7 +111,8 @@ export function materialRuntimeJs(): string {
     'float ojasK = ojasTop > 0.0 ? ojasLit / ojasTop : 1.0;',
     'outgoingLight = diffuseColor.rgb * (ojasK > 0.42 ? 1.0 : (ojasK > 0.12 ? 0.82 : 0.64));',
   ].join('\\n');
-  function isCloth(m) { return /top|pants|shoes|kit|outfit|sport|shirt|jacket|cloth|short|hood/i.test(m.name || ''); }
+  // (not gear_*: those are painted textures, Arjun's and Veera's, that a near-white sheen greys out)
+  function isCloth(m) { return /top|pants|shoes|kit|outfit|sport|shirt|jacket|cloth|short|hood/i.test(m.name || '') && !/^gear_/.test(m.name || ''); }
   // Skin on a physical material: soft sheen, a faint clearcoat and the wrap lighting (skinLighting)
   function skinUp(p) {
     p.sheen = 0.22;
@@ -222,9 +223,9 @@ export function materialRuntimeJs(): string {
       if (o.isSkinnedMesh && !Array.isArray(o.material) && o.material.userData.outline && !o.userData.outlined) inked.push(o);
     });
     inked.forEach(function (o) {
-      var ink = new THREE.MeshBasicMaterial({ color: 0x141418, side: THREE.BackSide });
+      var ink = new THREE.MeshBasicMaterial({ color: o.material.userData.outlineColor || 0x141418, side: THREE.BackSide });
       // hands get a fine line: a hull as thick as a finger folds over itself (slivers along the fingers)
-      var width = /^toon_hand/.test(o.material.name) ? OUTLINE_HAND : OUTLINE;
+      var width = o.material.userData.outlineWidth || (/^toon_hand/.test(o.material.name) ? OUTLINE_HAND : OUTLINE);
       ink.onBeforeCompile = function (sh) {
         sh.vertexShader = sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\\n transformed += normal * ' + width.toFixed(4) + ';');
       };
@@ -547,6 +548,108 @@ ${FACE_SOURCE}
   }
 
   // Linear RGB factors, may exceed 1: a face item brings the body's skin to its own tone.
+  // ---------- Paint: the painted animated-film look (scripts/blender/render_arcane.py in the viewer) ----------
+  // For a character whose look has "paint" (Veera): the light from the strongest directional light is painted
+  // into bands (cool violet shadow, a warm red-orange edge where skin turns away, a light mid-tone, bright
+  // warm light in the key's colour), point lights (her arm's glow) spill their colour, coloured fresnel rims
+  // (warm one side, cool the other) and a small crisp highlight are added, and a thin warm-dark line is drawn.
+  function paintGlsl(kind, p) {
+    function v3(c) { return 'vec3(' + c.map(function (x) { return x.toFixed(3); }).join(',') + ')'; }
+    var term = kind === 'skin' ? [0.88, 0.46, 0.36] : [0.62, 0.52, 0.58];
+    var spec = { skin: 0.12, hair: 0.22, metal: 0.38, cloth: 0.04 }[kind];
+    return [
+      'float pTop = 0.0; vec3 pKey = vec3(1.0); vec3 pKeyDir = vec3(0.0, 1.0, 0.0);',
+      '#if NUM_DIR_LIGHTS > 0',
+      'for (int i = 0; i < NUM_DIR_LIGHTS; i++) {',
+      '  float li = dot(directionalLights[i].color, vec3(0.299, 0.587, 0.114));',
+      '  if (li > pTop) { pTop = li; pKey = directionalLights[i].color / max(li, 0.0001); pKeyDir = directionalLights[i].direction; }',
+      '}',
+      '#endif',
+      'float pK = pTop > 0.0 ? max(dot(normal, pKeyDir), 0.0) : 1.0;',
+      'vec3 pBand = mix(' + v3(p.shadow || [0.36, 0.31, 0.5]) + ', ' + v3(term) + ', smoothstep(0.02, 0.12, pK));',
+      'pBand = mix(pBand, vec3(0.95), smoothstep(0.14, 0.32, pK));',
+      'pBand = mix(pBand, ' + v3(p.lit || [1.16, 1.09, 0.99]) + ' * mix(vec3(1.0), pKey, 0.5), smoothstep(0.45, 0.6, pK));',
+      'vec3 pCol = diffuseColor.rgb * pBand;',
+      '#if NUM_POINT_LIGHTS > 0',
+      'for (int i = 0; i < NUM_POINT_LIGHTS; i++) {',
+      '  vec3 lv = pointLights[i].position + vViewPosition;',
+      '  float d = length(lv);',
+      '  float at = 1.0 / (1.0 + d * d * 30.0);',
+      '  if (pointLights[i].distance > 0.0) at *= pow(clamp(1.0 - d / pointLights[i].distance, 0.0, 1.0), 2.0);',
+      '  pCol += (0.3 + diffuseColor.rgb) * pointLights[i].color * at * max(dot(normal, lv / max(d, 0.0001)), 0.0) * 0.5;',
+      '}',
+      '#endif',
+      'vec3 pV = normalize(vViewPosition);',
+      'float pFr = 1.0 - max(dot(normal, pV), 0.0);',
+      'vec3 pRim = mix(' + v3(p.rimB || [0.45, 0.55, 1.0]) + ', ' + v3(p.rimA || [1.0, 0.6, 0.3]) + ', smoothstep(-0.3, 0.3, normal.x));',
+      'pCol += pRim * smoothstep(0.58, 0.78, pFr) * ' + (p.rims || 0.6).toFixed(3) + ' * (0.45 + 0.55 * diffuseColor.rgb);',
+      'pCol += pKey * ' + spec.toFixed(3) + ' * smoothstep(0.94, 0.97, max(dot(normal, normalize(pKeyDir + pV)), 0.0));',
+      'outgoingLight = pCol + totalEmissiveRadiance;',
+    ].join('\\n');
+  }
+
+  // (cur: the loaded character)
+  function applyPaint(p, cur) {
+    if (!cur || cur.vrm) return;
+    eachMaterial(cur.root, function (m) {
+      if (!m || m.userData.painted || m.userData.outlineInk || m.userData.hairSoft || !m.isMeshStandardMaterial) return;
+      var n = (m.name || '').toLowerCase();
+      if (/eye|cornea|lash|teeth|tongue/.test(n)) return;
+      m.userData.painted = true;
+      if (/^gear_glow/.test(n)) {   // the chemtech: bright and untouched by tone mapping, so it reads as light
+        m.emissive.set(p.glowColor || '#36F1CD');
+        m.emissiveIntensity = 2.4;
+        m.toneMapped = false;
+        m.needsUpdate = true;
+        return;
+      }
+      var kind = /^skin/.test(n) ? 'skin' : /^hair/.test(n) ? 'hair' : /iron|metal|copper|brass/.test(n) ? 'metal' : 'cloth';
+      var glsl = paintGlsl(kind, p);
+      var prev = m.onBeforeCompile;
+      m.onBeforeCompile = function (sh, r) {
+        if (prev) prev(sh, r);
+        sh.fragmentShader = sh.fragmentShader.replace('#include <output_fragment>', glsl + '\\n#include <output_fragment>');
+      };
+      m.customProgramCacheKey = function () { return 'ojas-paint-' + kind; };
+      m.toneMapped = false;
+      m.userData.outline = true;
+      m.userData.outlineWidth = p.outline || 0.0028;
+      m.userData.outlineColor = 0x1c100e;
+      m.needsUpdate = true;
+    });
+    // the glow lights what is near it: a point light half way down the glowing forearm
+    if (p.glowBone && !cur.root.userData.paintGlow) {
+      var bone = cur.root.getObjectByName(p.glowBone);
+      var hand = p.glowTo ? cur.root.getObjectByName(p.glowTo) : null;
+      if (bone) {
+        cur.root.updateMatrixWorld(true);
+        var light = new THREE.PointLight(new THREE.Color(p.glowColor || '#36F1CD'), p.glowIntensity || 2.6, 0.9, 2);
+        var at = new THREE.Vector3().setFromMatrixPosition(bone.matrixWorld);
+        if (hand) at.lerp(new THREE.Vector3().setFromMatrixPosition(hand.matrixWorld), 0.55);
+        light.position.copy(bone.worldToLocal(at));
+        bone.add(light);
+        // no bloom pass here: a soft additive halo round the glow stands in for it
+        var c = document.createElement('canvas');
+        c.width = c.height = 64;
+        var g = c.getContext('2d'), grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+        grad.addColorStop(0, 'rgba(255,255,255,0.9)');
+        grad.addColorStop(0.25, 'rgba(255,255,255,0.35)');
+        grad.addColorStop(1, 'rgba(255,255,255,0)');
+        g.fillStyle = grad;
+        g.fillRect(0, 0, 64, 64);
+        var halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), color: new THREE.Color(p.glowColor || '#36F1CD'),
+          blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.55, toneMapped: false }));
+        var s0 = new THREE.Vector3(); bone.getWorldScale(s0);
+        halo.scale.setScalar((p.haloSize || 0.22) / (s0.x || 1));
+        halo.position.copy(light.position);
+        halo.userData.outlined = true;
+        bone.add(halo);
+        cur.root.userData.paintGlow = light;
+      }
+    }
+    upgradeMaterials(cur.root);   // draws the outline hulls for the newly painted materials
+  }
+
   function applyTint(map, root) {
     eachMaterial(root || current.root, function (m) {
       Object.keys(map).forEach(function (part) {
@@ -820,6 +923,7 @@ ${FACE_SOURCE}
       if (cfg.recolor) applyRecolor(cfg.recolor);
       if (cfg.tint) applyTint(cfg.tint);
       if (cfg.dye) applyDye(cfg.dye);
+      if (cfg.paint) applyPaint(cfg.paint, current);
       if (cfg.builtin) addBuiltinAccessory(cfg);
       else if (cfg.model_url && CLOTHING[item.category]) addSkinnedOutfit(cfg, token);
       else if (cfg.model_url) addAttachedAccessory(cfg, token);

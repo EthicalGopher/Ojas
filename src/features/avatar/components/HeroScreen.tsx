@@ -66,6 +66,8 @@ export const STORY_VIDEOS: Record<string, {
   /** The film in the web assets, for playing it in a WebView on emulators. */
   webPath: string;
   moves: Record<string, { from: number; to: number }>;
+  /** A short part of the film for the lobby's silent loop (default: the whole film). */
+  loop?: { source: number; webPath: string };
 }> = {
   starter_ojas: {
     source: IS_EMULATOR ? require('../../../../assets/video/arjun_story_av1.mp4') : require('../../../../assets/video/arjun_story.mp4'),
@@ -107,6 +109,38 @@ export const STORY_VIDEOS: Record<string, {
     webPath: 'video/meera_story.mp4',
     moves: { hero_move1: { from: 0, to: 2.95 }, hero_move2: { from: 5.4, to: 8 } },
   },
+  // Veera: the full story cut (scripts/veera_story_cut.py --app): six shots between black story cards that carry
+  // its captions, ending on the fight's last shot held still from 54.4 s (the title card comes in over it).
+  hero_veera: {
+    source: IS_EMULATOR ? require('../../../../assets/video/veera_story_av1.mp4') : require('../../../../assets/video/veera_story.mp4'),
+    captions: [],
+    titleAt: 54.8,
+    still: require('../../../../assets/video/veera_still.jpg'),
+    plate: require('../../../../assets/video/veera_plate.jpg'),
+    // The film ends with her at the far left (hero_plates.py: x 0.1555, foot 0.9991, height 0.9769), behind the
+    // page's stats panel, so the 3D hero stands in the middle, over the beaten fighter, until a centred final
+    // shot (the prompts' clip 7) replaces the ending.
+    spot: { x: 0.56, foot: 0.97, height: 0.82, yaw: 0 },
+    // The ring's light on the model: warm lamps overhead and a little to her left, dusty bounce from the canvas.
+    look: {
+      sun: { color: '#ffc58a', intensity: 2.1, from: [1.6, 2.4, 1.2] },
+      sky: '#8a7c6c',
+      ground: '#b29a78',
+      ambient: 0.55,
+      rims: 0.25,
+      exposure: 0.85,
+      reflections: 0.35,
+      tint: {},
+      clothRelief: 1,
+    },
+    webPath: 'video/veera_story.mp4',
+    // the workshop's flex of the iron fingers, the knockout and her standing over him, the heavy-bag combo
+    moves: { hero_move1: { from: 15.8, to: 20.3 }, hero_move2: { from: 49.5, to: 57.9 }, squat: { from: 31.2, to: 38.0 } },
+    loop: {
+      source: IS_EMULATOR ? require('../../../../assets/video/veera_loop_av1.mp4') : require('../../../../assets/video/veera_loop.mp4'),
+      webPath: 'video/veera_loop.mp4',
+    },
+  },
 };
 
 // Heroes without a film stand in a rendered world instead (scripts/blender/render_gym.py): a 16:9 plate for
@@ -119,6 +153,8 @@ export const HERO_BACKDROPS: Record<string, {
   lobbySpot: { x: number; foot: number; height: number; yaw: number };
   /** the loop they stand in */
   base: string;
+  /** the stage's light on the 3D hero (default: the viewer's studio light) */
+  look?: FilmLook;
 }> = {
   [DEFAULT_AVATAR_ID]: {
     plate: require('../../../../assets/video/hero_gym.jpg'),
@@ -312,7 +348,7 @@ export const HeroScreen: React.FC<HeroScreenProps> = ({ hero, status, catalog, c
   const still = useRef(new Animated.Value(1)).current;
   const placement = useMemo<HeroPlacement | null>(
     () => (film && box ? { ...coverSpot(film.spot, box.w, box.h), yaw: film.spot.yaw, base: 'stand', look: film.look }
-      : backdrop && box ? { ...coverSpot(backdrop.spot, box.w, box.h), yaw: backdrop.spot.yaw, base: backdrop.base } : null),
+      : backdrop && box ? { ...coverSpot(backdrop.spot, box.w, box.h), yaw: backdrop.spot.yaw, base: backdrop.base, look: backdrop.look } : null),
     [film, backdrop, box],
   );
 
@@ -359,12 +395,14 @@ export const HeroScreen: React.FC<HeroScreenProps> = ({ hero, status, catalog, c
 
   // a film carries its own sound: the music dips while it plays, and a film that never starts moves on
   const filmPlaying = phase === 'story' && !!film;
+  // (only for a film that never starts: once it plays, its own end moves on. A fixed 15 s cut Veera's 58 s film.)
+  const filmWatchdog = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (!filmPlaying) return;
     juice.music.duck(true);
-    const watchdog = setTimeout(finishStory, 15000);
+    filmWatchdog.current = setTimeout(finishStory, 15000);
     return () => {
-      clearTimeout(watchdog);
+      if (filmWatchdog.current) clearTimeout(filmWatchdog.current);
       juice.music.duck(false);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -537,7 +575,10 @@ export const HeroScreen: React.FC<HeroScreenProps> = ({ hero, status, catalog, c
             <StoryVideo
               key={storyKey}
               film={film}
-              onStart={() => fade(black, 0, 500).start()}
+              onStart={() => {
+                if (filmWatchdog.current) clearTimeout(filmWatchdog.current);
+                fade(black, 0, 500).start();
+              }}
               onEnd={finishStory}
               title={
                 <>

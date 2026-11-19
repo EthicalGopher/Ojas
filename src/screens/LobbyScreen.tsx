@@ -78,7 +78,7 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({ isGuest, onPlay, onOpe
   // a hero without a film stands in his rendered world (the default hero's gym)
   const backdrop = film ? null : HERO_BACKDROPS[look.model.id] ?? null;
   const placement = useMemo(
-    () => (backdrop ? { ...coverSpot(backdrop.lobbySpot, width, height), yaw: backdrop.lobbySpot.yaw, base: backdrop.base } : null),
+    () => (backdrop ? { ...coverSpot(backdrop.lobbySpot, width, height), yaw: backdrop.lobbySpot.yaw, base: backdrop.base, look: backdrop.look } : null),
     [backdrop, width, height],
   );
 
@@ -153,7 +153,7 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({ isGuest, onPlay, onOpe
         onTouchStart={() => juice.unlock()}
       >
         {/* a hero with a film plays it on repeat; no 3D to load */}
-        {film ? <LoopVideo source={film.source} poster={film.still} webPath={film.webPath} /> : backdrop ? (
+        {film ? <LoopVideo source={(film.loop ?? film).source} poster={film.still} webPath={(film.loop ?? film).webPath} /> : backdrop ? (
           <>
             <Image source={backdrop.lobby} style={[StyleSheet.absoluteFill, { width: '100%', height: '100%' }]} resizeMode="cover" />
             <AvatarViewer3D

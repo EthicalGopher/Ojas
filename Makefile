@@ -134,6 +134,17 @@ fc1: ## Build the base character (Meera) with her own clips from the FC1 downloa
 	$(BLENDER) -b -P scripts/blender/author_hero_clips.py -- $(CLIPS_SRC) meera $(CLIPS_DIR)/clips_meera.glb
 	$(BLENDER) -b -P scripts/blender/build_fc1.py -- $(FC1_SRC) $(CLIPS_DIR)/clips_meera.glb android/app/src/main/assets/web/avatars/ojas_fc1.glb $(MEERA_MIXAMO)
 
+BRAWLER_MIXAMO = $(MIXAMO_SHARED) hero_idle=$(MIXAMO)/StandingIdle.fbx hero_move1=$(MIXAMO)/Flex.fbx
+
+brawler: ## Build the brawler (FC1 body, painted look, own hair/clothes/armour: scripts/blender/brawler_shape.py) into the app assets; needs an APK rebuild
+	FC1_BRAWLER=1 $(BLENDER) -b -P scripts/blender/build_fc1.py -- $(FC1_SRC) $(CLIPS_DIR)/clips_meera.glb $(AVATARS)/brawler.glb $(BRAWLER_MIXAMO)
+
+brawler-art: ## Render Veera's card, stand art, shop thumbnail and VS scene from brawler.glb; needs an APK rebuild
+	$(BLENDER) -b -P scripts/blender/render_hero_card.py -- $(AVATARS)/brawler.glb hero_move1 40 $(AVATARS)/brawler_card.png --yaw 20
+	$(BLENDER) -b -P scripts/blender/render_hero_card.py -- $(AVATARS)/brawler.glb hero_idle 1 $(AVATARS)/brawler_stand.png --yaw 0
+	magick $(AVATARS)/brawler_card.png -crop 720x840+0+40 +repage -resize 192x224 $(AVATARS)/brawler.png
+	$(BLENDER) -b -P scripts/blender/render_arcane.py -- $(AVATARS)/brawler.glb $(AVATARS)/brawler_vs.jpg --clip hero_idle --yaw 15 --size 1200x1080 --mood golden
+
 ARJUN_SRC ?= scripts/blender/.cache/survival_character
 
 arjun: ## Build Arjun with his own clips from the Survival Character FBX + textures into the app assets; needs an APK rebuild
