@@ -104,7 +104,8 @@ export interface AvatarModel {
   unlock_level?: number | null;
 }
 
-/** The free default hero every player starts as: the yellow athlete (scripts/blender/build_hero.py),
+/** The free default hero every player starts as: the masked athlete in a yellow costume and gym kit, painted
+ * like Veera (scripts/blender/hero_suit.py),
  * shown under the player's own username. Arjun and Meera are bought with coins. */
 export const DEFAULT_AVATAR_ID = 'starter_hero';
 export const HERO_BODY_URL = 'local://avatars/hero.glb';
@@ -154,6 +155,8 @@ export const BUNDLED_AVATARS: AvatarModel[] = [
     model_format: 'glb',
     config: {
       nameFromUsername: true,
+      // Veera's painted film look in the 3D viewer (no glow: he has no chemtech)
+      look: { paint: {} },
       card: 'local://avatars/hero_card.png',
       hero: {
         title: 'The Everyday Athlete',
@@ -175,7 +178,8 @@ export const BUNDLED_AVATARS: AvatarModel[] = [
         story: 'You. Every rep you train makes this athlete stronger, and every coin you earn can recruit a new hero.',
         moves: [
           { clip: 'squat', name: 'Power Squat', text: 'Deep, steady reps: the base of every athlete.', icon: 'dumbbell' },
-          { clip: 'cheer', name: 'Thumbs Up', text: 'Another session done.', icon: 'flag' },
+          { clip: 'hero_move2', name: 'Champion', text: 'Arms wide: the workout is won.', icon: 'flag' },
+          { clip: 'cheer', name: 'Cheer', text: 'Another session done.', icon: 'flag' },
         ],
         effect: { name: 'Golden Glow', color: '#F5C842', text: 'A golden ring that brightens with every move.' },
       },

@@ -703,6 +703,10 @@ LOOK = {
     'hair_buzz': ((1, 1, 1), 160, 0.22, 0.97, 0.0, 0.0, 0.0),
 }
 RUST = '#7A3B1F'
+# materials baked with smooth tones, occlusion and light (no hard paint bands): the default hero's suit and kit
+# (hero_suit.py), where hard bands broke into blotches over his big muscles and read as torn cloth
+SOFT = set()
+BAKE_SAMPLES = 24      # Cycles samples for bake(); the hero raises it (cleaner occlusion)
 
 KEY = Vector((0.35, -0.45, 0.82)).normalized()
 
@@ -782,7 +786,7 @@ def _bake_material(name, target):
     links.new(mp.outputs['Vector'], noise.inputs['Vector'])
     tones = _ramp(nodes, links, noise.outputs['Fac'], [
         (0.0, _shift(base, 1 - spread * 1.3, -1)), (0.38, base), (0.58, _shift(base, 1 + spread, 1)),
-        (0.74, _shift(base, 1 + spread * 1.8, 1))], constant=True)
+        (0.74, _shift(base, 1 + spread * 1.8, 1))], constant=name not in SOFT)
     col = tones.outputs['Color']
     if rust:
         # rust and grime in blotches
@@ -887,14 +891,14 @@ def _bake_material(name, target):
     ao.samples = 16
     ao.inputs['Distance'].default_value = 0.06
     shade = _ramp(nodes, links, ao.outputs['AO'], [(0.0, (0.5, 0.52, 0.6)), (0.55, (0.72, 0.74, 0.8)),
-                                                  (0.9, (1, 1, 1))], constant=True)
+                                                  (0.9, (1, 1, 1))], constant=name not in SOFT)
     col = _mul(nodes, links, col, shade.outputs['Color'])
     dot = nodes.new('ShaderNodeVectorMath')
     dot.operation = 'DOT_PRODUCT'
     dot.inputs[1].default_value = KEY
     links.new(geo.outputs['Normal'], dot.inputs[0])
     light = _ramp(nodes, links, dot.outputs['Value'], [(0.0, (0.86, 0.87, 0.93)), (0.55, (1, 1, 1)),
-                                                      (0.8, (1.1, 1.07, 1.0))], constant=True)
+                                                      (0.8, (1.1, 1.07, 1.0))], constant=name not in SOFT)
     # the ramp's factor is clamped to 0..1: map the dot product from -1..1
     mr = nodes.new('ShaderNodeMapRange')
     mr.inputs['From Min'].default_value = -1.0
@@ -967,7 +971,7 @@ def bake(o, size):
     bpy.ops.object.select_all(action='DESELECT')
     bpy.context.view_layer.objects.active = o
     o.select_set(True)
-    scene.cycles.samples = 24
+    scene.cycles.samples = BAKE_SAMPLES
     scene.render.bake.margin = 6
     bpy.ops.object.bake(type='EMIT')
     img.pack()

@@ -1,6 +1,12 @@
 """The default hero's world: a gym, drawn in his comic look (flat tones, black ink lines), as a 16:9 plate.
 
     blender -b -P scripts/blender/render_gym.py -- <out.jpg> [--size 1920x1080] [--spot x,foot,height] [--hero hero.glb]
+        [--look comic|painted]
+
+--look painted: the same gym painted like Veera's renders (render_arcane.py), for the hero in his painted costume
+(hero_suit.py): brush-toned colours under real light (a warm key, a cool violet fill, a warm stage shaft through
+haze), glowing windows and lamps with bloom, a soft background (depth of field), a Kuwahara brush filter over the
+picture, no ink lines.
 
 --spot: where a 1.70 m figure standing on the platform lands in the picture (fractions: feet centre across,
 feet line down, head-to-feet), the same numbers the app's placement uses; the camera's distance sets the
@@ -25,6 +31,7 @@ argv = sys.argv[sys.argv.index('--') + 1:]
 OUT = argv[0]
 opts = dict(zip(argv[1::2], argv[2::2]))
 W, H = (int(x) for x in opts.get('--size', '1920x1080').split('x'))
+PAINTED = opts.get('--look') == 'painted'
 
 bpy.ops.wm.read_factory_settings(use_empty=True)
 sc = bpy.context.scene
@@ -50,6 +57,42 @@ def toon(name, hexcol, tones=(0.62, 0.82, 1.0), emit=False):
         if n.type != 'OUTPUT_MATERIAL':
             nt.nodes.remove(n)
     out = nt.nodes['Material Output']
+    if PAINTED:
+        # lit for real; the colour (B, which tiled() may drive with a pattern) times brush-stroke tones (A)
+        mul = nt.nodes.new('ShaderNodeMix')
+        mul.data_type = 'RGBA'
+        mul.blend_type = 'MULTIPLY'
+        mul.inputs['Factor'].default_value = 1.0
+        # the room recedes into dusk: walls, floor and mirrors darker than the comic plate's
+        dim = 0.42 if name.startswith(('wall', 'mirror', 'floor', 'streak')) else 1.0
+        mul.inputs['B'].default_value = tuple(c * dim for c in srgb(hexcol)[:3]) + (1.0,)
+        coord = nt.nodes.new('ShaderNodeTexCoord')
+        noise = nt.nodes.new('ShaderNodeTexNoise')
+        noise.inputs['Scale'].default_value = 2.5
+        noise.inputs['Detail'].default_value = 3.0
+        noise.inputs['Distortion'].default_value = 0.8
+        nt.links.new(coord.outputs['Object'], noise.inputs['Vector'])
+        ramp = nt.nodes.new('ShaderNodeValToRGB')
+        ramp.color_ramp.interpolation = 'CONSTANT'
+        e = ramp.color_ramp.elements
+        e[0].position, e[0].color = 0.0, (0.84, 0.84, 0.9, 1)
+        e[1].position, e[1].color = 0.42, (1, 1, 1, 1)
+        e.new(0.62).color = (1.1, 1.07, 1.0, 1)
+        nt.links.new(noise.outputs['Fac'], ramp.inputs['Fac'])
+        nt.links.new(ramp.outputs['Color'], mul.inputs['A'])
+        if emit:
+            em = nt.nodes.new('ShaderNodeEmission')
+            em.inputs['Strength'].default_value = 5.0
+            nt.links.new(mul.outputs['Result'], em.inputs['Color'])
+            nt.links.new(em.outputs['Emission'], out.inputs['Surface'])
+        else:
+            b = nt.nodes.new('ShaderNodeBsdfPrincipled')
+            b.inputs['Roughness'].default_value = 0.25 if name == 'mirror' else (0.45 if 'steel' in name else 0.75)
+            b.inputs['Metallic'].default_value = 0.7 if 'steel' in name else 0.0
+            nt.links.new(mul.outputs['Result'], b.inputs['Base Color'])
+            nt.links.new(b.outputs['BSDF'], out.inputs['Surface'])
+        MATS[name] = m
+        return m
     em = nt.nodes.new('ShaderNodeEmission')
     if emit:
         em.inputs['Color'].default_value = srgb(hexcol)
@@ -85,9 +128,10 @@ def tiled(name, a, b, scale, kind='brick'):
     nt = m.node_tree
     mul = next(n for n in nt.nodes if n.type == 'MIX')
     tex = nt.nodes.new('ShaderNodeTexBrick')
-    tex.inputs['Color1'].default_value = srgb(a)
-    tex.inputs['Color2'].default_value = srgb(a)
-    tex.inputs['Mortar'].default_value = srgb(b)
+    dim = 0.42 if PAINTED and name.startswith(('wall', 'floor')) else 1.0
+    tex.inputs['Color1'].default_value = tuple(c * dim for c in srgb(a)[:3]) + (1.0,)
+    tex.inputs['Color2'].default_value = tex.inputs['Color1'].default_value
+    tex.inputs['Mortar'].default_value = tuple(c * dim for c in srgb(b)[:3]) + (1.0,)
     tex.inputs['Scale'].default_value = scale
     tex.inputs['Mortar Size'].default_value = 0.015 if kind == 'brick' else 0.008
     if kind == 'tile':
@@ -272,24 +316,79 @@ if opts.get('--hero'):  # the hero on the spot, in his thumbs-up (a check of sca
             t.mute = True
         rig.animation_data.action = bpy.data.actions.get('hero_idle')
     for o in bpy.data.objects:
-        if o.type == 'MESH' and o.parent == rig:
+        if o.type == 'MESH' and o.parent == rig and not PAINTED:
             for slot in o.material_slots:
                 slot.material = toon('hero_yellow', '#F2CF5B')
 
 # ---------------------------------------------------------------- light, ink, camera
+if PAINTED:
+    def plight(name, kind, loc, aim, energy, color, size=1.0, spot=None, shadow=True, volume=0.0):
+        ld = bpy.data.lights.new(name, kind)
+        ld.energy, ld.color, ld.use_shadow = energy, color, shadow
+        ld.volume_factor = volume
+        if kind == 'AREA':
+            ld.size = size
+        else:
+            ld.shadow_soft_size = size
+        if spot:
+            ld.spot_size, ld.spot_blend = math.radians(spot), 0.35
+        o = bpy.data.objects.new(name, ld)
+        sc.collection.objects.link(o)
+        o.location = loc
+        o.rotation_euler = (Vector(aim) - Vector(loc)).to_track_quat('-Z', 'Y').to_euler()
+        return o
+    # warm sun-like key from the front left, cool violet fill from the right, a warm stage shaft from above
+    # onto the platform (the only light in the haze), the ceiling lamps' warm spill, a gold glow behind
+    plight('key', 'AREA', (-5.5, -1.0, 3.8), (0, 0.15, 1.0), 2600, (1.0, 0.72, 0.45), size=2.0)
+    plight('fill', 'AREA', (5.0, -2.0, 2.5), (0, 1.5, 1.0), 260, (0.45, 0.48, 1.0), size=4.0, shadow=False)
+    plight('shaft', 'SPOT', (-1.2, 2.2, 6.4), (0, 0.15, 0), 8000, (1.0, 0.76, 0.46), size=0.3, spot=30,
+           volume=1.0)
+    for i, x in enumerate((-4.0, 0.0, 4.0)):
+        plight(f'lamp_spill_{i}', 'AREA', (x, 3.0, 5.5), (x, 3.0, 0), 120, (1.0, 0.82, 0.6), size=2.4,
+               shadow=False)
+    plight('rim', 'AREA', (0, 5.0, 2.2), (0, 0.15, 1.2), 900, (1.0, 0.6, 0.25), size=3.0, shadow=False)
+    world = bpy.data.worlds.new('w')
+    sc.world = world
+    world.use_nodes = True
+    wt = world.node_tree
+    wt.nodes['Background'].inputs['Color'].default_value = (0.10, 0.08, 0.18, 1)
+    wt.nodes['Background'].inputs['Strength'].default_value = 0.12
+    vol = wt.nodes.new('ShaderNodeVolumePrincipled')
+    vol.inputs['Density'].default_value = 0.014
+    vol.inputs['Color'].default_value = (1.0, 0.85, 0.7, 1)
+    wt.links.new(vol.outputs['Volume'], wt.nodes['World Output'].inputs['Volume'])
+    engines = [e.identifier for e in bpy.types.RenderSettings.bl_rna.properties['engine'].enum_items]
+    sc.render.engine = 'BLENDER_EEVEE_NEXT' if 'BLENDER_EEVEE_NEXT' in engines else 'BLENDER_EEVEE'
+    ee = sc.eevee
+    ee.taa_render_samples = 64
+    for k, v in (('use_shadows', True), ('volumetric_tile_size', '4'), ('volumetric_samples', 64),
+                 ('volumetric_end', 40.0), ('use_volumetric_shadows', True), ('volumetric_shadow_samples', 32),
+                 ('use_raytracing', True)):
+        if hasattr(ee, k):
+            try:
+                setattr(ee, k, v)
+            except TypeError:
+                pass
+    sc.view_settings.view_transform = 'AgX'
+    try:
+        sc.view_settings.look = 'AgX - Punchy'
+    except TypeError:
+        pass
 sun = bpy.data.lights.new('key', 'SUN')
 sun.energy = 3.0
 so = bpy.data.objects.new('key', sun)
 sc.collection.objects.link(so)
 so.rotation_euler = (math.radians(50), 0, math.radians(-25))
-world = bpy.data.worlds.new('w')
-sc.world = world
-world.use_nodes = True
-world.node_tree.nodes['Background'].inputs['Color'].default_value = (0.05, 0.04, 0.08, 1)
-
-sc.render.engine = 'BLENDER_EEVEE'
-sc.view_settings.view_transform = 'Standard'
-sc.render.use_freestyle = True
+if PAINTED:
+    sun.energy = 0.0
+else:
+    world = bpy.data.worlds.new('w')
+    sc.world = world
+    world.use_nodes = True
+    world.node_tree.nodes['Background'].inputs['Color'].default_value = (0.05, 0.04, 0.08, 1)
+    sc.render.engine = 'BLENDER_EEVEE'
+    sc.view_settings.view_transform = 'Standard'
+sc.render.use_freestyle = not PAINTED
 sc.render.line_thickness_mode = 'ABSOLUTE'
 sc.render.line_thickness = 1.6 * W / 1920
 fs = bpy.context.view_layer.freestyle_settings
@@ -325,6 +424,39 @@ aspect = max(W, H)
 cam.shift_x = (f.x - sx) * W / aspect
 cam.shift_y = (f.y - (1 - sfoot)) * H / aspect
 bpy.context.view_layer.update()
+if PAINTED:
+    # the room behind goes soft; then the whole picture is brushed (Kuwahara) and the lights bloom
+    cam.dof.use_dof = True
+    cam.dof.focus_distance = (FEET.lerp(HEAD, 0.5) - co.location).length
+    cam.dof.aperture_fstop = 1.0
+    tree = bpy.data.node_groups.new('comp', 'CompositorNodeTree')
+    sc.compositing_node_group = tree
+    rl = tree.nodes.new('CompositorNodeRLayers')
+    kw = tree.nodes.new('CompositorNodeKuwahara')
+    kw.inputs['Size'].default_value = 7.0 * W / 1920
+    gl = tree.nodes.new('CompositorNodeGlare')
+    for k, v in (('Type', 'Bloom'), ('Quality', 'High'), ('Threshold', 0.85), ('Strength', 0.7), ('Size', 0.6)):
+        if k in gl.inputs:
+            try:
+                gl.inputs[k].default_value = v
+            except TypeError:
+                pass
+    out_n = tree.nodes.new('NodeGroupOutput')
+    tree.interface.new_socket('Image', in_out='OUTPUT', socket_type='NodeSocketColor')
+    tree.links.new(rl.outputs['Image'], kw.inputs['Image'])
+    tree.links.new(kw.outputs['Image'], gl.inputs['Image'])
+    last = gl.outputs['Image']
+    try:   # contrast: darker darks, brighter lights (as render_arcane.py)
+        cv = tree.nodes.new('CompositorNodeCurveRGB')
+        c = cv.mapping.curves[3]
+        c.points.new(0.22, 0.12)
+        c.points.new(0.72, 0.85)
+        cv.mapping.update()
+        tree.links.new(last, next(x for x in cv.inputs if x.name == 'Image'))
+        last = next(x for x in cv.outputs if x.name == 'Image')
+    except (RuntimeError, KeyError, StopIteration, AttributeError) as e:
+        print('CURVE skipped', e)
+    tree.links.new(last, out_n.inputs[0])
 sc.render.image_settings.file_format = 'JPEG'
 sc.render.image_settings.quality = 92
 sc.render.filepath = OUT

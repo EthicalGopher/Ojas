@@ -573,12 +573,22 @@ if HERO:
         if os.environ.get('HERO_STOP_AFTER_WRAP'):
             sys.exit(0)
     body, head = hero_body.sculpt_body(fc1_body, rig, short, os.path.join(base, 'male_body_lo.ply'))
-    hero_shape.make_kit(body, rig, short, body_shell)
-    # no skin is culled under the shorts: culled skin showed as holes wherever the cloth lifted off the body
+    # no skin is culled under the kit: culled skin showed as holes wherever the cloth lifted off the body
     # (in squats); the cloth follows the skin's bones closely instead
-    hero_shape.finish_materials([o for o in bpy.data.objects if o.type == 'MESH'], short)
-    hero_body.dress_skin(body, head, short, os.path.join(base, 'male_body_hi.ply'),
-                         os.path.join(base, 'maps'))  # the maps for inspection; the GLB embeds them
+    if os.environ.get('HERO_TOON') == '1':   # the old flat toon figure in grey shorts
+        hero_shape.make_kit(body, rig, short, body_shell)
+        hero_shape.finish_materials([o for o in bpy.data.objects if o.type == 'MESH'], short)
+        hero_body.dress_skin(body, head, short, os.path.join(base, 'male_body_hi.ply'),
+                             os.path.join(base, 'maps'))  # the maps for inspection; the GLB embeds them
+    else:   # Veera's painted style: yellow costume and gym kit (hero_suit.py)
+        import hero_suit
+        hero_suit.dress(body, head, rig, short,
+                        {'body_shell': body_shell, 'smoothed_body': smoothed_body, 'edge_segments': edge_segments,
+                         'edge_z': edge_z, 'cull': cull_covered_skin}, os.path.join(base, 'male_body_hi.ply'), os.path.join(base, 'suit_maps'))
+    if os.environ.get('HERO_BLEND'):  # the dressed figure before the clips, for quick look renders
+        bpy.ops.wm.save_as_mainfile(filepath=os.environ['HERO_BLEND'], copy=True)
+        if os.environ.get('HERO_STOP'):
+            sys.exit(0)
 elif BRAWLER:
     brawler_shape.dress(fc1_body, fc1_body.parent, short,
                         {'body_shell': body_shell, 'smoothed_body': smoothed_body, 'edge_segments': edge_segments,
@@ -598,8 +608,10 @@ tgt.name = 'CC_rig'
 # ---------------------------------------------------------------- clips
 
 retarget_clips(tgt, CLIPS_PATH, EXTRA)
-if HERO:
+if HERO and os.environ.get('HERO_TOON') == '1':   # the toon hero's hand-posed thumbs-up idle
     hero_body.thumbs_up_clip(tgt)
+elif HERO:   # the painted hero's mocap idle, shoulders lowered (hero_suit.lower_shoulders)
+    hero_suit.lower_shoulders(tgt)
 
 # ---------------------------------------------------------------- textures and export
 
@@ -609,7 +621,7 @@ for img in bpy.data.images:
     users = [m.name for m in bpy.data.materials
              if m.use_nodes and any(n.type == 'TEX_IMAGE' and n.image == img for n in m.node_tree.nodes)]
     face = any(u == 'skin_head' for u in users)
-    if any(u.startswith(('toon_skin', 'toon_head')) for u in users):
+    if any(u.startswith(('toon_skin', 'toon_head', 'gear_')) for u in users):   # sized where they are made
         continue  # the default hero's maps keep their size (hero_body.dress_skin)
     size = 2048 if face else 1024
     if img.size[0] > size:

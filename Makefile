@@ -115,20 +115,23 @@ AVATARS = android/app/src/main/assets/web/avatars
 hero-prep: ## Prepare the user's anatomy sculpt (HERO_FBX, male_body.fbx) for the default hero: shape target, bake source, game mesh
 	$(BLENDER) -b -P scripts/blender/hero_sculpt_prep.py -- $(HERO_FBX) $(HERO_BASE)
 
-hero: ## Build the default hero (the sculpt rigged on FC1's skeleton, toon look: scripts/blender/hero_body.py) into the app assets; needs an APK rebuild
+HERO_MIXAMO = $(MIXAMO_SHARED) hero_idle=$(MIXAMO)/BreathingIdle.fbx
+
+hero: ## Build the default hero (the sculpt rigged on FC1's skeleton, yellow costume and gym kit painted like Veera: scripts/blender/hero_suit.py; HERO_TOON=1 for the old toon look) into the app assets; needs an APK rebuild
 	@test -f $(HERO_BASE)/male_body_lo.ply || { echo "$(HERO_BASE)/male_body_lo.ply missing: run make hero-prep first"; exit 1; }
-	FC1_HERO=1 HERO_SCULPT=$(HERO_SCULPT) $(BLENDER) -b -P scripts/blender/build_fc1.py -- $(FC1_SRC) $(CLIPS_DIR)/clips_meera.glb $(AVATARS)/hero.glb $(MIXAMO_SHARED)
+	magick -background none assets/logo-mark.svg -resize 1024x1024 $(HERO_BASE)/ojas_logo.png
+	FC1_HERO=1 HERO_SCULPT=$(HERO_SCULPT) $(BLENDER) -b -P scripts/blender/build_fc1.py -- $(FC1_SRC) $(CLIPS_DIR)/clips_meera.glb $(AVATARS)/hero.glb $(HERO_MIXAMO)
 
-hero-gym: ## Render the default hero's gym (his world, comic look): hero page and lobby plates, and the VS screen's plate; needs an APK rebuild
-	$(BLENDER) -b -P scripts/blender/render_gym.py -- assets/video/hero_gym.jpg --size 1920x1080 --spot 0.5,0.86,0.66
-	$(BLENDER) -b -P scripts/blender/render_gym.py -- assets/video/hero_gym_lobby.jpg --size 1920x1080 --spot 0.37,0.93,0.74
-	$(BLENDER) -b -P scripts/blender/render_gym.py -- scripts/blender/hero_vs_plate.jpg --size 1200x1080 --spot 0.5,0.96,0.88
+hero-gym: ## Render the default hero's gym (his world, painted like Veera's renders): hero page and lobby plates, and the VS screen's plate; needs an APK rebuild
+	$(BLENDER) -b -P scripts/blender/render_gym.py -- assets/video/hero_gym.jpg --size 1920x1080 --spot 0.5,0.86,0.66 --look painted
+	$(BLENDER) -b -P scripts/blender/render_gym.py -- assets/video/hero_gym_lobby.jpg --size 1920x1080 --spot 0.37,0.93,0.74 --look painted
+	$(BLENDER) -b -P scripts/blender/render_gym.py -- scripts/blender/hero_vs_plate.jpg --size 1200x1080 --spot 0.5,0.96,0.88 --look painted
 
-hero-art: ## Render the default hero's card, VS stand art, VS scene (on his gym, hero_vs_plate.jpg from make hero-gym) and shop thumbnail (thumbs up, toon look) from hero.glb; needs an APK rebuild
-	$(BLENDER) -b -P scripts/blender/render_toon.py -- $(AVATARS)/hero.glb $(AVATARS)/hero_card.png --clip hero_idle --frame 1 --yaw 18 --size 720x1080 --transparent 1
-	$(BLENDER) -b -P scripts/blender/render_toon.py -- $(AVATARS)/hero.glb $(AVATARS)/hero_stand.png --clip hero_idle --frame 1 --yaw 0 --size 720x1080 --transparent 1
-	$(BLENDER) -b -P scripts/blender/render_toon.py -- $(AVATARS)/hero.glb $(AVATARS)/hero.png --clip hero_idle --frame 1 --yaw 18 --size 192x224 --transparent 1
-	$(BLENDER) -b -P scripts/blender/render_toon.py -- $(AVATARS)/hero.glb $(AVATARS)/hero_vs.jpg --clip hero_idle --frame 1 --yaw 12 --size 1200x1080 --backdrop scripts/blender/hero_vs_plate.jpg --cx 600
+hero-art: ## Render the default hero's card, VS stand art, shop thumbnail (standing) and VS scene (him in his painted gym) from hero.glb; needs an APK rebuild
+	$(BLENDER) -b -P scripts/blender/render_hero_card.py -- $(AVATARS)/hero.glb hero_idle 1 $(AVATARS)/hero_card.png --yaw 18
+	$(BLENDER) -b -P scripts/blender/render_hero_card.py -- $(AVATARS)/hero.glb hero_idle 1 $(AVATARS)/hero_stand.png --yaw 0
+	magick $(AVATARS)/hero_card.png -crop 720x840+0+40 +repage -resize 192x224 $(AVATARS)/hero.png
+	$(BLENDER) -b -P scripts/blender/render_gym.py -- $(AVATARS)/hero_vs.jpg --size 1200x1080 --spot 0.5,0.96,0.88 --look painted --hero $(AVATARS)/hero.glb
 
 fc1: ## Build the base character (Meera) with her own clips from the FC1 download into the app assets; needs an APK rebuild
 	$(BLENDER) -b -P scripts/blender/author_hero_clips.py -- $(CLIPS_SRC) meera $(CLIPS_DIR)/clips_meera.glb
