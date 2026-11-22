@@ -865,39 +865,48 @@ def _action_fcurves(act):
     return out
 
 
-def lower_shoulders(rig, clip='hero_idle', deg=SHOULDER_DROP):
-    """every key of both clavicles in `clip` turned down by deg about the front-back axis (his shoulders
-    drop, his neck shows)"""
+ARMS_OUT = 12.0   # degrees the upper arms swing out in his idle: hanging close, his hands sank into his hips
+
+
+def _turn_bone_keys(rig, act, bone, deg):
+    """every rotation key of `bone` in `act` turned by deg about the front-back axis (bone-local)"""
     from mathutils import Quaternion
+    fcs = _action_fcurves(act)
+    path = f'pose.bones["{bone.name}"].rotation_quaternion'
+    curves = _keys_of(fcs, path)
+    if len(curves) != 4:
+        print('POSE no keys for', bone.name)
+        return 0
+    to_arm = rig.matrix_world.to_3x3().normalized().inverted()
+    axis = (bone.matrix_local.to_3x3().inverted() @ (to_arm @ Vector((0, 1, 0)))).normalized()
+    off = Quaternion(axis, math.radians(deg))
+    frames = sorted({round(k.co.x, 3) for k in curves[0].keyframe_points})
+    for f in frames:
+        q = Quaternion([c.evaluate(f) for c in curves])
+        nq = off @ q
+        for i, c in enumerate(curves):
+            for k in c.keyframe_points:
+                if abs(k.co.x - f) < 1e-3:
+                    k.co.y = nq[i]
+                    k.handle_left.y = k.handle_right.y = nq[i]
+    for c in curves:
+        c.update()
+    return len(frames)
+
+
+def lower_shoulders(rig, clip='hero_idle', deg=SHOULDER_DROP, arms_out=ARMS_OUT):
+    """his idle: both clavicles turned down by deg (his shoulders drop, his neck shows) and both upper arms
+    swung out by arms_out (his hands clear his hips and thighs)"""
     act = bpy.data.actions.get(clip)
     if act is None:
         print('SHOULDERS no', clip)
         return
-    fcs = _action_fcurves(act)
-    to_arm = rig.matrix_world.to_3x3().normalized().inverted()
     for side, sign in (('L', 1), ('R', -1)):
-        bone = next((b for b in rig.data.bones if b.name.endswith(f'{side}_Clavicle')), None)
-        if bone is None:
-            continue
-        path = f'pose.bones["{bone.name}"].rotation_quaternion'
-        curves = _keys_of(fcs, path)
-        if len(curves) != 4:
-            print('SHOULDERS no keys for', bone.name)
-            continue
-        axis = (bone.matrix_local.to_3x3().inverted() @ (to_arm @ Vector((0, 1, 0)))).normalized()
-        off = Quaternion(axis, math.radians(deg * sign))
-        frames = sorted({round(k.co.x, 3) for k in curves[0].keyframe_points})
-        for f in frames:
-            q = Quaternion([c.evaluate(f) for c in curves])
-            nq = off @ q
-            for i, c in enumerate(curves):
-                for k in c.keyframe_points:
-                    if abs(k.co.x - f) < 1e-3:
-                        k.co.y = nq[i]
-                        k.handle_left.y = k.handle_right.y = nq[i]
-        for c in curves:
-            c.update()
-        print('SHOULDERS', bone.name, len(frames), 'keys, down', deg)
+        for part, d in (('Clavicle', deg * sign), ('Upperarm', -arms_out * sign)):
+            bone = next((b for b in rig.data.bones if b.name.endswith(f'{side}_{part}')), None)
+            if bone is not None:
+                n_ = _turn_bone_keys(rig, act, bone, d)
+                print('POSE', bone.name, n_, 'keys, turned', round(d, 1))
 
 
 def paint_logo(o, logo_path):

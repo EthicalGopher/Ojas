@@ -610,8 +610,9 @@ tgt.name = 'CC_rig'
 retarget_clips(tgt, CLIPS_PATH, EXTRA)
 if HERO and os.environ.get('HERO_TOON') == '1':   # the toon hero's hand-posed thumbs-up idle
     hero_body.thumbs_up_clip(tgt)
-elif HERO:   # the painted hero's mocap idle, shoulders lowered (hero_suit.lower_shoulders)
-    hero_suit.lower_shoulders(tgt)
+elif HERO:   # the painted hero's standing clips: shoulders lowered, arms clear of his body (hero_suit)
+    for clip in ('hero_idle', 'idle', 'rest', 'stand'):
+        hero_suit.lower_shoulders(tgt, clip)
 
 # ---------------------------------------------------------------- textures and export
 
